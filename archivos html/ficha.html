@@ -1,0 +1,682 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>VidaVitalQR · Ficha de Emergencia</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<style>
+  :root{
+    --navy:#0F2A3D;
+    --navy-light:#1B4863;
+    --paper:#F7F5F0;
+    --card:#FFFFFF;
+    --red:#C1272D;
+    --teal:#2E7D6B;
+    --slate:#5B6774;
+    --line:#DDD8CC;
+    --amber:#E2A63B;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:var(--paper);
+    font-family:'Source Sans Pro',Arial,sans-serif;
+    color:var(--navy);
+    padding:32px 16px 80px;
+  }
+  h1,h2,h3,.stamp{font-family:'Libre Franklin',Arial,sans-serif;}
+  .wrap{max-width:920px;margin:0 auto;}
+
+  /* ---------- Header ---------- */
+  .top{
+    display:flex;align-items:center;justify-content:space-between;
+    border-bottom:3px solid var(--navy);
+    padding-bottom:14px;margin-bottom:28px;
+    flex-wrap:wrap;gap:10px;
+  }
+  .brand{display:flex;align-items:center;gap:12px;}
+  .cross{
+    width:34px;height:34px;background:var(--red);border-radius:6px;position:relative;flex:none;
+  }
+  .cross::before,.cross::after{content:"";position:absolute;background:#fff;}
+  .cross::before{left:14px;top:6px;width:6px;height:22px;}
+  .cross::after{left:6px;top:14px;width:22px;height:6px;}
+  .brand h1{margin:0;font-size:26px;letter-spacing:.5px;}
+  .brand p{margin:2px 0 0;font-size:12.5px;color:var(--slate);letter-spacing:.4px;text-transform:uppercase;}
+  .warn-badge{
+    font-size:11px;color:var(--red);border:1px solid var(--red);border-radius:20px;
+    padding:5px 12px;font-weight:600;letter-spacing:.3px;white-space:nowrap;
+  }
+
+  /* ---------- Live ID card preview ---------- */
+  .idcard{
+    background:var(--navy);
+    background-image:linear-gradient(135deg,var(--navy) 0%,var(--navy-light) 100%);
+    color:#fff;border-radius:14px;padding:18px 22px;margin-bottom:32px;
+    box-shadow:0 10px 24px rgba(15,42,61,.25);
+    position:relative;overflow:hidden;
+  }
+  .idcard::after{
+    content:"";position:absolute;right:-40px;top:-40px;width:160px;height:160px;
+    border-radius:50%;background:rgba(255,255,255,.05);
+  }
+  .idcard-body{display:flex;justify-content:space-between;align-items:stretch;gap:16px;position:relative;z-index:1;}
+  .idcard-left{display:flex;flex-direction:column;justify-content:space-between;flex:1;min-width:0;}
+  .idcard-info{display:flex;flex-direction:column;gap:10px;}
+  .idname{font-size:22px;font-weight:700;margin:0;}
+  .idmeta{display:flex;gap:22px;flex-wrap:wrap;font-size:13px;}
+  .idmeta div span{display:block;opacity:.65;font-size:10.5px;text-transform:uppercase;letter-spacing:.8px;}
+  .blood-chip{
+    background:var(--red);border-radius:8px;padding:6px 12px;font-weight:700;font-size:15px;
+    display:inline-block;align-self:flex-start;
+  }
+
+  /* ---------- Sections ---------- */
+  .section{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:22px 24px;margin-bottom:20px;}
+  .section h2{
+    margin:0 0 4px;font-size:15px;letter-spacing:1.2px;text-transform:uppercase;color:var(--navy);
+    display:flex;align-items:center;gap:8px;
+  }
+  .section h2 em{font-style:normal;background:var(--navy);color:#fff;width:22px;height:22px;border-radius:50%;
+    display:inline-flex;align-items:center;justify-content:center;font-size:12px;}
+  .section .hint{font-size:12.5px;color:var(--slate);margin:0 0 16px;}
+  .grid{display:grid;grid-template-columns:repeat(2,1fr);gap:14px 18px;}
+  .grid.cols3{grid-template-columns:repeat(3,1fr);}
+  @media(max-width:640px){.grid,.grid.cols3{grid-template-columns:1fr;}}
+  .contact-rows{display:flex;flex-direction:column;gap:14px;margin-top:16px;padding-top:14px;border-top:1px dashed var(--line);}
+  .field{display:flex;flex-direction:column;gap:5px;}
+  .field.full{grid-column:1/-1;}
+  label{font-size:12px;font-weight:600;color:var(--navy-light);letter-spacing:.3px;}
+  input,select,textarea{
+    font-family:inherit;font-size:14px;padding:9px 11px;border:1px solid var(--line);
+    border-radius:7px;background:#FCFBF8;color:var(--navy);
+  }
+  input:focus,select:focus,textarea:focus{outline:2px solid var(--teal);outline-offset:1px;border-color:var(--teal);}
+  textarea{resize:vertical;min-height:60px;}
+  .donor-toggle{display:flex;gap:16px;align-items:center;font-size:13.5px;color:var(--navy);margin-top:2px;}
+  .donor-toggle label{display:flex;gap:6px;align-items:center;font-weight:500;color:var(--navy);}
+
+  /* ---------- Attachments ---------- */
+  .drop{
+    border:2px dashed var(--line);border-radius:10px;padding:22px;text-align:center;
+    color:var(--slate);cursor:pointer;background:#FCFBF8;transition:border-color .15s;
+  }
+  .drop.drag{border-color:var(--teal);color:var(--teal);}
+  .drop input{display:none;}
+  /* ---------- Photo ---------- */
+  .photo-box{
+    width:130px;height:155px;border:2px dashed var(--line);border-radius:10px;
+    display:flex;align-items:center;justify-content:center;text-align:center;
+    background:#FCFBF8;color:var(--slate);font-size:13px;cursor:pointer;position:relative;
+    overflow:hidden;padding:8px;line-height:1.4;flex:none;
+  }
+  .photo-box img{width:100%;height:100%;object-fit:cover;position:absolute;inset:0;}
+  .photo-box input{display:none;}
+  .photo-remove{
+    position:absolute;top:5px;right:5px;background:var(--red);color:#fff;border:none;
+    border-radius:50%;width:22px;height:22px;font-size:13px;cursor:pointer;z-index:2;
+  }
+  .idcard-photo-wrap{display:flex;flex-direction:column;align-items:center;gap:6px;}
+  .idcard-photo{
+    border-color:rgba(255,255,255,.4);background:rgba(255,255,255,.08);color:rgba(255,255,255,.8);
+  }
+  .open-counter{
+    font-size:22px;color:rgba(255,255,255,.82);letter-spacing:.3px;text-align:center;
+    font-family:'Libre Franklin',monospace;font-weight:600;
+    background:rgba(0,0,0,.18);border-radius:5px;padding:3px 7px;
+  }
+  .open-counter span{color:inherit;font-weight:inherit;}
+
+  /* ---------- Medical table ---------- */
+  table.med-table{width:100%;border-collapse:collapse;margin-top:4px;}
+  table.med-table th{
+    text-align:left;font-size:11.5px;letter-spacing:.6px;text-transform:uppercase;color:var(--slate);
+    border-bottom:2px solid var(--navy);padding:6px 8px;
+  }
+  table.med-table td{padding:6px 8px;border-bottom:1px solid var(--line);}
+  table.med-table td input{width:100%;}
+  table.med-table td.rowbtn{width:34px;text-align:center;}
+  table.med-table td.rowbtn button{background:none;border:none;color:var(--red);font-size:17px;font-weight:700;cursor:pointer;}
+  .add-row{
+    margin-top:10px;background:none;border:1px dashed var(--navy);color:var(--navy);
+    border-radius:7px;padding:7px 14px;font-size:12.5px;font-weight:600;cursor:pointer;
+  }
+  .add-row:hover{background:#F0EDE3;}
+
+  .filelist{list-style:none;margin:14px 0 0;padding:0;display:flex;flex-direction:column;gap:8px;}
+  .filelist li{
+    display:flex;justify-content:space-between;align-items:center;background:#FCFBF8;
+    border:1px solid var(--line);border-radius:7px;padding:8px 12px;font-size:13px;
+  }
+  .filelist li button{background:none;border:none;color:var(--red);cursor:pointer;font-size:16px;font-weight:700;}
+  .note{
+    background:#FBF3E4;border:1px solid var(--amber);color:#7A5A12;font-size:12.5px;
+    padding:10px 14px;border-radius:8px;margin-top:14px;line-height:1.5;
+  }
+
+  /* ---------- Actions ---------- */
+  .actions{display:flex;gap:14px;flex-wrap:wrap;margin-top:8px;}
+  .btn{
+    border:none;border-radius:9px;padding:14px 22px;font-size:14.5px;font-weight:700;cursor:pointer;
+    display:flex;align-items:center;gap:9px;letter-spacing:.2px;
+  }
+  .btn-primary{background:var(--red);color:#fff;}
+  .btn-primary:hover{background:#a51f24;}
+  .btn-secondary{background:var(--navy);color:#fff;}
+  .btn-secondary:hover{background:var(--navy-light);}
+  .btn-ghost{background:#fff;color:var(--navy);border:1px solid var(--line);}
+  .btn-ghost:hover{border-color:var(--navy);}
+  footer{text-align:center;color:var(--slate);font-size:11.5px;margin-top:30px;letter-spacing:.3px;}
+
+  /* ---------- Print-only attachments ---------- */
+  .print-only{display:none;}
+  .print-attachment-page{padding-top:10px;}
+  .print-attachment-title{
+    font-weight:700;margin-bottom:10px;text-align:center;color:var(--navy);
+    font-size:13px;letter-spacing:.4px;text-transform:uppercase;
+  }
+  .print-attachment-page img{max-width:100%;max-height:920px;display:block;margin:0 auto;border-radius:6px;}
+
+  @media print{
+    *{-webkit-print-color-adjust:exact !important;print-color-adjust:exact !important;color-adjust:exact !important;}
+    body{background:#fff;padding:0;}
+    .no-print{display:none !important;}
+    .section{break-inside:avoid;border-color:#999;}
+    .idcard{background:var(--navy) !important;}
+    .print-only{display:block;}
+    .print-attachment-page{page-break-before:always;break-before:page;}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<div class="top">
+<div class="brand">
+<div class="cross"></div>
+<div>
+<h1>VidaVitalQR</h1>
+<p>Ficha de datos personales · uso en emergencias</p>
+</div>
+</div>
+<span class="warn-badge">Información confidencial de emergencia</span>
+</div>
+
+<!-- Live ID card preview -->
+<div class="idcard">
+<div class="idcard-body">
+<div class="idcard-left">
+<div class="idcard-info">
+<div class="idname" id="pvNombre">Nombre y apellidos</div>
+<div class="idmeta">
+<div><span>Edad</span><b id="pvEdad">—</b></div>
+<div><span>Documento</span><b id="pvDoc">—</b></div>
+<div><span>Contacto emergencia</span><b id="pvContacto">—</b></div>
+<div><span>Teléfono</span><b id="pvTelefono">—</b></div>
+</div>
+</div>
+<div class="blood-chip" id="pvBlood">— TIPO —</div>
+</div>
+<div class="idcard-photo-wrap">
+<div class="photo-box idcard-photo" id="photoBox">
+<span id="photoHint">📷 Foto<br>Clic para subir</span>
+<img id="photoImg" style="display:none;">
+<button type="button" class="photo-remove no-print" id="photoRemove" style="display:none;">✕</button>
+<input type="file" id="photoInput" accept="image/*">
+</div>
+<div class="open-counter no-print" id="openCounter"><span id="counterNum">VVITALQR00000001</span></div>
+</div>
+</div>
+</div>
+
+<!-- Datos personales -->
+<div class="section">
+<h2><em>1</em>Datos personales</h2>
+<div class="grid">
+<div class="field"><label>Nombres</label><input type="text" id="nombres"></div>
+<div class="field"><label>Apellidos</label><input type="text" id="apellidos"></div>
+<div class="field"><label>Fecha de nacimiento</label><input type="date" id="fnac"></div>
+<div class="field"><label>Edad</label><input type="text" id="edad" readonly placeholder="Calculada automáticamente"></div>
+<div class="field"><label>Número de asegurado</label><input type="text" id="asegurado"></div>
+<div class="field"><label>Tipo de sangre</label>
+<select id="sangre">
+<option value="">Seleccione…</option>
+<option>O+</option><option>O-</option><option>A+</option><option>A-</option>
+<option>B+</option><option>B-</option><option>AB+</option><option>AB-</option>
+</select>
+</div>
+<div class="field">
+<label>¿Donador?</label>
+<div class="donor-toggle">
+<label><input type="radio" name="donador" value="Sí"> Sí</label>
+<label><input type="radio" name="donador" value="No" checked> No</label>
+</div>
+</div>
+<div class="field"><label>Documento de identidad</label><input type="text" id="documento"></div>
+</div>
+</div>
+
+<!-- Datos generales -->
+<div class="section">
+<h2><em>2</em>Datos generales</h2>
+<div class="grid cols3">
+<div class="field"><label>País</label><input type="text" id="pais"></div>
+<div class="field"><label>Ciudad / Cantón</label><input type="text" id="ciudad"></div>
+<div class="field"><label>Distrito</label><input type="text" id="distrito"></div>
+<div class="field full"><label>Otras señales</label><input type="text" id="senales" placeholder="Referencias de ubicación"></div>
+</div>
+<div class="contact-rows">
+<div class="grid cols3">
+<div class="field"><label>Nombre de contacto 1</label><input type="text" id="contacto1"></div>
+<div class="field"><label>Teléfono</label><input type="tel" id="telcontacto1"></div>
+<div class="field"><label>Parentesco</label><input type="text" id="parentesco1"></div>
+</div>
+<div class="grid cols3">
+<div class="field"><label>Nombre de contacto 2</label><input type="text" id="contacto2"></div>
+<div class="field"><label>Teléfono</label><input type="tel" id="telcontacto2"></div>
+<div class="field"><label>Parentesco</label><input type="text" id="parentesco2"></div>
+</div>
+</div>
+</div>
+
+<!-- Información médica -->
+<div class="section">
+<h2><em>3</em>Información médica</h2>
+<div class="grid">
+<div class="field full"><label>Comentarios importantes</label><textarea id="comentarios" placeholder="Alergias, condiciones, indicaciones para primeros auxilios…"></textarea></div>
+</div>
+<table class="med-table" id="medTable">
+<thead>
+<tr><th>Medicamento</th><th>Dosificación</th><th></th></tr>
+</thead>
+<tbody id="medTableBody">
+<tr>
+<td><input type="text" class="med-name" placeholder="Nombre del medicamento"></td>
+<td><input type="text" class="med-dose" placeholder="Dosis / frecuencia"></td>
+<td class="rowbtn"><button type="button" class="med-remove" title="Quitar">✕</button></td>
+</tr>
+<tr>
+<td><input type="text" class="med-name" placeholder="Nombre del medicamento"></td>
+<td><input type="text" class="med-dose" placeholder="Dosis / frecuencia"></td>
+<td class="rowbtn"><button type="button" class="med-remove" title="Quitar">✕</button></td>
+</tr>
+<tr>
+<td><input type="text" class="med-name" placeholder="Nombre del medicamento"></td>
+<td><input type="text" class="med-dose" placeholder="Dosis / frecuencia"></td>
+<td class="rowbtn"><button type="button" class="med-remove" title="Quitar">✕</button></td>
+</tr>
+<tr>
+<td><input type="text" class="med-name" placeholder="Nombre del medicamento"></td>
+<td><input type="text" class="med-dose" placeholder="Dosis / frecuencia"></td>
+<td class="rowbtn"><button type="button" class="med-remove" title="Quitar">✕</button></td>
+</tr>
+<tr>
+<td><input type="text" class="med-name" placeholder="Nombre del medicamento"></td>
+<td><input type="text" class="med-dose" placeholder="Dosis / frecuencia"></td>
+<td class="rowbtn"><button type="button" class="med-remove" title="Quitar">✕</button></td>
+</tr>
+<tr>
+<td><input type="text" class="med-name" placeholder="Nombre del medicamento"></td>
+<td><input type="text" class="med-dose" placeholder="Dosis / frecuencia"></td>
+<td class="rowbtn"><button type="button" class="med-remove" title="Quitar">✕</button></td>
+</tr>
+</tbody>
+</table>
+<button type="button" class="add-row no-print" id="addMedRow">+ Agregar medicamento</button>
+</div>
+
+<!-- Adjuntos -->
+<div class="section no-print">
+<h2><em>4</em>Archivos importantes (.jpg)</h2>
+<p class="hint">Documento de identidad, carné de seguro, récipes médicos, etc. — solo imágenes .jpg. Cada archivo se agrega como una página adicional dentro del PDF.</p>
+<div class="drop" id="drop">
+<div>📎 Arrastra tus archivos .jpg aquí o haz clic para seleccionarlos</div>
+<input type="file" id="fileInput" accept=".jpg,.jpeg,image/jpeg" multiple>
+</div>
+<ul class="filelist" id="fileList"></ul>
+<div class="note">
+      Por seguridad de los navegadores, ningún sitio web puede adjuntar un archivo a un correo de forma 100%
+      automática en todos los dispositivos. Al presionar "Enviar por correo", la app genera el PDF completo
+      (con el diseño de la ficha y cada .jpg adjunto como página adicional), lo envía hacia vidavitalqr@zohomail.com
+      y lo(a) regresa a la página de VidaVitalQR para finalizar el pago:<br><br>
+<b>📱 En celular</b> (Android/iPhone): se abre el menú "Compartir" nativo — elige tu app de correo
+      (Gmail, Mail, Outlook) y el PDF ya vendrá adjunto listo para enviar a vidavitalqr@zohomail.com.<br>
+<b>💻 En computadora</b>: el PDF se descarga automáticamente (revisa tu carpeta de Descargas) y se abre tu
+      programa de correo con el mensaje listo hacia vidavitalqr@zohomail.com — solo arrastra el PDF descargado
+      al correo antes de enviarlo.
+</div>
+</div>
+
+<!-- Páginas de adjuntos (usadas para generar el PDF) -->
+<div class="print-only" id="printAttachments"></div>
+
+<!-- Acciones -->
+<div class="actions no-print">
+<button class="btn btn-primary" id="btnEmail">✉ Enviar por correo</button>
+<button class="btn btn-ghost" id="btnReset">↺ Limpiar formulario</button>
+</div>
+
+<footer>VidaVitalQR · Ficha de emergencia personal · Uso restringido a situaciones de emergencia</footer>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+
+// ---- página de pago de VidaVitalQR a la que se regresa tras enviar la ficha ----
+const PAYMENT_URL = 'https://vidavitalqr.com/';
+
+// ---- edad automática ----
+$('fnac').addEventListener('input', () => {
+  const v = $('fnac').value;
+  if(!v){ $('edad').value = ''; return; }
+  const birth = new Date(v);
+  const now = new Date();
+  let age = now.getFullYear() - birth.getFullYear();
+  const m = now.getMonth() - birth.getMonth();
+  if(m < 0 || (m === 0 && now.getDate() < birth.getDate())) age--;
+  $('edad').value = age >= 0 ? age + ' años' : '';
+  updatePreview();
+});
+
+// ---- foto ----
+$('photoInput').addEventListener('change', e => {
+  const file = e.target.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = ev => {
+    const dataUrl = ev.target.result;
+    $('photoImg').src = dataUrl;
+    $('photoImg').style.display = 'block';
+    $('photoHint').style.display = 'none';
+    $('photoRemove').style.display = 'flex';
+  };
+  reader.readAsDataURL(file);
+});
+$('photoBox').addEventListener('click', e => {
+  if(e.target.id !== 'photoRemove') $('photoInput').click();
+});
+$('photoRemove').addEventListener('click', e => {
+  e.stopPropagation();
+  $('photoInput').value = '';
+  $('photoImg').src = '';
+  $('photoImg').style.display = 'none';
+  $('photoHint').style.display = 'block';
+  $('photoRemove').style.display = 'none';
+});
+
+// ---- contador de aperturas (compartido para todo el público) ----
+(function(){
+  function formatCounter(n){
+    return 'VVITALQR' + String(n).padStart(8,'0');
+  }
+  // Servicio gratuito de conteo compartido (sin necesidad de servidor propio).
+  // IMPORTANTE: una vez tengas tu dominio, cambia COUNTER_NAMESPACE por algo único
+  // basado en tu dominio (ej. 'vidavitalqr-tudominio-cr') para evitar choques con otros usuarios del servicio.
+  const COUNTER_API = 'https://abacus.jasoncameron.dev';
+  const COUNTER_NAMESPACE = 'vidavitalqr-cr-ficha-emergencia';
+  const COUNTER_KEY = 'aperturas';
+  const LOCAL_FALLBACK_KEY = 'vidavitalqr_open_count_local';
+
+  function localFallback(){
+    try{
+      const n = (parseInt(localStorage.getItem(LOCAL_FALLBACK_KEY), 10) || 0) + 1;
+      localStorage.setItem(LOCAL_FALLBACK_KEY, n);
+      return n;
+    }catch(err){
+      // localStorage bloqueado (modo privado, iframe restringido, etc.)
+      return 1;
+    }
+  }
+
+  try{
+    fetch(`${COUNTER_API}/hit/${COUNTER_NAMESPACE}/${COUNTER_KEY}`)
+      .then(res => { if(!res.ok) throw new Error('respuesta no válida'); return res.json(); })
+      .then(data => {
+        $('counterNum').textContent = formatCounter(data.value);
+      })
+      .catch(() => {
+        // Sin conexión o el servicio no respondió: usa un contador local de respaldo
+        // (no compartido) para que la app siga funcionando.
+        $('counterNum').textContent = formatCounter(localFallback());
+      });
+  }catch(err){
+    // fetch no disponible en este contexto: usar respaldo local directamente
+    $('counterNum').textContent = formatCounter(localFallback());
+  }
+})();
+
+// ---- tabla de medicamentos ----
+function wireMedRow(tr){
+  tr.querySelector('.med-remove').addEventListener('click', () => {
+    if($('medTableBody').children.length > 1) tr.remove();
+  });
+}
+document.querySelectorAll('#medTableBody tr').forEach(wireMedRow);
+$('addMedRow').addEventListener('click', () => {
+  const tr = document.createElement('tr');
+  tr.innerHTML = `
+    <td><input type="text" class="med-name" placeholder="Nombre del medicamento"></td>
+    <td><input type="text" class="med-dose" placeholder="Dosis / frecuencia"></td>
+    <td class="rowbtn"><button type="button" class="med-remove" title="Quitar">✕</button></td>`;
+  $('medTableBody').appendChild(tr);
+  wireMedRow(tr);
+});
+
+// ---- live preview ----
+const previewFields = ['nombres','apellidos','documento','sangre','contacto1','telcontacto1'];
+previewFields.forEach(id => $(id).addEventListener('input', updatePreview));
+$('sangre').addEventListener('change', updatePreview);
+document.querySelectorAll('input[name="donador"]').forEach(r => r.addEventListener('change', updatePreview));
+
+function updatePreview(){
+  const nombreCompleto = [$('nombres').value, $('apellidos').value].filter(Boolean).join(' ');
+  $('pvNombre').textContent = nombreCompleto || 'Nombre y apellidos';
+  $('pvBlood').textContent = $('sangre').value ? $('sangre').value : '— TIPO —';
+  $('pvEdad').textContent = $('edad').value || '—';
+  $('pvDoc').textContent = $('documento').value || '—';
+  $('pvContacto').textContent = $('contacto1').value || '—';
+  $('pvTelefono').textContent = $('telcontacto1').value || '—';
+}
+
+// ---- adjuntos ----
+let files = [];
+const drop = $('drop');
+const fileInput = $('fileInput');
+drop.addEventListener('click', () => fileInput.click());
+['dragenter','dragover'].forEach(ev => drop.addEventListener(ev, e => {e.preventDefault(); drop.classList.add('drag');}));
+['dragleave','drop'].forEach(ev => drop.addEventListener(ev, e => {e.preventDefault(); drop.classList.remove('drag');}));
+drop.addEventListener('drop', e => addFiles(e.dataTransfer.files));
+fileInput.addEventListener('change', e => addFiles(e.target.files));
+
+function isJpg(f){
+  return f.type === 'image/jpeg' || /\.jpe?g$/i.test(f.name);
+}
+function addFiles(list){
+  const rejected = [];
+  Array.from(list).forEach(f => {
+    if(isJpg(f)) files.push(f); else rejected.push(f.name);
+  });
+  if(rejected.length){
+    alert('Solo se permiten archivos .jpg. No se agregaron: ' + rejected.join(', '));
+  }
+  renderFiles();
+  buildPrintAttachments();
+}
+function renderFiles(){
+  const ul = $('fileList');
+  ul.innerHTML = '';
+  files.forEach((f,i) => {
+    const li = document.createElement('li');
+    const sizeKb = (f.size/1024).toFixed(0);
+    li.innerHTML = `<span>📄 ${f.name} <span style="color:var(--slate)">(${sizeKb} KB) · página adicional en el PDF</span></span>`;
+    const btn = document.createElement('button');
+    btn.textContent = '✕';
+    btn.title = 'Quitar';
+    btn.addEventListener('click', () => { files.splice(i,1); renderFiles(); buildPrintAttachments(); });
+    li.appendChild(btn);
+    ul.appendChild(li);
+  });
+}
+
+function buildPrintAttachments(){
+  const container = $('printAttachments');
+  container.innerHTML = '';
+  files.forEach(f => {
+    const reader = new FileReader();
+    reader.onload = ev => {
+      const page = document.createElement('div');
+      page.className = 'print-attachment-page';
+      const title = document.createElement('div');
+      title.className = 'print-attachment-title';
+      title.textContent = `Archivo adjunto: ${f.name}`;
+      const img = document.createElement('img');
+      img.src = ev.target.result;
+      page.appendChild(title);
+      page.appendChild(img);
+      container.appendChild(page);
+    };
+    reader.readAsDataURL(f);
+  });
+}
+
+// ---- generar el PDF real (diseño de la ficha + páginas de fotos .jpg) ----
+async function generatePdfBlob(){
+  const { jsPDF } = window.jspdf;
+  const noPrintEls = Array.from(document.querySelectorAll('.no-print'));
+  const prevDisplays = noPrintEls.map(el => el.style.display);
+  noPrintEls.forEach(el => { el.style.display = 'none'; });
+
+  await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+
+  const mainCanvas = await html2canvas(document.querySelector('.wrap'), {
+    scale: 2, backgroundColor: '#F7F5F0', useCORS: true
+  });
+  const pdf = new jsPDF({unit:'pt', format:[mainCanvas.width*0.75, mainCanvas.height*0.75]});
+  pdf.addImage(mainCanvas.toDataURL('image/jpeg', 0.92), 'JPEG', 0, 0, mainCanvas.width*0.75, mainCanvas.height*0.75);
+
+  const attPages = document.querySelectorAll('#printAttachments .print-attachment-page');
+  for(const page of attPages){
+    const c = await html2canvas(page, {scale:2, backgroundColor:'#ffffff', useCORS:true});
+    pdf.addPage([c.width*0.75, c.height*0.75]);
+    pdf.addImage(c.toDataURL('image/jpeg', 0.92), 'JPEG', 0, 0, c.width*0.75, c.height*0.75);
+  }
+
+  noPrintEls.forEach((el,i) => { el.style.display = prevDisplays[i]; });
+  return pdf.output('blob');
+}
+
+// ---- cuerpo del correo (texto de respaldo) ----
+function buildEmailBody(){
+  const donadorEl = document.querySelector('input[name="donador"]:checked');
+  const lines = [
+    `Nombres: ${$('nombres').value}`,
+    `Apellidos: ${$('apellidos').value}`,
+    `Fecha de nacimiento: ${$('fnac').value}  (${$('edad').value})`,
+    `Número de asegurado: ${$('asegurado').value}`,
+    `Tipo de sangre: ${$('sangre').value}`,
+    `Donador: ${donadorEl ? donadorEl.value : ''}`,
+    `Documento de identidad: ${$('documento').value}`,
+    '',
+    `País: ${$('pais').value}`,
+    `Ciudad/Cantón: ${$('ciudad').value}`,
+    `Distrito: ${$('distrito').value}`,
+    `Otras señales: ${$('senales').value}`,
+    `Nombre de contacto 1: ${$('contacto1').value}`,
+    `Teléfono contacto 1: ${$('telcontacto1').value}`,
+    `Parentesco contacto 1: ${$('parentesco1').value}`,
+    `Nombre de contacto 2: ${$('contacto2').value}`,
+    `Teléfono contacto 2: ${$('telcontacto2').value}`,
+    `Parentesco contacto 2: ${$('parentesco2').value}`,
+    '',
+    `Comentarios importantes: ${$('comentarios').value}`,
+  ];
+  const medRows = Array.from(document.querySelectorAll('#medTableBody tr'))
+    .map(tr => ({name: tr.querySelector('.med-name').value, dose: tr.querySelector('.med-dose').value}))
+    .filter(r => r.name || r.dose);
+  if(medRows.length){
+    lines.push('', 'Medicamentos:');
+    medRows.forEach(r => lines.push(`- ${r.name || '(sin nombre)'}: ${r.dose || '(sin dosis)'}`));
+  }
+  return lines.join('\n');
+}
+
+// ---- ir a la sección de pago seguro de VidaVitalQR, pasando el número de la ficha ----
+function goToPayment(folio){
+  try{
+    var url = new URL(PAYMENT_URL);
+    url.searchParams.set('fichaId', folio);
+    url.hash = 'pago-seguro';
+    window.location.href = url.toString();
+  }catch(err){
+    window.location.href = PAYMENT_URL + '?fichaId=' + encodeURIComponent(folio) + '#pago-seguro';
+  }
+}
+
+// ---- solo en celulares reales usamos el panel "Compartir"; en computadora,
+//      siempre descarga + abre el correo con vidavitalqr@zohomail.com ya puesto ----
+function isMobileDevice(){
+  if (navigator.userAgentData && typeof navigator.userAgentData.mobile === 'boolean') {
+    return navigator.userAgentData.mobile;
+  }
+  return /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent || '');
+}
+
+// ---- convertir a PDF, enviar por correo y regresar al pago (un solo botón) ----
+$('btnEmail').addEventListener('click', async () => {
+  const btn = $('btnEmail');
+  const originalText = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = '⏳ Generando PDF…';
+
+  try{
+    const folio = $('counterNum').textContent.trim() || 'VidaVitalQR';
+    const filename = `${folio}.pdf`;
+    const pdfBlob = await generatePdfBlob();
+    const pdfFile = new File([pdfBlob], filename, {type:'application/pdf'});
+    const subject = `VidaVitalQR - Ficha de emergencia${$('nombres').value ? ' - ' + $('nombres').value + ' ' + $('apellidos').value : ''}`;
+    const body = buildEmailBody();
+
+    if(isMobileDevice() && navigator.canShare && navigator.canShare({files:[pdfFile]})){
+      // Móvil: comparte el PDF ya adjunto directo a la app de correo elegida
+      await navigator.share({files:[pdfFile], title: subject, text: `Enviar a vidavitalqr@zohomail.com\n\n${body}`});
+      goToPayment(folio);
+    }else{
+      // Escritorio: descarga el PDF y abre el correo con el mensaje listo
+      const url = URL.createObjectURL(pdfBlob);
+      const a = document.createElement('a');
+      a.href = url; a.download = filename;
+      document.body.appendChild(a); a.click(); a.remove();
+      URL.revokeObjectURL(url);
+      const mailBody = encodeURIComponent(body + `\n\n⚠ Adjunta el archivo ${filename} que se acaba de descargar antes de enviar este correo.`);
+      window.location.href = `mailto:vidavitalqr@zohomail.com?subject=${encodeURIComponent(subject)}&body=${mailBody}`;
+      // Damos un instante para que el sistema abra el programa de correo antes de navegar.
+      window.setTimeout(() => { goToPayment(folio); }, 600);
+    }
+  }catch(err){
+    if(err && err.name !== 'AbortError'){
+      alert('No se pudo generar o compartir el PDF. Intenta de nuevo.');
+    }
+  }finally{
+    btn.disabled = false;
+    btn.textContent = originalText;
+  }
+});
+
+// ---- limpiar ----
+$('btnReset').addEventListener('click', () => {
+  if(!confirm('¿Limpiar todos los campos del formulario?')) return;
+  document.querySelectorAll('input[type=text],input[type=tel],input[type=date],textarea').forEach(el => el.value='');
+  $('sangre').value='';
+  document.querySelector('input[name="donador"][value="No"]').checked = true;
+  files = [];
+  renderFiles();
+  buildPrintAttachments();
+  updatePreview();
+});
+
+updatePreview();
+</script>
+</body>
+</html>
