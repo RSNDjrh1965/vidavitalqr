@@ -262,9 +262,17 @@
 <div class="section">
 <h2><em>2</em>Datos generales</h2>
 <div class="grid cols3">
-<div class="field"><label>País</label><input type="text" id="pais"></div>
-<div class="field"><label>Ciudad / Cantón</label><input type="text" id="ciudad"></div>
-<div class="field"><label>Distrito</label><input type="text" id="distrito"></div>
+<div class="field"><label>País</label><input type="text" id="pais" placeholder="Ej. Costa Rica"></div>
+<div class="field">
+<label>Ciudad / Cantón</label>
+<input type="text" id="ciudad" readonly>
+<select id="cantonSelect" class="no-print" style="display:none;"><option value="">Seleccione un cantón…</option></select>
+</div>
+<div class="field">
+<label>Distrito</label>
+<input type="text" id="distrito" placeholder="Ej. Carmen">
+<select id="distritoSelect" class="no-print" style="display:none;"><option value="">Seleccione un cantón primero…</option></select>
+</div>
 <div class="field full"><label>Otras señales</label><input type="text" id="senales" placeholder="Referencias de ubicación"></div>
 </div>
 <div class="contact-rows">
@@ -457,6 +465,134 @@ $('addMedRow').addEventListener('click', () => {
   $('medTableBody').appendChild(tr);
   wireMedRow(tr);
 });
+
+// ---- ubicación: cantones y distritos de Costa Rica (desplegables en cascada si el país es Costa Rica) ----
+(function(){
+  // Fuente: API pública "Ubicaciones de Costa Rica" (ubicaciones.paginasweb.cr), sin llave,
+  // con CORS abierto — se consulta en vivo desde el navegador para mostrar siempre el listado
+  // oficial de provincias → cantones → distritos, en lugar de una copia fija en el código.
+  const API_BASE = 'https://ubicaciones.paginasweb.cr';
+  const PROVINCIAS = { 1: 'San José', 2: 'Alajuela', 3: 'Cartago', 4: 'Heredia', 5: 'Guanacaste', 6: 'Puntarenas', 7: 'Limón' };
+
+  const paisEl = $('pais');
+  const ciudadInput = $('ciudad');
+  const distritoInput = $('distrito');
+  const cantonSelect = $('cantonSelect');
+  const distritoSelect = $('distritoSelect');
+
+  let cantonesCargados = false;
+  let cargaFallida = false;
+
+  function normaliza(str){
+    return (str || '')
+      .trim()
+      .toLowerCase()
+      .normalize('NFD').replace(/[̀-ͯ]/g, '');
+  }
+
+  function esCostaRica(){
+    return normaliza(paisEl.value) === 'costa rica';
+  }
+
+  async function cargarCantones(){
+    if (cantonesCargados || cargaFallida) return;
+    try {
+      const provinciaIds = Object.keys(PROVINCIAS);
+      const respuestas = await Promise.all(provinciaIds.map(id =>
+        fetch(`${API_BASE}/provincia/${id}/cantones.json`).then(r => { if(!r.ok) throw new Error('http'); return r.json(); })
+      ));
+      provinciaIds.forEach((provinciaId, i) => {
+        const og = document.createElement('optgroup');
+        og.label = PROVINCIAS[provinciaId];
+        const cantones = respuestas[i];
+        Object.keys(cantones).forEach(cantonId => {
+          const opt = document.createElement('option');
+          opt.value = cantones[cantonId];
+          opt.textContent = cantones[cantonId];
+          opt.dataset.provinciaId = provinciaId;
+          opt.dataset.cantonId = cantonId;
+          og.appendChild(opt);
+        });
+        cantonSelect.appendChild(og);
+      });
+      cantonesCargados = true;
+    } catch (err) {
+      // Sin conexión con la API: se deja el campo como texto libre para no bloquear el formulario.
+      cargaFallida = true;
+    }
+  }
+
+  async function cargarDistritos(provinciaId, cantonId){
+    distritoSelect.innerHTML = '<option value="">Cargando distritos…</option>';
+    try {
+      const resp = await fetch(`${API_BASE}/provincia/${provinciaId}/canton/${cantonId}/distritos.json`);
+      if (!resp.ok) throw new Error('http');
+      const distritos = await resp.json();
+      distritoSelect.innerHTML = '<option value="">Seleccione un distrito…</option>';
+      Object.keys(distritos).forEach(distritoId => {
+        const opt = document.createElement('option');
+        opt.value = distritos[distritoId];
+        opt.textContent = distritos[distritoId];
+        distritoSelect.appendChild(opt);
+      });
+      distritoSelect.style.display = '';
+      distritoInput.setAttribute('readonly', 'readonly');
+      distritoInput.placeholder = 'Seleccione un distrito arriba ▾';
+      const match = Array.from(distritoSelect.options).find(o => o.value === distritoInput.value);
+      distritoSelect.value = match ? match.value : '';
+    } catch (err) {
+      // Sin conexión con la API para este cantón: se deja "Distrito" como texto libre.
+      distritoSelect.style.display = 'none';
+      distritoInput.removeAttribute('readonly');
+      distritoInput.placeholder = 'Ej. Carmen';
+    }
+  }
+
+  async function actualizarModoUbicacion(){
+    if (esCostaRica()) {
+      await cargarCantones();
+      if (cargaFallida) return; // se queda como texto libre
+      cantonSelect.style.display = '';
+      ciudadInput.setAttribute('readonly', 'readonly');
+      ciudadInput.placeholder = 'Seleccione un cantón arriba ▾';
+      // si el valor actual de ciudad coincide con un cantón, reflejarlo en el select
+      const match = Array.from(cantonSelect.options).find(o => o.value === ciudadInput.value);
+      cantonSelect.value = match ? match.value : '';
+      if (cantonSelect.value) {
+        const opt = cantonSelect.selectedOptions[0];
+        cargarDistritos(opt.dataset.provinciaId, opt.dataset.cantonId);
+      }
+    } else {
+      cantonSelect.style.display = 'none';
+      ciudadInput.removeAttribute('readonly');
+      ciudadInput.placeholder = '';
+      distritoSelect.style.display = 'none';
+      distritoInput.removeAttribute('readonly');
+      distritoInput.placeholder = 'Ej. Carmen';
+    }
+  }
+
+  cantonSelect.addEventListener('change', () => {
+    ciudadInput.value = cantonSelect.value;
+    distritoInput.value = '';
+    if (cantonSelect.value) {
+      const opt = cantonSelect.selectedOptions[0];
+      cargarDistritos(opt.dataset.provinciaId, opt.dataset.cantonId);
+    } else {
+      distritoSelect.style.display = 'none';
+      distritoInput.removeAttribute('readonly');
+    }
+    updatePreview();
+  });
+
+  distritoSelect.addEventListener('change', () => {
+    distritoInput.value = distritoSelect.value;
+    updatePreview();
+  });
+
+  paisEl.addEventListener('input', actualizarModoUbicacion);
+  actualizarModoUbicacion();
+})();
 
 // ---- live preview ----
 const previewFields = ['nombres','apellidos','documento','sangre','contacto1','telcontacto1'];
