@@ -337,15 +337,9 @@
 </div>
 <ul class="filelist" id="fileList"></ul>
 <div class="note">
-      Por seguridad de los navegadores, ningún sitio web puede adjuntar un archivo a un correo de forma 100%
-      automática en todos los dispositivos. Al presionar "Enviar por correo", la app genera el PDF completo
-      (con el diseño de la ficha y cada .jpg adjunto como página adicional), lo envía hacia vidavitalqr@zohomail.com
-      y lo(a) regresa a la página de VidaVitalQR para finalizar el pago:<br><br>
-<b>📱 En celular</b> (Android/iPhone): se abre el menú "Compartir" nativo — elige tu app de correo
-      (Gmail, Mail, Outlook) y el PDF ya vendrá adjunto listo para enviar a vidavitalqr@zohomail.com.<br>
-<b>💻 En computadora</b>: el PDF se descarga automáticamente (revisa tu carpeta de Descargas) y se abre tu
-      programa de correo con el mensaje listo hacia vidavitalqr@zohomail.com — solo arrastra el PDF descargado
-      al correo antes de enviarlo.
+      Al presionar "Enviar por correo", la app genera el PDF completo (con el diseño de la ficha y cada .jpg
+      adjunto como página adicional) y lo envía de forma automática a vidavitalqr@zohomail.com — no necesitas
+      hacer nada más. Enseguida serás redirigido(a) a la página de VidaVitalQR para finalizar el pago.
 </div>
 </div>
 
@@ -614,50 +608,67 @@ function goToPayment(folio){
   }
 }
 
-// ---- solo en celulares reales usamos el panel "Compartir"; en computadora,
-//      siempre descarga + abre el correo con vidavitalqr@zohomail.com ya puesto ----
-function isMobileDevice(){
-  if (navigator.userAgentData && typeof navigator.userAgentData.mobile === 'boolean') {
-    return navigator.userAgentData.mobile;
-  }
-  return /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent || '');
+// ---- convertir un Blob a base64 (para enviarlo en el cuerpo del JSON) ----
+function blobToBase64(blob){
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = () => resolve(reader.result); // incluye el prefijo "data:application/pdf;base64,"
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
 }
 
-// ---- convertir a PDF, enviar por correo y regresar al pago (un solo botón) ----
+// ---- respaldo manual: descarga el PDF y abre el correo prellenado (solo si el envío automático falla) ----
+function fallbackDescargaYCorreo(pdfBlob, filename, folio){
+  const subject = `VidaVitalQR - Ficha de emergencia${$('nombres').value ? ' - ' + $('nombres').value + ' ' + $('apellidos').value : ''}`;
+  const body = buildEmailBody();
+  const url = URL.createObjectURL(pdfBlob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click(); a.remove();
+  URL.revokeObjectURL(url);
+  const mailBody = encodeURIComponent(body + `\n\n⚠ El envío automático no estuvo disponible en este momento. Adjunta el archivo ${filename} que se acaba de descargar antes de enviar este correo.`);
+  window.location.href = `mailto:vidavitalqr@zohomail.com?subject=${encodeURIComponent(subject)}&body=${mailBody}`;
+  window.setTimeout(() => { goToPayment(folio); }, 600);
+}
+
+// ---- generar el PDF, enviarlo automáticamente por correo (sin intervención manual) y regresar al pago ----
 $('btnEmail').addEventListener('click', async () => {
   const btn = $('btnEmail');
   const originalText = btn.textContent;
   btn.disabled = true;
   btn.textContent = '⏳ Generando PDF…';
 
-  try{
-    const folio = $('counterNum').textContent.trim() || 'VidaVitalQR';
-    const filename = `${folio}.pdf`;
-    const pdfBlob = await generatePdfBlob();
-    const pdfFile = new File([pdfBlob], filename, {type:'application/pdf'});
-    const subject = `VidaVitalQR - Ficha de emergencia${$('nombres').value ? ' - ' + $('nombres').value + ' ' + $('apellidos').value : ''}`;
-    const body = buildEmailBody();
+  const folio = $('counterNum').textContent.trim() || 'VidaVitalQR';
+  const filename = `${folio}.pdf`;
+  let pdfBlob;
 
-    if(isMobileDevice() && navigator.canShare && navigator.canShare({files:[pdfFile]})){
-      // Móvil: comparte el PDF ya adjunto directo a la app de correo elegida
-      await navigator.share({files:[pdfFile], title: subject, text: `Enviar a vidavitalqr@zohomail.com\n\n${body}`});
-      goToPayment(folio);
-    }else{
-      // Escritorio: descarga el PDF y abre el correo con el mensaje listo
-      const url = URL.createObjectURL(pdfBlob);
-      const a = document.createElement('a');
-      a.href = url; a.download = filename;
-      document.body.appendChild(a); a.click(); a.remove();
-      URL.revokeObjectURL(url);
-      const mailBody = encodeURIComponent(body + `\n\n⚠ Adjunta el archivo ${filename} que se acaba de descargar antes de enviar este correo.`);
-      window.location.href = `mailto:vidavitalqr@zohomail.com?subject=${encodeURIComponent(subject)}&body=${mailBody}`;
-      // Damos un instante para que el sistema abra el programa de correo antes de navegar.
-      window.setTimeout(() => { goToPayment(folio); }, 600);
-    }
+  try{
+    pdfBlob = await generatePdfBlob();
   }catch(err){
-    if(err && err.name !== 'AbortError'){
-      alert('No se pudo generar o compartir el PDF. Intenta de nuevo.');
-    }
+    alert('No se pudo generar el PDF. Intenta de nuevo.');
+    btn.disabled = false;
+    btn.textContent = originalText;
+    return;
+  }
+
+  try{
+    btn.textContent = '⏳ Enviando por correo…';
+    const pdfBase64 = await blobToBase64(pdfBlob);
+
+    const resp = await fetch('/.netlify/functions/send-ficha', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ folio, filename, pdfBase64 })
+    });
+
+    if(!resp.ok) throw new Error('send-ficha-failed');
+
+    goToPayment(folio);
+  }catch(err){
+    // El envío automático no estuvo disponible (sin conexión, función aún no desplegada, etc.):
+    // usamos el respaldo manual para que la ficha nunca se pierda.
+    fallbackDescargaYCorreo(pdfBlob, filename, folio);
   }finally{
     btn.disabled = false;
     btn.textContent = originalText;
