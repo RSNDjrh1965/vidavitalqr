@@ -1,5 +1,4 @@
 [build]
-  command = "pwd && ls -la && npm install"
   functions = "netlify/functions"
   publish = "."
 
