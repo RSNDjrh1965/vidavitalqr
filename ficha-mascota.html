@@ -805,11 +805,13 @@ $('btnEmail').addEventListener('click', async () => {
   try{
     btn.textContent = '⏳ Enviando por correo…';
     const pdfBase64 = await blobToBase64(pdfBlob);
+    const nombreCompleto = [$('nombres').value, $('apellidos').value].filter(Boolean).join(' ') || 'Sin nombre';
+    const fotoBase64 = ($('photoImg').style.display !== 'none' && $('photoImg').src.startsWith('data:')) ? $('photoImg').src : null;
 
     const resp = await fetch('/.netlify/functions/send-ficha', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({ folio, filename, pdfBase64 })
+      body: JSON.stringify({ folio, filename, pdfBase64, nombreCompleto, tipo: 'Mascota', fotoBase64 })
     });
 
     if(!resp.ok) throw new Error('send-ficha-failed');
