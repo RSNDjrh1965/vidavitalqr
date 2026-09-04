@@ -1513,26 +1513,18 @@
   var cxAmount = document.getElementById('cxAmount');
   var cxPayBtn = document.getElementById('cxPayBtn');
 
-  // ---- fichas externas (persona / mascota): se abren en pestaña nueva al elegir un producto ----
+  // ---- fichas externas (persona / mascota): se abren en pestaña nueva cada vez que se elige un producto ----
   var FICHA_URL = 'https://vidavitalqr.com/ficha.html';
   var FICHA_MASCOTA_URL = 'https://vidavitalqr.com/ficha-mascota.html';
-  var fichaTabOpened = false;
-  var fichaMascotaTabOpened = false;
 
   function openFicha(esRenovacion){
     var url = esRenovacion ? (FICHA_URL + '?renovar=1') : FICHA_URL;
-    if (esRenovacion || !fichaTabOpened) {
-      window.open(url, '_blank', 'noopener');
-      fichaTabOpened = true;
-    }
+    window.open(url, '_blank', 'noopener');
   }
 
   function openFichaMascota(esRenovacion){
     var url = esRenovacion ? (FICHA_MASCOTA_URL + '?renovar=1') : FICHA_MASCOTA_URL;
-    if (esRenovacion || !fichaMascotaTabOpened) {
-      window.open(url, '_blank', 'noopener');
-      fichaMascotaTabOpened = true;
-    }
+    window.open(url, '_blank', 'noopener');
   }
 
   // ---- referencia de fichas asociadas (persona y/o mascota): llegan por ?fichaId= y/o ?fichaIdMascota=,
