@@ -231,6 +231,20 @@
 </div>
 </div>
 
+<!-- Aviso de renovación: solo se muestra si se llega con ?renovar=1 en la URL -->
+<div class="section no-print" id="renewalGate" style="display:none; border:2px solid var(--red,#c0392b); background:#fff6f0;">
+<h2 style="margin-top:0;">🔄 Renovación de ficha existente</h2>
+<p style="margin:0 0 14px;">Ingresa el código que aparece debajo del código QR de tu ficha actual (ejemplo: <b>VVMASCOTA00000012</b>). Al confirmarlo, tu ficha se actualizará usando ese mismo código — el código QR que ya tienes seguirá funcionando y mostrará la información nueva, sin generar un código duplicado.</p>
+<div style="display:flex; gap:10px; flex-wrap:wrap; align-items:flex-end;">
+<div class="field" style="flex:1; min-width:220px; margin:0;">
+<label>Código de tu ficha</label>
+<input type="text" id="renewalCodeInput" placeholder="VVMASCOTA00000012" style="text-transform:uppercase;">
+</div>
+<button type="button" id="renewalConfirmBtn" class="select-btn" style="white-space:nowrap;">Continuar con este código</button>
+</div>
+<p id="renewalConfirmedMsg" style="display:none; margin:14px 0 0; color:#1a7a3c; font-weight:600;">✔ Código confirmado. Completa el formulario y envía para actualizar tu ficha.</p>
+</div>
+
 <!-- Datos personales -->
 <div class="section">
 <h2><em>1</em>Datos de la mascota</h2>
@@ -325,11 +339,6 @@
 <input type="file" id="fileInput" accept=".jpg,.jpeg,image/jpeg" multiple>
 </div>
 <ul class="filelist" id="fileList"></ul>
-<div class="note">
-      Al presionar "Enviar por correo", la app genera el PDF completo (con el diseño de la ficha y cada .jpg
-      adjunto como página adicional) y lo envía de forma automática a vidavitalqr@zohomail.com — no necesitas
-      hacer nada más. Enseguida serás redirigido(a) a la página de VidaVitalQR Mascotas para finalizar el pago.
-</div>
 </div>
 
 <!-- Páginas de adjuntos (usadas para generar el PDF) -->
@@ -337,7 +346,7 @@
 
 <!-- Acciones -->
 <div class="actions no-print">
-<button class="btn btn-primary" id="btnEmail">✉ Enviar por correo</button>
+<button class="btn btn-primary" id="btnEmail">ENVIAR</button>
 <button class="btn btn-ghost" id="btnReset">↺ Limpiar formulario</button>
 </div>
 
@@ -411,6 +420,29 @@ $('photoRemove').addEventListener('click', e => {
       // localStorage bloqueado (modo privado, iframe restringido, etc.)
       return 1;
     }
+  }
+
+  // ---- ¿Es una renovación? (llegó con ?renovar=1 en la URL) ----
+  const params = new URLSearchParams(window.location.search);
+  const esRenovacion = params.get('renovar') === '1';
+
+  if (esRenovacion) {
+    // No se incrementa el contador global: el folio lo aporta el propio cliente,
+    // reutilizando el código que ya tiene, para que el QR existente no cambie.
+    $('counterNum').textContent = '— pendiente —';
+    $('renewalGate').style.display = 'block';
+    $('btnEmail').disabled = true;
+
+    $('renewalConfirmBtn').addEventListener('click', () => {
+      const codigo = $('renewalCodeInput').value.trim().toUpperCase();
+      if (!codigo) { alert('Ingresa el código de tu ficha para continuar.'); return; }
+      $('counterNum').textContent = codigo;
+      $('renewalConfirmedMsg').style.display = 'block';
+      $('renewalCodeInput').disabled = true;
+      $('renewalConfirmBtn').disabled = true;
+      $('btnEmail').disabled = false;
+    });
+    return;
   }
 
   try{
@@ -701,14 +733,50 @@ async function generatePdfBlob(){
   const mainCanvas = await html2canvas(document.querySelector('.wrap'), {
     scale: 2, backgroundColor: '#F7F5F0', useCORS: true
   });
-  const pdf = new jsPDF({unit:'pt', format:[mainCanvas.width*0.75, mainCanvas.height*0.75]});
-  pdf.addImage(mainCanvas.toDataURL('image/jpeg', 0.92), 'JPEG', 0, 0, mainCanvas.width*0.75, mainCanvas.height*0.75);
+
+  // ---- Tamaño de página carta (Letter, 8.5"x11") en puntos, con márgenes ----
+  const PAGE_W = 612, PAGE_H = 792, MARGIN = 24;
+  const usableW = PAGE_W - MARGIN * 2;
+  const usableH = PAGE_H - MARGIN * 2;
+
+  // Convierte el ancho del canvas (px) a puntos y calcula la escala para que quepa en el ancho útil.
+  const scaleToPage = usableW / (mainCanvas.width * 0.75);
+  // Altura (en px del canvas) que corresponde exactamente a una página completa ya escalada.
+  const sliceHeightPx = usableH / scaleToPage;
+
+  const pdf = new jsPDF({ unit: 'pt', format: [PAGE_W, PAGE_H] });
+  let y = 0;
+  let first = true;
+  while (y < mainCanvas.height) {
+    const sliceH = Math.min(sliceHeightPx, mainCanvas.height - y);
+    const sliceCanvas = document.createElement('canvas');
+    sliceCanvas.width = mainCanvas.width;
+    sliceCanvas.height = sliceH;
+    const ctx = sliceCanvas.getContext('2d');
+    ctx.fillStyle = '#F7F5F0';
+    ctx.fillRect(0, 0, sliceCanvas.width, sliceCanvas.height);
+    ctx.drawImage(mainCanvas, 0, y, mainCanvas.width, sliceH, 0, 0, mainCanvas.width, sliceH);
+
+    if (!first) pdf.addPage([PAGE_W, PAGE_H]);
+    first = false;
+    const imgW = mainCanvas.width * scaleToPage;
+    const imgH = sliceH * scaleToPage;
+    pdf.addImage(sliceCanvas.toDataURL('image/jpeg', 0.92), 'JPEG', MARGIN, MARGIN, imgW, imgH);
+
+    y += sliceH;
+  }
 
   const attPages = document.querySelectorAll('#printAttachments .print-attachment-page');
   for(const page of attPages){
     const c = await html2canvas(page, {scale:2, backgroundColor:'#ffffff', useCORS:true});
-    pdf.addPage([c.width*0.75, c.height*0.75]);
-    pdf.addImage(c.toDataURL('image/jpeg', 0.92), 'JPEG', 0, 0, c.width*0.75, c.height*0.75);
+    pdf.addPage([PAGE_W, PAGE_H]);
+    // escala la imagen adjunta para que quepa completa dentro de la página carta, centrada
+    const scaleAtt = Math.min(usableW / (c.width * 0.75), usableH / (c.height * 0.75));
+    const wAtt = c.width * 0.75 * scaleAtt;
+    const hAtt = c.height * 0.75 * scaleAtt;
+    const xAtt = (PAGE_W - wAtt) / 2;
+    const yAtt = (PAGE_H - hAtt) / 2;
+    pdf.addImage(c.toDataURL('image/jpeg', 0.92), 'JPEG', xAtt, yAtt, wAtt, hAtt);
   }
 
   noPrintEls.forEach((el,i) => { el.style.display = prevDisplays[i]; });
