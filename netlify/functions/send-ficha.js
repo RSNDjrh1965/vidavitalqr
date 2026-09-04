@@ -18,9 +18,9 @@
 // (son reservados por el propio entorno de ejecución). Por eso aquí se usan nombres propios:
 // S3_ACCESS_KEY_ID, S3_SECRET_ACCESS_KEY, S3_REGION.
 
-const { S3Client, PutObjectCommand, GetObjectCommand } = require('@aws-sdk/client-s3');
+const { S3Client, PutObjectCommand } = require('@aws-sdk/client-s3');
 const { buildQrSvg } = require('./lib/qr-svg');
-const { buildRow, parseCsv } = require('./lib/csv');
+const { actualizarResumenXlsx } = require('./lib/xlsx-resumen');
 
 const DESTINATARIO = 'vidavitalqr@zohomail.com';
 const REMITENTE = 'VidaVitalQR <ficha@vidavitalqr.com>';
@@ -29,9 +29,7 @@ const REMITENTE = 'VidaVitalQR <ficha@vidavitalqr.com>';
 const BUCKET_FICHAS = process.env.S3_BUCKET_FICHAS || 'vidavitalqr';
 const BUCKET_QR = process.env.S3_BUCKET_QR || 'vidavitalqr-qr';
 const BUCKET_RESUMEN = process.env.S3_BUCKET_RESUMEN || 'resumen-vidavitalqr';
-const RESUMEN_KEY = 'resumen.csv';
-
-const CSV_HEADER = ['Contador', 'Nombre completo', 'URL del objeto', 'Fotografía', 'Código QR'];
+const RESUMEN_KEY = 'resumen.xlsx';
 
 function getS3Client() {
   const region = process.env.S3_REGION || 'us-east-1';
@@ -99,44 +97,15 @@ async function subirABuckets(s3, region, { folio, filename, pdfBase64, fotoBase6
   return { pdfUrl, fotoUrl, qrUrl };
 }
 
-async function agregarFilaResumen(s3, region, fila) {
-  let existingRows = [];
+// ---- fecha de inicio de vigencia (formato legible, zona horaria de Costa Rica) ----
+function fechaInicioHoy() {
   try {
-    const resp = await s3.send(new GetObjectCommand({ Bucket: BUCKET_RESUMEN, Key: RESUMEN_KEY }));
-    const text = await streamToString(resp.Body);
-    existingRows = parseCsv(text);
+    return new Date().toLocaleDateString('es-CR', {
+      timeZone: 'America/Costa_Rica', year: 'numeric', month: '2-digit', day: '2-digit',
+    });
   } catch (err) {
-    if (err.name !== 'NoSuchKey' && err.Code !== 'NoSuchKey' && err.$metadata?.httpStatusCode !== 404) {
-      throw err;
-    }
-    // No existía todavía el archivo: empieza uno nuevo.
-    existingRows = [];
+    return new Date().toISOString().slice(0, 10);
   }
-
-  let csvOut = '';
-  if (existingRows.length === 0) {
-    csvOut += buildRow(CSV_HEADER);
-  } else {
-    // Reconstruye el archivo completo a partir de las filas existentes (ya parseadas) + la nueva.
-    existingRows.forEach(r => { csvOut += buildRow(r); });
-  }
-  csvOut += buildRow(fila);
-
-  await s3.send(new PutObjectCommand({
-    Bucket: BUCKET_RESUMEN,
-    Key: RESUMEN_KEY,
-    Body: Buffer.from(csvOut, 'utf-8'),
-    ContentType: 'text/csv; charset=utf-8',
-  }));
-}
-
-function streamToString(stream) {
-  return new Promise((resolve, reject) => {
-    const chunks = [];
-    stream.on('data', (chunk) => chunks.push(chunk));
-    stream.on('error', reject);
-    stream.on('end', () => resolve(Buffer.concat(chunks).toString('utf-8')));
-  });
 }
 
 exports.handler = async (event) => {
@@ -189,13 +158,14 @@ exports.handler = async (event) => {
     const subido = await subirABuckets(s3, region, { folio, filename, pdfBase64, fotoBase64 });
     pdfUrl = subido.pdfUrl; fotoUrl = subido.fotoUrl; qrUrl = subido.qrUrl;
 
-    await agregarFilaResumen(s3, region, [
-      folio || '',
-      nombreCompleto || '',
+    await actualizarResumenXlsx(s3, BUCKET_RESUMEN, RESUMEN_KEY, {
+      contador: folio || '',
+      nombre: nombreCompleto || '',
+      fecha: fechaInicioHoy(),
       pdfUrl,
-      fotoUrl,
+      fotoBase64,
       qrUrl,
-    ]);
+    });
   } catch (err) {
     // No bloqueamos el envío del correo si falla la parte de S3 — se reporta en la respuesta
     // para poder diagnosticarlo, pero la ficha igual llega por correo.
