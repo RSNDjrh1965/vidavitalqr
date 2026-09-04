@@ -1043,7 +1043,6 @@
           <div class="cap"><span>Gatos</span></div>
         </div>
       </div>
-      <p style="color:var(--ink-soft); font-size:0.95rem; margin-top:14px;"><strong>Importante:</strong> la información de la ficha (de persona o de mascota) se renueva una vez al año; el código QR se mantiene activo durante ese período y puede actualizarse en cualquier momento antes del vencimiento.</p>
     </div>
   </section>
 
@@ -1195,9 +1194,6 @@
           <div><h4>Información veterinaria</h4><p>Veterinario de confianza, vacunas al día, alergias y medicamentos.</p></div>
         </div>
       </div>
-      <div class="hero-actions" style="margin-top:20px;">
-        <a class="btn btn-ghost" id="fichaMascotaLinkBtn" href="https://vidavitalqr.com/ficha-mascota.html" target="_blank" rel="noopener noreferrer">Abrir la ficha de mi mascota</a>
-      </div>
     </div>
   </section>
 
@@ -1208,7 +1204,7 @@
         <span class="section-num">05 &mdash; Presentaciones físicas</span>
         <h2>Lleve su código QR con usted</h2>
         <p>La membresía anual de VidaVitalQR es un solo pago, disponible todo el año. Incluye la generación del código QR Dinámico, el alojamiento de la ficha en la nube y la impresión con láser en cualquiera de las siguientes presentaciones, accesible desde cualquier lector de códigos QR y desde cualquier parte del mundo. Se enviará una imagen en formato JPG, que podrá imprimirse donde el usuario o su representante consideren.</p>
-        <p>Marque con "Agregar a mi pago" la o las presentaciones que desee: la selección se reflejará en el resumen de pago (mockup) al final de la página.</p>
+        <p>Al hacer click en los botones "Agregar a mi pago" se despliega automáticamente la ficha correspondiente que debe llenar; una vez completada, haga click en "Enviar" y será redirigido(a) a la sección de pago, donde debe realizar el trámite correspondiente. Una vez realizado el pago, en menos de 48 horas le estaremos enviando el producto adquirido.</p>
       </div>
       <div class="formats">
         <div class="fcard">
@@ -1261,8 +1257,8 @@
     <div class="wrap">
       <div class="section-head" style="text-align:center;">
         <span class="section-num">Renovación anual</span>
-        <h2>Un QR para usted, otro para su mascota</h2>
-        <p>Puede adquirir ambos en la misma compra: cada uno se aloja, actualiza y renueva de forma independiente.</p>
+        <h2>Renueve su ficha o la de su mascota</h2>
+        <p>Al hacer click en "Agregar a mi pago" se abre la ficha correspondiente, donde debe ingresar el código que ya tiene para que su información se actualice sin generar un código nuevo. Una vez actualizada, la ficha queda reflejada en la nube en un plazo de hasta 8 horas.</p>
       </div>
       <div class="price-panel" style="display:grid; grid-template-columns:repeat(auto-fit, minmax(280px,1fr)); gap:28px; align-items:start;">
         <div class="price-card">
@@ -1272,7 +1268,7 @@
           <div class="pline"><span class="k">Alojamiento en la nube</span><span class="v">12 meses</span></div>
           <div class="pline"><span class="k">Acceso desde cualquier país</span><span class="v">Ilimitado</span></div>
           <button type="button" class="select-btn" data-item="renewal" data-price="7.00" data-label="Renovación anual VidaVitalQR — Persona">Agregar a mi pago</button>
-          <p class="select-note">Se reflejará en el resumen de pago al final de la página.</p>
+          <p class="select-note">Se abrirá la ficha para ingresar su código y actualizar su información.</p>
         </div>
         <div class="price-card">
           <span class="eyebrow" style="display:block; text-align:center; margin-bottom:8px;">Para su mascota</span>
@@ -1281,35 +1277,9 @@
           <div class="pline"><span class="k">Alojamiento en la nube</span><span class="v">12 meses</span></div>
           <div class="pline"><span class="k">Acceso desde cualquier país</span><span class="v">Ilimitado</span></div>
           <button type="button" class="select-btn" data-item="renewal_mascota" data-price="7.00" data-label="Renovación anual VidaVitalQR — Mascota">Agregar a mi pago</button>
-          <p class="select-note">Se reflejará en el resumen de pago al final de la página.</p>
+          <p class="select-note">Se abrirá la ficha para ingresar su código y actualizar su información.</p>
         </div>
       </div>
-    </div>
-  </section>
-
-  <!-- ============ FICHA MÉDICA (previa al pago) ============ -->
-  <section id="ficha-medica" class="ficha-medica">
-    <div class="wrap">
-      <div class="section-head">
-        <span class="section-num">Antes de pagar</span>
-        <h2>Complete la ficha médica</h2>
-        <p>La ficha médica se abrió en una pestaña nueva para que la complete allí. Si no se abrió, use el botón de abajo. Mientras tanto, indíquenos el correo para la confirmación (simulada) de este mockup de pago.</p>
-      </div>
-      <form id="fichaForm" class="ficha-form">
-        <a class="btn btn-ghost" id="fichaLinkBtn" href="https://vidavitalqr.com/ficha.html" target="_blank" rel="noopener noreferrer" style="width:fit-content; margin:0 auto;">Abrir la ficha médica</a>
-        <div class="field-row">
-          <div class="field">
-            <label for="fmNombre">Nombre completo</label>
-            <input type="text" id="fmNombre" placeholder="Nombre y apellidos" required>
-          </div>
-          <div class="field">
-            <label for="fmEmail">Correo para la confirmación</label>
-            <input type="email" id="fmEmail" placeholder="correo@ejemplo.com" required>
-          </div>
-        </div>
-        <button type="submit" class="btn btn-primary ficha-continue-btn">Continuar al pago</button>
-        <p class="select-note" id="fichaSavedNote" style="display:none;">Listo &mdash; continúe hasta el botón "Pagar" al final de la página.</p>
-      </form>
     </div>
   </section>
 
@@ -1546,27 +1516,21 @@
   // ---- fichas externas (persona / mascota): se abren en pestaña nueva al elegir un producto ----
   var FICHA_URL = 'https://vidavitalqr.com/ficha.html';
   var FICHA_MASCOTA_URL = 'https://vidavitalqr.com/ficha-mascota.html';
-  var fichaSection = document.getElementById('ficha-medica');
-  var fichaForm = document.getElementById('fichaForm');
-  var fichaSavedNote = document.getElementById('fichaSavedNote');
-  var ficha = { completed: false, email: '', nombre: '' };
   var fichaTabOpened = false;
   var fichaMascotaTabOpened = false;
 
-  function openFicha(){
-    if (!fichaSection.classList.contains('is-open')) {
-      fichaSection.classList.add('is-open');
-    }
-    if (!fichaTabOpened) {
-      window.open(FICHA_URL, '_blank', 'noopener');
+  function openFicha(esRenovacion){
+    var url = esRenovacion ? (FICHA_URL + '?renovar=1') : FICHA_URL;
+    if (esRenovacion || !fichaTabOpened) {
+      window.open(url, '_blank', 'noopener');
       fichaTabOpened = true;
     }
-    fichaSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
 
-  function openFichaMascota(){
-    if (!fichaMascotaTabOpened) {
-      window.open(FICHA_MASCOTA_URL, '_blank', 'noopener');
+  function openFichaMascota(esRenovacion){
+    var url = esRenovacion ? (FICHA_MASCOTA_URL + '?renovar=1') : FICHA_MASCOTA_URL;
+    if (esRenovacion || !fichaMascotaTabOpened) {
+      window.open(url, '_blank', 'noopener');
       fichaMascotaTabOpened = true;
     }
   }
@@ -1671,20 +1635,12 @@
       selectBtns.forEach(function(b){ if (b.dataset.item === item) updateButton(b); });
       renderOrder();
       if (selected[item]) {
-        if (PET_ITEMS.indexOf(item) !== -1) { openFichaMascota(); } else { openFicha(); }
+        var esRenovacion = (item === 'renewal' || item === 'renewal_mascota');
+        if (PET_ITEMS.indexOf(item) !== -1) { openFichaMascota(esRenovacion); } else { openFicha(esRenovacion); }
       }
     });
   });
   renderOrder();
-
-  fichaForm.addEventListener('submit', function(e){
-    e.preventDefault();
-    ficha.completed = true;
-    ficha.email = document.getElementById('fmEmail').value.trim();
-    ficha.nombre = document.getElementById('fmNombre').value.trim();
-    fichaSavedNote.style.display = '';
-    document.getElementById('checkout-demo').scrollIntoView({ behavior: 'smooth', block: 'start' });
-  });
 
   // ---- checkout demo: tabs ----
   var tabCard = document.getElementById('cxTabCard');
@@ -1746,16 +1702,10 @@
     var keys = Object.keys(ITEMS).filter(function(k){ return selected[k]; });
     if (keys.length === 0) { return; }
 
-    if (!ficha.completed || !ficha.email) {
-      openFicha();
-      fichaForm.reportValidity();
-      return;
-    }
-
     var labels = keys.map(function(k){ return ITEMS[k].label; }).join(', ');
     var subtotal = keys.reduce(function(sum, k){ return sum + ITEMS[k].price; }, 0);
     var total = subtotal * (1 + IVA_RATE);
-    cxSuccessDetail.innerHTML = labels + ' — Total ' + fmt(total) + ' (IVA incluido).<br>Ficha enviada (simulado) a <strong>' + ficha.email + '</strong>.';
+    cxSuccessDetail.innerHTML = labels + ' — Total ' + fmt(total) + ' (IVA incluido).<br>En menos de 48 horas le estaremos enviando el producto adquirido.';
     cxStep.style.display = 'none';
     cxSuccess.style.display = '';
   });
