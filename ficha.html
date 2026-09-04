@@ -716,6 +716,10 @@ async function generatePdfBlob(){
     scale: 2, backgroundColor: '#F7F5F0', useCORS: true
   });
 
+  if (!mainCanvas || !mainCanvas.width || !mainCanvas.height) {
+    throw new Error('El navegador no pudo generar la imagen de la ficha (mainCanvas vacío). Prueba en otro navegador o desactiva bloqueadores de anuncios/privacidad y vuelve a intentar.');
+  }
+
   // ---- Tamaño de página carta (Letter, 8.5"x11") en puntos, con márgenes ----
   const PAGE_W = 612, PAGE_H = 792, MARGIN = 24;
   const usableW = PAGE_W - MARGIN * 2;
@@ -850,7 +854,8 @@ $('btnEmail').addEventListener('click', async () => {
   try{
     pdfBlob = await generatePdfBlob();
   }catch(err){
-    alert('No se pudo generar el PDF. Intenta de nuevo.');
+    console.error('Error generando el PDF:', err);
+    alert('No se pudo generar el PDF. Detalle: ' + (err && err.message ? err.message : err) + '\n\nIntenta de nuevo, o prueba en otro navegador.');
     btn.disabled = false;
     btn.textContent = originalText;
     return;
