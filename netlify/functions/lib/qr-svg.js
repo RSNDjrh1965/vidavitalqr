@@ -3,7 +3,7 @@
 // - Codifica una URL en el QR (nivel de corrección de errores alto, para poder tapar el centro).
 // - Dibuja "VIDAVITALQR" centrado y legible dentro del propio QR.
 // - Debajo del QR (fuera del área escaneable) dibuja el folio/contador de la ficha.
-const QRCode = require('grcode');
+const QRCode = require('qrcode');
  
 async function buildQrSvg(targetUrl, folioText) {
   const qr = QRCode.create(targetUrl, { errorCorrectionLevel: 'H' });
