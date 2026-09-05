@@ -783,41 +783,6 @@ async function generatePdfBlob(){
   return pdf.output('blob');
 }
 
-// ---- cuerpo del correo (texto de respaldo) ----
-function buildEmailBody(){
-  const donadorEl = document.querySelector('input[name="donador"]:checked');
-  const lines = [
-    `Nombres: ${$('nombres').value}`,
-    `Apellidos: ${$('apellidos').value}`,
-    `Fecha de nacimiento: ${$('fnac').value}  (${$('edad').value})`,
-    `Número de asegurado: ${$('asegurado').value}`,
-    `Tipo de sangre: ${$('sangre').value}`,
-    `Donador: ${donadorEl ? donadorEl.value : ''}`,
-    `Documento de identidad: ${$('documento').value}`,
-    '',
-    `País: ${$('pais').value}`,
-    `Ciudad/Cantón: ${$('ciudad').value}`,
-    `Distrito: ${$('distrito').value}`,
-    `Otras señales: ${$('senales').value}`,
-    `Nombre de contacto 1: ${$('contacto1').value}`,
-    `Teléfono contacto 1: ${$('telcontacto1').value}`,
-    `Parentesco contacto 1: ${$('parentesco1').value}`,
-    `Nombre de contacto 2: ${$('contacto2').value}`,
-    `Teléfono contacto 2: ${$('telcontacto2').value}`,
-    `Parentesco contacto 2: ${$('parentesco2').value}`,
-    '',
-    `Comentarios importantes: ${$('comentarios').value}`,
-  ];
-  const medRows = Array.from(document.querySelectorAll('#medTableBody tr'))
-    .map(tr => ({name: tr.querySelector('.med-name').value, dose: tr.querySelector('.med-dose').value}))
-    .filter(r => r.name || r.dose);
-  if(medRows.length){
-    lines.push('', 'Medicamentos:');
-    medRows.forEach(r => lines.push(`- ${r.name || '(sin nombre)'}: ${r.dose || '(sin dosis)'}`));
-  }
-  return lines.join('\n');
-}
-
 // ---- ir a la sección de pago seguro de VidaVitalQR, pasando el número de la ficha ----
 function goToPayment(folio){
   try{
@@ -840,21 +805,7 @@ function blobToBase64(blob){
   });
 }
 
-// ---- respaldo manual: descarga el PDF y abre el correo prellenado (solo si el envío automático falla) ----
-function fallbackDescargaYCorreo(pdfBlob, filename, folio){
-  const subject = `VidaVitalQR - Ficha de emergencia${$('nombres').value ? ' - ' + $('nombres').value + ' ' + $('apellidos').value : ''}`;
-  const body = buildEmailBody();
-  const url = URL.createObjectURL(pdfBlob);
-  const a = document.createElement('a');
-  a.href = url; a.download = filename;
-  document.body.appendChild(a); a.click(); a.remove();
-  URL.revokeObjectURL(url);
-  const mailBody = encodeURIComponent(body + `\n\n⚠ El envío automático no estuvo disponible en este momento. Adjunta el archivo ${filename} que se acaba de descargar antes de enviar este correo.`);
-  window.location.href = `mailto:vidavitalqr@zohomail.com?subject=${encodeURIComponent(subject)}&body=${mailBody}`;
-  window.setTimeout(() => { goToPayment(folio); }, 600);
-}
-
-// ---- generar el PDF, enviarlo automáticamente por correo (sin intervención manual) y regresar al pago ----
+// ---- generar el PDF y guardarlo directamente en AWS S3 (no se envía ningún correo) ----
 $('btnEmail').addEventListener('click', async () => {
   const btn = $('btnEmail');
   const originalText = btn.textContent;
@@ -876,7 +827,7 @@ $('btnEmail').addEventListener('click', async () => {
   }
 
   try{
-    btn.textContent = '⏳ Enviando por correo…';
+    btn.textContent = '⏳ Guardando en la nube…';
     const pdfBase64 = await blobToBase64(pdfBlob);
     const nombreCompleto = [$('nombres').value, $('apellidos').value].filter(Boolean).join(' ') || 'Sin nombre';
     const fotoBase64 = ($('photoImg').style.display !== 'none' && $('photoImg').src.startsWith('data:')) ? $('photoImg').src : null;
@@ -887,13 +838,16 @@ $('btnEmail').addEventListener('click', async () => {
       body: JSON.stringify({ folio, filename, pdfBase64, nombreCompleto, tipo: 'Persona', fotoBase64 })
     });
 
-    if(!resp.ok) throw new Error('send-ficha-failed');
+    if(!resp.ok){
+      let detalle = '';
+      try{ detalle = await resp.text(); }catch(e){}
+      throw new Error(`El servidor respondió ${resp.status}. ${detalle}`.trim());
+    }
 
     goToPayment(folio);
   }catch(err){
-    // El envío automático no estuvo disponible (sin conexión, función aún no desplegada, etc.):
-    // usamos el respaldo manual para que la ficha nunca se pierda.
-    fallbackDescargaYCorreo(pdfBlob, filename, folio);
+    console.error('Error guardando la ficha en la nube:', err);
+    alert('No se pudo guardar la ficha. Detalle: ' + (err && err.message ? err.message : err) + '\n\nPor favor intenta de nuevo. Si el problema continúa, contáctanos.');
   }finally{
     btn.disabled = false;
     btn.textContent = originalText;
