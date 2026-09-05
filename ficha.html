@@ -752,9 +752,22 @@ async function generatePdfBlob(){
     y += sliceH;
   }
 
+  // ---- páginas de adjuntos: #printAttachments normalmente está oculto (solo se muestra
+  // al imprimir vía @media print), así que hay que mostrarlo temporalmente aquí; si no,
+  // html2canvas lo captura como 0x0 y jsPDF lanza "Invalid coordinates passed to jsPDF.addImage" ----
+  const attContainer = document.getElementById('printAttachments');
+  const prevAttDisplay = attContainer.style.display;
+  attContainer.style.display = 'block';
+
+  // asegura que todas las imágenes adjuntas ya terminaron de cargar antes de capturarlas
+  const attImgs = Array.from(attContainer.querySelectorAll('img'));
+  await Promise.all(attImgs.map(img => img.complete ? Promise.resolve() : new Promise(res => { img.onload = res; img.onerror = res; })));
+  await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+
   const attPages = document.querySelectorAll('#printAttachments .print-attachment-page');
   for(const page of attPages){
     const c = await html2canvas(page, {scale:2, backgroundColor:'#ffffff', useCORS:true});
+    if (!c || !c.width || !c.height) continue; // evita coordenadas inválidas si algo no cargó
     pdf.addPage([PAGE_W, PAGE_H]);
     // escala la imagen adjunta para que quepa completa dentro de la página carta, centrada
     const scaleAtt = Math.min(usableW / (c.width * 0.75), usableH / (c.height * 0.75));
@@ -765,6 +778,7 @@ async function generatePdfBlob(){
     pdf.addImage(c.toDataURL('image/jpeg', 0.92), 'JPEG', xAtt, yAtt, wAtt, hAtt);
   }
 
+  attContainer.style.display = prevAttDisplay;
   noPrintEls.forEach((el,i) => { el.style.display = prevDisplays[i]; });
   return pdf.output('blob');
 }
