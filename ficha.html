@@ -648,6 +648,9 @@ $('addMedRow').addEventListener('click', () => {
 
   paisEl.addEventListener('input', actualizarModoUbicacion);
   actualizarModoUbicacion();
+
+  // se expone para poder revertir el cantón/distrito a modo texto libre al limpiar el formulario
+  window.__resetUbicacionFicha = () => { cantonSelect.value=''; actualizarModoUbicacion(); };
 })();
 
 // ---- live preview ----
@@ -706,22 +709,30 @@ function renderFiles(){
   });
 }
 
+// ---- crea una página del PDF por cada archivo adjunto — sin límite de cantidad: si el usuario
+// adjunta 1, 5 o más archivos, se agregan igual cantidad de páginas al final del PDF ----
 function buildPrintAttachments(){
   const container = $('printAttachments');
   container.innerHTML = '';
-  files.forEach(f => {
+  // se crean los contenedores de cada página en el orden correcto desde ya (uno por archivo);
+  // así el orden final de las páginas siempre coincide con el orden en que se adjuntaron los
+  // archivos, sin depender de qué imagen termine de leerse primero (lectura asíncrona)
+  const pages = files.map(f => {
+    const page = document.createElement('div');
+    page.className = 'print-attachment-page';
+    const title = document.createElement('div');
+    title.className = 'print-attachment-title';
+    title.textContent = `Archivo adjunto: ${f.name}`;
+    page.appendChild(title);
+    container.appendChild(page);
+    return page;
+  });
+  files.forEach((f, i) => {
     const reader = new FileReader();
     reader.onload = async ev => {
-      const page = document.createElement('div');
-      page.className = 'print-attachment-page';
-      const title = document.createElement('div');
-      title.className = 'print-attachment-title';
-      title.textContent = `Archivo adjunto: ${f.name}`;
       const img = document.createElement('img');
       img.src = await comprimirImagenDataUrl(ev.target.result, 1800, 0.85);
-      page.appendChild(title);
-      page.appendChild(img);
-      container.appendChild(page);
+      pages[i].appendChild(img);
     };
     reader.readAsDataURL(f);
   });
@@ -749,8 +760,12 @@ async function generatePdfBlob(){
   const usableW = PAGE_W - MARGIN * 2;
   const usableH = PAGE_H - MARGIN * 2;
 
-  // Convierte el ancho del canvas (px) a puntos y calcula la escala para que quepa en el ancho útil.
-  const scaleToPage = usableW / (mainCanvas.width * 0.75);
+  // Escala que hace que el ANCHO COMPLETO del canvas quepa exactamente en el ancho útil de la
+  // página (sin el "* 0.75" que se usaba antes: ese factor solo se cancelaba correctamente en el
+  // cálculo del alto/ancho de las páginas de adjuntos más abajo, pero aquí se aplicaba una sola
+  // vez, lo que dibujaba la imagen un 33% más ancha que la página y recortaba el lado derecho —
+  // incluida la fotografía— fuera de la hoja).
+  const scaleToPage = usableW / mainCanvas.width;
   // Altura (en px del canvas) que corresponde exactamente a una página completa ya escalada.
   const sliceHeightPx = usableH / scaleToPage;
 
@@ -878,16 +893,29 @@ $('btnEmail').addEventListener('click', async () => {
   }
 });
 
-// ---- limpiar ----
-$('btnReset').addEventListener('click', () => {
-  if(!confirm('¿Limpiar todos los campos del formulario?')) return;
+// ---- limpiar (también se usa al restaurar la página desde el caché de atrás/adelante del navegador) ----
+function limpiarFormularioFicha(){
   document.querySelectorAll('input[type=text],input[type=tel],input[type=date],textarea').forEach(el => el.value='');
   $('sangre').value='';
   document.querySelector('input[name="donador"][value="No"]').checked = true;
   files = [];
   renderFiles();
   buildPrintAttachments();
+  // país/cantón/distrito: revertir el desplegable en cascada de Costa Rica a modo texto libre
+  if (typeof window.__resetUbicacionFicha === 'function') window.__resetUbicacionFicha();
   updatePreview();
+}
+
+$('btnReset').addEventListener('click', () => {
+  if(!confirm('¿Limpiar todos los campos del formulario?')) return;
+  limpiarFormularioFicha();
+});
+
+// ---- si el navegador restaura esta página desde su caché de atrás/adelante (bfcache) —por
+// ejemplo al volver con el botón "Atrás" después de enviar una ficha— se limpia el formulario
+// automáticamente para que no queden datos de la ficha anterior al momento de llenar otra ----
+window.addEventListener('pageshow', (e) => {
+  if (e.persisted) limpiarFormularioFicha();
 });
 
 updatePreview();
