@@ -914,6 +914,7 @@ function precargarDatosFicha(datos){
   setVal('nombres', datos.nombres);
   setVal('apellidos', datos.apellidos);
   setVal('fnac', datos.fnac);
+  $('fnac').dispatchEvent(new Event('input')); // recalcula la edad automática, que depende de este evento
   setVal('asegurado', datos.asegurado);
   setVal('sangre', datos.sangre);
   setVal('documento', datos.documento);
