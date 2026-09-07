@@ -1,19 +1,22 @@
 // ---- Netlify Function: página pública que se abre al escanear el código QR ----
 // Reemplaza el enlace directo al PDF. Al abrirse:
 //  1) Busca los datos de la ficha (folio) guardados en S3 por send-ficha.js.
-//  2) Envía, en segundo plano y sin bloquear la respuesta al visitante, un aviso por correo a
-//     cada contacto de emergencia que tenga un correo registrado, indicando que su código QR
-//     fue escaneado.
-//  3) Devuelve una página HTML con la información esencial, un botón para ver/descargar la
+//  2) Devuelve una página HTML con la información esencial, un botón para ver/descargar la
 //     ficha completa en PDF, y un selector de idioma (Español / English / Français /
 //     Português) que traduce las etiquetas fijas de esta página — el texto que la persona
 //     escribió en su ficha (comentarios, nombres, etc.) se muestra tal como fue ingresado,
 //     porque traducirlo automáticamente no sería confiable para información médica.
+//  3) Desde el navegador de quien escaneó, se le pide permiso para compartir su ubicación
+//     actual (aplica tanto para fichas de persona como de mascota) y, con el resultado
+//     (coordenadas exactas si lo permite, o nada si lo rechaza), se llama en segundo plano a
+//     la función `avisar-escaneo.js`, que es la que arma y envía el correo de aviso a los
+//     contactos de emergencia — incluyendo la ubicación cuando fue posible obtenerla. Esta
+//     página ya no envía el aviso ella misma, para no bloquear la carga esperando el permiso
+//     del navegador.
 
 const { S3Client, GetObjectCommand } = require('@aws-sdk/client-s3');
 
 const BUCKET_FICHAS = process.env.S3_BUCKET_FICHAS || 'vidavitalqr';
-const REMITENTE = 'VidaVitalQR <ficha@vidavitalqr.com>';
 
 function getS3Client() {
   const region = process.env.S3_REGION || 'us-east-1';
@@ -43,57 +46,6 @@ function escapeHtml(str) {
     .replace(/'/g, '&#39;');
 }
 
-// ---- fecha/hora legible en zona horaria de Costa Rica, para el correo de aviso ----
-function fechaHoraCR() {
-  try {
-    return new Date().toLocaleString('es-CR', { timeZone: 'America/Costa_Rica', dateStyle: 'long', timeStyle: 'short' });
-  } catch (err) {
-    return new Date().toISOString();
-  }
-}
-
-// ---- envía el aviso de escaneo a los contactos que tengan correo, sin bloquear la página ----
-async function avisarContactos(datos) {
-  const apiKey = process.env.RESEND_API_KEY;
-  if (!apiKey) return; // si no hay Resend configurado, simplemente no se avisa (no debe romper la página)
-
-  const contactosConCorreo = (Array.isArray(datos.contactos) ? datos.contactos : []).filter((c) => c && c.email);
-  if (contactosConCorreo.length === 0) return;
-
-  const esTipoMascota = datos.tipo === 'Mascota';
-  const asunto = esTipoMascota
-    ? `⚠️ Alguien escaneó el código QR de ${datos.nombreCompleto || 'su mascota'}`
-    : `⚠️ Alguien escaneó el código QR de emergencia de ${datos.nombreCompleto || 'un usuario'}`;
-
-  const cuerpo = [
-    `El código QR de ${esTipoMascota ? 'la mascota' : 'la ficha de emergencia de'} "${datos.nombreCompleto || 'Sin nombre'}" (folio ${datos.folio}) fue escaneado el ${fechaHoraCR()} (hora de Costa Rica).`,
-    '',
-    'Esto puede significar que alguien está tratando de contactarlo(a) por una emergencia, o que la mascota fue encontrada.',
-    '',
-    datos.pdfUrl ? `Ficha completa: ${datos.pdfUrl}` : '',
-    '',
-    'Este es un aviso automático de VidaVitalQR. Si usted mismo(a) escaneó el código para probarlo, puede ignorar este mensaje.',
-  ].filter(Boolean).join('\n');
-
-  const envios = contactosConCorreo.map((c) =>
-    fetch('https://api.resend.com/emails', {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        from: REMITENTE,
-        to: [c.email],
-        subject: asunto,
-        text: `Hola ${c.nombre || ''},\n\n${cuerpo}`,
-      }),
-    }).catch((err) => {
-      // no se debe interrumpir la carga de la página por un correo que falle
-      console.error('No se pudo avisar a', c.email, err);
-    })
-  );
-
-  await Promise.allSettled(envios);
-}
-
 // ---- diccionario de textos fijos de la página, por idioma ----
 const TEXTOS = {
   es: {
@@ -112,9 +64,11 @@ const TEXTOS = {
     sinDatos: 'Sin datos registrados.',
     botonPdf: 'Ver ficha completa (PDF)',
     notaOriginal: 'Texto ingresado por el usuario, tal como fue escrito.',
-    notaAviso: 'Se notificó automáticamente a los contactos de emergencia registrados.',
     noEncontrado: 'No se encontró información para este código.',
     idioma: 'Idioma',
+    avisoSolicitud: 'Se solicita su permiso para enviar a la persona de contacto la ubicación actual de la persona y/o mascota en aprietos.',
+    avisoUbicPrecisa: 'Gracias. Se notificó a los contactos de emergencia junto con su ubicación.',
+    avisoUbicAprox: 'No se compartió su ubicación exacta. Se notificó a los contactos de emergencia con una ubicación aproximada según su conexión a internet.',
   },
   en: {
     tituloPersona: 'Emergency information',
@@ -132,9 +86,11 @@ const TEXTOS = {
     sinDatos: 'No data on file.',
     botonPdf: 'View full record (PDF)',
     notaOriginal: 'Text entered by the user, shown exactly as written.',
-    notaAviso: 'The registered emergency contacts were automatically notified.',
     noEncontrado: 'No information was found for this code.',
     idioma: 'Language',
+    avisoSolicitud: 'We are requesting your permission to send the contact person the current location of the person and/or pet in distress.',
+    avisoUbicPrecisa: 'Thank you. The emergency contacts were notified along with your location.',
+    avisoUbicAprox: 'Your exact location was not shared. The emergency contacts were notified with an approximate location based on your internet connection.',
   },
   fr: {
     tituloPersona: "Informations d'urgence",
@@ -152,9 +108,11 @@ const TEXTOS = {
     sinDatos: 'Aucune donnée enregistrée.',
     botonPdf: 'Voir la fiche complète (PDF)',
     notaOriginal: "Texte saisi par l'utilisateur, affiché tel quel.",
-    notaAviso: "Les contacts d'urgence enregistrés ont été notifiés automatiquement.",
     noEncontrado: "Aucune information trouvée pour ce code.",
     idioma: 'Langue',
+    avisoSolicitud: "Nous vous demandons la permission d'envoyer à la personne de contact la localisation actuelle de la personne et/ou de l'animal en détresse.",
+    avisoUbicPrecisa: "Merci. Les contacts d'urgence ont été notifiés avec votre localisation.",
+    avisoUbicAprox: "Votre localisation exacte n'a pas été partagée. Les contacts d'urgence ont été notifiés avec une localisation approximative basée sur votre connexion internet.",
   },
   pt: {
     tituloPersona: 'Informações de emergência',
@@ -172,9 +130,11 @@ const TEXTOS = {
     sinDatos: 'Sem dados registrados.',
     botonPdf: 'Ver ficha completa (PDF)',
     notaOriginal: 'Texto inserido pelo usuário, exibido como foi escrito.',
-    notaAviso: 'Os contatos de emergência registrados foram notificados automaticamente.',
     noEncontrado: 'Nenhuma informação foi encontrada para este código.',
     idioma: 'Idioma',
+    avisoSolicitud: 'Solicitamos sua permissão para enviar ao contato a localização atual da pessoa e/ou animal em apuros.',
+    avisoUbicPrecisa: 'Obrigado. Os contatos de emergência foram notificados junto com sua localização.',
+    avisoUbicAprox: 'Sua localização exata não foi compartilhada. Os contatos de emergência foram notificados com uma localização aproximada baseada na sua conexão à internet.',
   },
 };
 
@@ -270,25 +230,45 @@ function paginaVisor(datos) {
     </div>
     ${datos.pdfUrl ? `<a class="btnPdf" href="${escapeHtml(datos.pdfUrl)}" target="_blank" rel="noopener" data-i18n="botonPdf"></a>` : ''}
   </div>
-  <p class="avisoFooter" data-i18n="notaAviso"></p>
+  <p class="avisoFooter" id="avisoUbicacion"></p>
 </div>
 <script>
   var TEXTOS = ${JSON.stringify(TEXTOS)};
+  var FOLIO = ${JSON.stringify(datos.folio || '')};
+  var idiomaActual = 'es';
+  // estadoUbicacion: 'pendiente' mientras se espera la respuesta del navegador al permiso de
+  // ubicación; 'concedida' si la persona que escaneó aceptó compartirla; 'denegada' si la
+  // rechazó, no respondió a tiempo, o su navegador no soporta geolocalización.
+  var estadoUbicacion = 'pendiente';
+
+  function actualizarAvisoUbicacion(){
+    var dic = TEXTOS[idiomaActual] || TEXTOS.es;
+    var el = document.getElementById('avisoUbicacion');
+    if (!el) return;
+    if (estadoUbicacion === 'concedida') el.textContent = dic.avisoUbicPrecisa;
+    else if (estadoUbicacion === 'denegada') el.textContent = dic.avisoUbicAprox;
+    else el.textContent = dic.avisoSolicitud;
+  }
+
   function aplicarIdioma(lang){
-    var dic = TEXTOS[lang] || TEXTOS.es;
+    idiomaActual = TEXTOS[lang] ? lang : 'es';
+    var dic = TEXTOS[idiomaActual];
     document.querySelectorAll('[data-i18n]').forEach(function(el){
       var clave = el.getAttribute('data-i18n');
       if (dic[clave] !== undefined) el.textContent = dic[clave];
     });
-    document.documentElement.lang = lang;
+    document.documentElement.lang = idiomaActual;
     document.querySelectorAll('.langbar button').forEach(function(b){
-      b.classList.toggle('activo', b.getAttribute('data-lang') === lang);
+      b.classList.toggle('activo', b.getAttribute('data-lang') === idiomaActual);
     });
-    try { localStorage.setItem('vidavitalqr_lang', lang); } catch(e){}
+    actualizarAvisoUbicacion();
+    try { localStorage.setItem('vidavitalqr_lang', idiomaActual); } catch(e){}
   }
+
   document.querySelectorAll('.langbar button').forEach(function(b){
     b.addEventListener('click', function(){ aplicarIdioma(b.getAttribute('data-lang')); });
   });
+
   var preferido = 'es';
   try {
     var guardado = localStorage.getItem('vidavitalqr_lang');
@@ -299,6 +279,41 @@ function paginaVisor(datos) {
     }
   } catch(e){}
   aplicarIdioma(preferido);
+
+  // ---- pide permiso de ubicación (aplica igual para fichas de persona y de mascota) y avisa
+  // en segundo plano a la función que envía el correo, con coordenadas exactas si se concedió
+  // el permiso, o sin ellas si se rechazó (esa función usará la IP como respaldo aproximado) ----
+  function avisarEscaneo(lat, lng, permitido){
+    if (!FOLIO) return;
+    try {
+      fetch('/.netlify/functions/avisar-escaneo', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        keepalive: true,
+        body: JSON.stringify({ folio: FOLIO, lat: lat, lng: lng, permitido: !!permitido }),
+      }).catch(function(){});
+    } catch (e) {}
+  }
+
+  if (navigator.geolocation) {
+    navigator.geolocation.getCurrentPosition(
+      function (pos) {
+        estadoUbicacion = 'concedida';
+        actualizarAvisoUbicacion();
+        avisarEscaneo(pos.coords.latitude, pos.coords.longitude, true);
+      },
+      function () {
+        estadoUbicacion = 'denegada';
+        actualizarAvisoUbicacion();
+        avisarEscaneo(null, null, false);
+      },
+      { timeout: 6000, maximumAge: 0, enableHighAccuracy: false }
+    );
+  } else {
+    estadoUbicacion = 'denegada';
+    actualizarAvisoUbicacion();
+    avisarEscaneo(null, null, false);
+  }
 </script>
 </body>
 </html>`;
@@ -344,18 +359,15 @@ exports.handler = async (event) => {
     }
     if (!encontrado) throw new Error('No encontrado en ninguna ubicación.');
     datos = JSON.parse(encontrado);
+    datos.folio = datos.folio || folio; // por si el JSON guardado no trae el folio explícito
   } catch (err) {
     return { statusCode: 404, headers, body: paginaError('No se encontró información para este código.') };
   }
 
-  // el aviso a los contactos se espera antes de responder (los Netlify Functions no garantizan
-  // que el código siga corriendo después de devolver la respuesta), pero nunca debe impedir que
-  // la página se muestre si el envío falla
-  try {
-    await avisarContactos(datos);
-  } catch (err) {
-    console.error('Error avisando a los contactos:', err);
-  }
+  // El aviso a los contactos ya no se envía desde aquí: se dispara desde el navegador de quien
+  // escaneó, después de pedirle permiso de ubicación (ver `avisar-escaneo.js`). Así la página se
+  // muestra de inmediato, sin esperar a que el navegador resuelva el permiso ni a que se envíe
+  // el correo.
 
   return { statusCode: 200, headers, body: paginaVisor(datos) };
 };
