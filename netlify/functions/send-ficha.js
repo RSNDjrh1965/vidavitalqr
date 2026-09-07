@@ -97,14 +97,18 @@ async function subirABuckets(s3, region, { folio, filename, pdfBase64, fotoBase6
   return { pdfUrl, fotoUrl, qrUrl };
 }
 
-// ---- fecha de inicio de vigencia (formato legible, zona horaria de Costa Rica) ----
+// ---- fecha de hoy (zona horaria de Costa Rica), como objeto Date real ----
+// Se construye a partir del año/mes/día calendario de Costa Rica (no de la hora UTC del
+// servidor) y se fija al mediodía para evitar que un cambio de zona horaria la corra un día.
+// Se necesita como Date real (no como texto ya formateado) para que Excel pueda calcular con
+// ella la columna "Meses transcurridos" en xlsx-resumen.js.
 function fechaInicioHoy() {
   try {
-    return new Date().toLocaleDateString('es-CR', {
-      timeZone: 'America/Costa_Rica', year: 'numeric', month: '2-digit', day: '2-digit',
-    });
+    const iso = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Costa_Rica' }); // 'YYYY-MM-DD'
+    const [y, m, d] = iso.split('-').map(Number);
+    return new Date(y, m - 1, d, 12, 0, 0);
   } catch (err) {
-    return new Date().toISOString().slice(0, 10);
+    return new Date();
   }
 }
 
