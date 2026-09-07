@@ -3,13 +3,27 @@
 // (encabezados con color, columnas con ancho fijo, bordes en cada celda) y para poder
 // incrustar la fotografía directamente dentro de la celda correspondiente.
 //
+// Columnas (en este orden):
+//  1) Actualización          — contador de cuántas veces se ha guardado esta ficha (1, 2, 3…)
+//  2) Contador                — folio/código de la ficha
+//  3) Nombre completo
+//  4) Fecha de inicio         — fecha de la primera vez que se guardó la ficha
+//  5) Fecha de actualización  — fecha del guardado más reciente (la renovación reinicia el conteo)
+//  6) Meses transcurridos     — fórmula de Excel: meses completos desde "Fecha de actualización"
+//                               hasta hoy — se recalcula solo cada vez que se abre el archivo,
+//                               así siempre queda claro cuándo se vence la renovación (1 año).
+//  7) URL del objeto (PDF)
+//  8) Fotografía
+//  9) Código QR
+//
 // Comportamiento:
 //  - Si el archivo resumen.xlsx no existe todavía en el bucket, lo crea con el
 //    encabezado y el formato ya aplicado.
 //  - Si el "Contador" (folio) de la ficha que se está subiendo YA existe en una fila
 //    anterior (esto pasa cuando el cliente renueva/actualiza su ficha), esa fila se
-//    ACTUALIZA en su lugar en vez de crear una fila duplicada.
-//  - Si no existe todavía, se agrega como una fila nueva al final.
+//    ACTUALIZA en su lugar en vez de crear una fila duplicada, y "Actualización" sube
+//    en 1 respecto al valor que ya tenía.
+//  - Si no existe todavía, se agrega como una fila nueva al final, con Actualización = 1.
 
 const ExcelJS = require('exceljs');
 const { PutObjectCommand, GetObjectCommand } = require('@aws-sdk/client-s3');
@@ -17,6 +31,23 @@ const { PutObjectCommand, GetObjectCommand } = require('@aws-sdk/client-s3');
 const HEADER_FILL = 'FF12282B';
 const HEADER_FONT = 'FFF9F6EF';
 const BORDER = { style: 'thin', color: { argb: 'FFB9B2A0' } };
+const FECHA_FORMATO = 'dd/mm/yyyy';
+
+// ---- índices de columna (1-based, como los usa exceljs) ----
+const COL_ACTUALIZACION = 1;
+const COL_CONTADOR = 2;
+const COL_NOMBRE = 3;
+const COL_FECHA_INICIO = 4;
+const COL_FECHA_ACTUALIZACION = 5;
+const COL_MESES = 6;
+const COL_PDF = 7;
+const COL_FOTO = 8;
+const COL_QR = 9;
+
+const FOTO_ANCHO_PX = 74;
+const FOTO_ALTO_PX = 74;
+const FOTO_COL_WIDTH = 16; // en "caracteres" (unidad de ancho de columna de Excel)
+const FILA_ALTO_PT = 60;
 
 function streamToBuffer(stream) {
   return new Promise((resolve, reject) => {
@@ -27,17 +58,32 @@ function streamToBuffer(stream) {
   });
 }
 
+// ---- convierte un índice de columna (1-based) a su letra de Excel (1→A, 27→AA, …) ----
+function colALetra(indice1based) {
+  let s = '';
+  let n = indice1based;
+  while (n > 0) {
+    const resto = (n - 1) % 26;
+    s = String.fromCharCode(65 + resto) + s;
+    n = Math.floor((n - 1) / 26);
+  }
+  return s;
+}
+
 function nuevaHojaConEstilo(workbook) {
   const sheet = workbook.addWorksheet('Resumen', {
     views: [{ state: 'frozen', ySplit: 1 }],
   });
   sheet.columns = [
+    { header: 'Actualización', key: 'actualizacion', width: 14 },
     { header: 'Contador', key: 'contador', width: 20 },
-    { header: 'Nombre completo', key: 'nombre', width: 30 },
-    { header: 'Fecha de inicio', key: 'fecha', width: 16 },
-    { header: 'URL del objeto (PDF)', key: 'pdf', width: 46 },
-    { header: 'Fotografía', key: 'foto', width: 16 },
-    { header: 'Código QR', key: 'qr', width: 46 },
+    { header: 'Nombre completo', key: 'nombre', width: 28 },
+    { header: 'Fecha de inicio', key: 'fecha', width: 15 },
+    { header: 'Fecha de actualización', key: 'fechaActualizacion', width: 18 },
+    { header: 'Meses transcurridos', key: 'meses', width: 16 },
+    { header: 'URL del objeto (PDF)', key: 'pdf', width: 14 },
+    { header: 'Fotografía', key: 'foto', width: FOTO_COL_WIDTH },
+    { header: 'Código QR', key: 'qr', width: 16 },
   ];
   const headerRow = sheet.getRow(1);
   headerRow.height = 22;
@@ -71,7 +117,7 @@ function buscarFilaPorContador(sheet, contador) {
   let filaEncontrada = null;
   sheet.eachRow((row, rowNumber) => {
     if (rowNumber === 1) return; // encabezado
-    const valor = row.getCell(1).value;
+    const valor = row.getCell(COL_CONTADOR).value;
     if (valor !== null && valor !== undefined && String(valor).trim() === String(contador).trim()) {
       filaEncontrada = rowNumber;
     }
@@ -89,29 +135,72 @@ function imagenDesdeDataUrl(dataUrl) {
   return { buffer: Buffer.from(m[2], 'base64'), extension };
 }
 
+// ---- fracción de desplazamiento para centrar la fotografía dentro de su celda ----
+// exceljs posiciona la imagen con "tl.col"/"tl.row" como número de columna/fila con una
+// parte decimal que representa qué tan adentro de esa celda empieza la imagen (0 = borde
+// izquierdo/superior). Se estima el ancho/alto de la celda en píxeles a partir del ancho de
+// columna (en "caracteres") y del alto de fila (en puntos) para centrar la imagen fija de
+// 74x74 px dentro de ella. La conversión es aproximada (Excel no expone el tamaño real en
+// píxeles), pero deja la foto centrada de forma consistente en Excel/Google Sheets/LibreOffice.
+function offsetParaCentrar(colWidthChars, rowHeightPt, imgWidthPx, imgHeightPx) {
+  const colWidthPx = Math.round(colWidthChars * 7 + 5);
+  const rowHeightPx = Math.round(rowHeightPt * (96 / 72));
+  const offX = Math.max(0, (colWidthPx - imgWidthPx) / 2 / colWidthPx);
+  const offY = Math.max(0, (rowHeightPx - imgHeightPx) / 2 / rowHeightPx);
+  return { offX, offY };
+}
+
 async function actualizarResumenXlsx(s3, bucket, key, fila) {
   const { contador, nombre, fecha, pdfUrl, fotoBase64, qrUrl } = fila;
   const { workbook, sheet } = await cargarOCrearLibro(s3, bucket, key);
 
   let rowNumber = buscarFilaPorContador(sheet, contador);
   const esNueva = !rowNumber;
+
+  // "fecha" llega como un objeto Date real (ver fechaInicioHoy() en send-ficha.js) para que
+  // Excel lo trate como fecha de verdad y la columna de "Meses transcurridos" pueda calcularse
+  // con una fórmula en vez de quedar congelada en el valor que tenía al momento de guardar.
+  const fechaActualizacion = fecha instanceof Date ? fecha : new Date();
+
+  // ---- número de actualización: 1 en la primera vez; +1 sobre el valor anterior en cada renovación ----
+  let numeroActualizacion = 1;
+  let fechaInicioFinal = fechaActualizacion;
+  if (!esNueva) {
+    const filaExistente = sheet.getRow(rowNumber);
+    const valorPrevio = parseInt(filaExistente.getCell(COL_ACTUALIZACION).value, 10);
+    numeroActualizacion = Number.isFinite(valorPrevio) && valorPrevio > 0 ? valorPrevio + 1 : 2;
+    // la fecha de inicio no cambia en una renovación — se conserva la que ya tenía la fila
+    const fechaInicioPrevia = filaExistente.getCell(COL_FECHA_INICIO).value;
+    if (fechaInicioPrevia) fechaInicioFinal = fechaInicioPrevia;
+  }
   if (esNueva) {
     rowNumber = Math.max(sheet.rowCount, 1) + 1;
   }
 
   const row = sheet.getRow(rowNumber);
-  row.height = 60;
-  row.getCell(1).value = contador || '';
-  row.getCell(2).value = nombre || '';
-  row.getCell(3).value = fecha || '';
-  row.getCell(4).value = pdfUrl ? { text: 'Ver PDF', hyperlink: pdfUrl } : '';
-  row.getCell(6).value = qrUrl ? { text: 'Ver código QR', hyperlink: qrUrl } : '';
+  row.height = FILA_ALTO_PT;
+  row.getCell(COL_ACTUALIZACION).value = numeroActualizacion;
+  row.getCell(COL_CONTADOR).value = contador || '';
+  row.getCell(COL_NOMBRE).value = nombre || '';
+  row.getCell(COL_FECHA_INICIO).value = fechaInicioFinal;
+  row.getCell(COL_FECHA_INICIO).numFmt = FECHA_FORMATO;
+  row.getCell(COL_FECHA_ACTUALIZACION).value = fechaActualizacion;
+  row.getCell(COL_FECHA_ACTUALIZACION).numFmt = FECHA_FORMATO;
+  // meses completos transcurridos desde la última actualización hasta hoy (se recalcula cada
+  // vez que se abre el archivo — así siempre refleja cuánto falta para el año de vigencia)
+  const celdaFechaActualizacion = `${colALetra(COL_FECHA_ACTUALIZACION)}${rowNumber}`;
+  row.getCell(COL_MESES).value = { formula: `IFERROR(DATEDIF(${celdaFechaActualizacion},TODAY(),"m"),"")` };
+  row.getCell(COL_PDF).value = pdfUrl ? { text: 'Ver PDF', hyperlink: pdfUrl } : '';
+  row.getCell(COL_QR).value = qrUrl ? { text: 'Ver código QR', hyperlink: qrUrl } : '';
 
   row.eachCell({ includeEmpty: true }, (cell) => {
     cell.border = { top: BORDER, left: BORDER, bottom: BORDER, right: BORDER };
     cell.alignment = { vertical: 'middle', horizontal: 'left', wrapText: true };
   });
-  [4, 6].forEach((col) => {
+  [COL_ACTUALIZACION, COL_FECHA_INICIO, COL_FECHA_ACTUALIZACION, COL_MESES].forEach((col) => {
+    row.getCell(col).alignment = { vertical: 'middle', horizontal: 'center' };
+  });
+  [COL_PDF, COL_QR].forEach((col) => {
     const cell = row.getCell(col);
     if (cell.value) cell.font = { color: { argb: 'FF1155CC' }, underline: true };
   });
@@ -119,22 +208,24 @@ async function actualizarResumenXlsx(s3, bucket, key, fila) {
   // Si esta fila ya tenía una foto incrustada (caso típico de una renovación que vuelve a
   // usar el mismo Contador), hay que quitarla antes de poner la nueva — si no, quedarían
   // dos fotos superpuestas en la misma celda.
+  const colFotoIdx0 = COL_FOTO - 1; // exceljs guarda el "range" de la imagen con columna 0-based
   if (typeof sheet._media !== 'undefined') {
-    sheet._media = sheet._media.filter((m) => !(m.type === 'image' && m.range && m.range.tl && m.range.tl.col === 4 && Math.floor(m.range.tl.row) === rowNumber - 1));
+    sheet._media = sheet._media.filter((m) => !(m.type === 'image' && m.range && m.range.tl && Math.floor(m.range.tl.col) === colFotoIdx0 && Math.floor(m.range.tl.row) === rowNumber - 1));
   }
 
   const imagen = imagenDesdeDataUrl(fotoBase64);
   if (imagen) {
     const imageId = workbook.addImage({ buffer: imagen.buffer, extension: imagen.extension });
+    const { offX, offY } = offsetParaCentrar(FOTO_COL_WIDTH, FILA_ALTO_PT, FOTO_ANCHO_PX, FOTO_ALTO_PX);
     sheet.addImage(imageId, {
-      tl: { col: 4, row: rowNumber - 1 + 0.05 },
-      ext: { width: 74, height: 74 },
+      tl: { col: colFotoIdx0 + offX, row: rowNumber - 1 + offY },
+      ext: { width: FOTO_ANCHO_PX, height: FOTO_ALTO_PX },
       editAs: 'oneCell',
     });
-    row.getCell(5).value = '';
+    row.getCell(COL_FOTO).value = '';
   } else {
-    row.getCell(5).value = 'Sin foto';
-    row.getCell(5).alignment = { vertical: 'middle', horizontal: 'center' };
+    row.getCell(COL_FOTO).value = 'Sin foto';
+    row.getCell(COL_FOTO).alignment = { vertical: 'middle', horizontal: 'center' };
   }
 
   row.commit();
