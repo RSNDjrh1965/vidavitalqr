@@ -96,6 +96,120 @@ function nuevaHojaConEstilo(workbook) {
   return sheet;
 }
 
+// ---- migración del esquema antiguo (6 columnas) al nuevo (9 columnas) ----
+// El archivo resumen.xlsx pudo haberse creado ANTES de que existieran las columnas
+// "Actualización", "Fecha de actualización" y "Meses transcurridos". Esa hoja antigua tiene
+// como encabezados, en orden: Contador | Nombre completo | Fecha de inicio |
+// URL del objeto (PDF) | Fotografía | Código QR.
+// Si se detecta ese encabezado, se reconstruye la hoja completa con el formato nuevo,
+// trasladando cada fila existente (datos, enlaces y fotografías incrustadas) antes de
+// continuar con el guardado que disparó esta actualización.
+
+function esEsquemaAntiguo(sheet) {
+  const encabezado1 = sheet.getRow(1).getCell(1).value;
+  return String(encabezado1 || '').trim() === 'Contador';
+}
+
+function parseFechaLegacy(valor) {
+  if (valor instanceof Date) return valor;
+  if (typeof valor === 'string') {
+    const m = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(valor.trim());
+    if (m) {
+      const d = parseInt(m[1], 10), mo = parseInt(m[2], 10), y = parseInt(m[3], 10);
+      return new Date(y, mo - 1, d, 12, 0, 0);
+    }
+  }
+  return new Date();
+}
+
+function extraerHyperlink(valor) {
+  if (!valor) return '';
+  if (typeof valor === 'string') return valor;
+  if (typeof valor === 'object' && valor.hyperlink) return valor.hyperlink;
+  if (typeof valor === 'object' && valor.text) return valor.text;
+  return '';
+}
+
+function migrarEsquemaAntiguo(workbook, sheetAntigua) {
+  // Esquema antiguo (1-based): 1 Contador, 2 Nombre completo, 3 Fecha de inicio,
+  // 4 URL del objeto (PDF), 5 Fotografía, 6 Código QR.
+  const filasLegacy = [];
+  sheetAntigua.eachRow((row, rowNumber) => {
+    if (rowNumber === 1) return; // encabezado
+    const contador = row.getCell(1).value;
+    if (contador === null || contador === undefined || String(contador).trim() === '') return;
+    filasLegacy.push({
+      rowNumber,
+      contador,
+      nombre: row.getCell(2).value,
+      fecha: row.getCell(3).value,
+      pdfUrl: extraerHyperlink(row.getCell(4).value),
+      qrUrl: extraerHyperlink(row.getCell(6).value),
+    });
+  });
+
+  // capturar qué imagen (por su imageId dentro del workbook) va con cada fila, ANTES de
+  // quitar la hoja antigua
+  const imagenesPorFila = {};
+  if (typeof sheetAntigua.getImages === 'function') {
+    sheetAntigua.getImages().forEach((img) => {
+      const filaAsociada = Math.round(img.range.tl.row) + 1;
+      imagenesPorFila[filaAsociada] = img.imageId;
+    });
+  }
+
+  workbook.removeWorksheet(sheetAntigua.id);
+  const sheetNueva = nuevaHojaConEstilo(workbook);
+
+  filasLegacy.forEach((legacy) => {
+    const rowNumber = sheetNueva.rowCount + 1;
+    const fechaInicio = parseFechaLegacy(legacy.fecha);
+    const row = sheetNueva.getRow(rowNumber);
+    row.height = FILA_ALTO_PT;
+    row.getCell(COL_ACTUALIZACION).value = 1;
+    row.getCell(COL_CONTADOR).value = legacy.contador || '';
+    row.getCell(COL_NOMBRE).value = legacy.nombre || '';
+    row.getCell(COL_FECHA_INICIO).value = fechaInicio;
+    row.getCell(COL_FECHA_INICIO).numFmt = FECHA_FORMATO;
+    row.getCell(COL_FECHA_ACTUALIZACION).value = fechaInicio;
+    row.getCell(COL_FECHA_ACTUALIZACION).numFmt = FECHA_FORMATO;
+    const celdaFechaActualizacion = `${colALetra(COL_FECHA_ACTUALIZACION)}${rowNumber}`;
+    row.getCell(COL_MESES).value = { formula: `IFERROR(DATEDIF(${celdaFechaActualizacion},TODAY(),"m"),"")` };
+    row.getCell(COL_PDF).value = legacy.pdfUrl ? { text: 'Ver PDF', hyperlink: legacy.pdfUrl } : '';
+    row.getCell(COL_QR).value = legacy.qrUrl ? { text: 'Ver código QR', hyperlink: legacy.qrUrl } : '';
+
+    row.eachCell({ includeEmpty: true }, (cell) => {
+      cell.border = { top: BORDER, left: BORDER, bottom: BORDER, right: BORDER };
+      cell.alignment = { vertical: 'middle', horizontal: 'left', wrapText: true };
+    });
+    [COL_ACTUALIZACION, COL_FECHA_INICIO, COL_FECHA_ACTUALIZACION, COL_MESES].forEach((col) => {
+      row.getCell(col).alignment = { vertical: 'middle', horizontal: 'center' };
+    });
+    [COL_PDF, COL_QR].forEach((col) => {
+      const cell = row.getCell(col);
+      if (cell.value) cell.font = { color: { argb: 'FF1155CC' }, underline: true };
+    });
+
+    const colFotoIdx0 = COL_FOTO - 1;
+    const imageId = imagenesPorFila[legacy.rowNumber];
+    if (imageId !== undefined) {
+      const { offX, offY } = offsetParaCentrar(FOTO_COL_WIDTH, FILA_ALTO_PT, FOTO_ANCHO_PX, FOTO_ALTO_PX);
+      sheetNueva.addImage(imageId, {
+        tl: { col: colFotoIdx0 + offX, row: rowNumber - 1 + offY },
+        ext: { width: FOTO_ANCHO_PX, height: FOTO_ALTO_PX },
+        editAs: 'oneCell',
+      });
+      row.getCell(COL_FOTO).value = '';
+    } else {
+      row.getCell(COL_FOTO).value = 'Sin foto';
+      row.getCell(COL_FOTO).alignment = { vertical: 'middle', horizontal: 'center' };
+    }
+    row.commit();
+  });
+
+  return sheetNueva;
+}
+
 async function cargarOCrearLibro(s3, bucket, key) {
   const workbook = new ExcelJS.Workbook();
   let sheet;
@@ -104,7 +218,11 @@ async function cargarOCrearLibro(s3, bucket, key) {
     const buf = await streamToBuffer(resp.Body);
     await workbook.xlsx.load(buf);
     sheet = workbook.getWorksheet('Resumen');
-    if (!sheet) sheet = nuevaHojaConEstilo(workbook);
+    if (!sheet) {
+      sheet = nuevaHojaConEstilo(workbook);
+    } else if (esEsquemaAntiguo(sheet)) {
+      sheet = migrarEsquemaAntiguo(workbook, sheet);
+    }
   } catch (err) {
     const noExiste = err.name === 'NoSuchKey' || err.Code === 'NoSuchKey' || err.$metadata?.httpStatusCode === 404;
     if (!noExiste) throw err;
