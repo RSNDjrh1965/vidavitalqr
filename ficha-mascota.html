@@ -733,7 +733,9 @@ function updatePreview(){
 }
 
 // ---- adjuntos ----
-let files = [];
+// se guardan como {name, size, dataUrl} en vez de los File originales, para poder tanto
+// mostrarlos/incluirlos en el PDF como restaurarlos al precargar una ficha existente (renovación)
+let attachments = [];
 const drop = $('drop');
 const fileInput = $('fileInput');
 drop.addEventListener('click', () => fileInput.click());
@@ -745,13 +747,24 @@ fileInput.addEventListener('change', e => addFiles(e.target.files));
 function isJpg(f){
   return f.type === 'image/jpeg' || /\.jpe?g$/i.test(f.name);
 }
-function addFiles(list){
+async function addFiles(list){
   const rejected = [];
+  const nuevos = [];
   Array.from(list).forEach(f => {
-    if(isJpg(f)) files.push(f); else rejected.push(f.name);
+    if(isJpg(f)) nuevos.push(f); else rejected.push(f.name);
   });
   if(rejected.length){
     alert('Solo se permiten archivos .jpg. No se agregaron: ' + rejected.join(', '));
+  }
+  for (const f of nuevos) {
+    const dataUrlOriginal = await new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = ev => resolve(ev.target.result);
+      reader.onerror = reject;
+      reader.readAsDataURL(f);
+    });
+    const dataUrl = await comprimirImagenDataUrl(dataUrlOriginal, 1800, 0.85);
+    attachments.push({ name: f.name, size: f.size, dataUrl });
   }
   renderFiles();
   buildPrintAttachments();
@@ -759,14 +772,14 @@ function addFiles(list){
 function renderFiles(){
   const ul = $('fileList');
   ul.innerHTML = '';
-  files.forEach((f,i) => {
+  attachments.forEach((a,i) => {
     const li = document.createElement('li');
-    const sizeKb = (f.size/1024).toFixed(0);
-    li.innerHTML = `<span>📄 ${f.name} <span style="color:var(--slate)">(${sizeKb} KB) · página adicional en el PDF</span></span>`;
+    const sizeInfo = a.size ? `(${(a.size/1024).toFixed(0)} KB) · ` : '';
+    li.innerHTML = `<span>📄 ${a.name} <span style="color:var(--slate)">${sizeInfo}página adicional en el PDF</span></span>`;
     const btn = document.createElement('button');
     btn.textContent = '✕';
     btn.title = 'Quitar';
-    btn.addEventListener('click', () => { files.splice(i,1); renderFiles(); buildPrintAttachments(); });
+    btn.addEventListener('click', () => { attachments.splice(i,1); renderFiles(); buildPrintAttachments(); });
     li.appendChild(btn);
     ul.appendChild(li);
   });
@@ -777,27 +790,17 @@ function renderFiles(){
 function buildPrintAttachments(){
   const container = $('printAttachments');
   container.innerHTML = '';
-  // se crean los contenedores de cada página en el orden correcto desde ya (uno por archivo);
-  // así el orden final de las páginas siempre coincide con el orden en que se adjuntaron los
-  // archivos, sin depender de qué imagen termine de leerse primero (lectura asíncrona)
-  const pages = files.map(f => {
+  attachments.forEach(a => {
     const page = document.createElement('div');
     page.className = 'print-attachment-page';
     const title = document.createElement('div');
     title.className = 'print-attachment-title';
-    title.textContent = `Archivo adjunto: ${f.name}`;
+    title.textContent = `Archivo adjunto: ${a.name}`;
     page.appendChild(title);
+    const img = document.createElement('img');
+    img.src = a.dataUrl;
+    page.appendChild(img);
     container.appendChild(page);
-    return page;
-  });
-  files.forEach((f, i) => {
-    const reader = new FileReader();
-    reader.onload = async ev => {
-      const img = document.createElement('img');
-      img.src = await comprimirImagenDataUrl(ev.target.result, 1800, 0.85);
-      pages[i].appendChild(img);
-    };
-    reader.readAsDataURL(f);
   });
 }
 
@@ -940,6 +943,28 @@ function precargarDatosFicha(datos){
   setVal('comentarios', datos.comentarios);
   setVal('contacto1', datos.contacto1); setVal('telcontacto1', datos.telcontacto1); setVal('parentesco1', datos.parentesco1); setVal('emailcontacto1', datos.emailcontacto1);
   setVal('contacto2', datos.contacto2); setVal('telcontacto2', datos.telcontacto2); setVal('parentesco2', datos.parentesco2); setVal('emailcontacto2', datos.emailcontacto2);
+  if (datos.vacunas) {
+    const radioVac = document.querySelector(`input[name="vacunas"][value="${datos.vacunas === 'No' ? 'No' : 'Sí'}"]`);
+    if (radioVac) radioVac.checked = true;
+  }
+
+  // ---- foto ----
+  if (datos.fotoBase64) {
+    $('photoImg').src = datos.fotoBase64;
+    $('photoImg').style.display = 'block';
+    $('photoHint').style.display = 'none';
+    $('photoRemove').style.display = 'flex';
+  }
+
+  // ---- archivos importantes (.jpg) ----
+  if (Array.isArray(datos.archivosImportantes) && datos.archivosImportantes.length) {
+    attachments = datos.archivosImportantes
+      .filter(a => a && a.dataUrl)
+      .map(a => ({ name: a.nombre || 'archivo.jpg', size: 0, dataUrl: a.dataUrl }));
+    renderFiles();
+    buildPrintAttachments();
+  }
+
   if (typeof updatePreview === 'function') updatePreview();
 }
 
@@ -993,6 +1018,8 @@ $('btnEmail').addEventListener('click', async () => {
       pais: $('pais').value || '',
     };
 
+    const vacunasEl = document.querySelector('input[name="vacunas"]:checked');
+    const archivosImportantes = attachments.map(a => ({ nombre: a.name, dataUrl: a.dataUrl }));
     const datosFormulario = {
       nombres: $('nombres').value || '',
       apellidos: $('apellidos').value || '',
@@ -1001,6 +1028,7 @@ $('btnEmail').addEventListener('click', async () => {
       raza: $('raza').value || '',
       microchip: $('microchip').value || '',
       veterinario: $('veterinario').value || '',
+      vacunas: vacunasEl ? vacunasEl.value : 'Sí',
       pais: $('pais').value || '',
       ciudad: $('ciudad').value || '',
       distrito: $('distrito').value || '',
@@ -1008,6 +1036,8 @@ $('btnEmail').addEventListener('click', async () => {
       comentarios: $('comentarios').value || '',
       contacto1: $('contacto1').value || '', telcontacto1: $('telcontacto1').value || '', parentesco1: $('parentesco1').value || '', emailcontacto1: $('emailcontacto1').value || '',
       contacto2: $('contacto2').value || '', telcontacto2: $('telcontacto2').value || '', parentesco2: $('parentesco2').value || '', emailcontacto2: $('emailcontacto2').value || '',
+      fotoBase64: fotoBase64 || '',
+      archivosImportantes,
     };
 
     const resp = await fetch('/.netlify/functions/send-ficha', {
@@ -1045,7 +1075,7 @@ function limpiarFormularioFicha(){
   $('especie').value='';
   document.querySelector('input[name="esterilizado"][value="No"]').checked = true;
   document.querySelector('input[name="vacunas"][value="Sí"]').checked = true;
-  files = [];
+  attachments = [];
   renderFiles();
   buildPrintAttachments();
   // país/cantón/distrito: revertir el desplegable en cascada de Costa Rica a modo texto libre
