@@ -316,13 +316,34 @@ exports.handler = async (event) => {
     return { statusCode: 400, headers, body: paginaError('Falta el código de la ficha.') };
   }
 
+  // El folio mismo ya dice el tipo sin ambigüedad: el de persona siempre empieza con
+  // "VVITALQR" y el de mascota con "VVMASCOTA" — así que se busca directo en la carpeta que
+  // corresponde. La ubicación antigua (sin carpeta, de antes de organizar por carpetas) se
+  // revisa como respaldo, para las fichas que todavía no se han vuelto a guardar desde ese
+  // cambio.
+  const folioMayus = folio.toUpperCase();
+  const carpetaPreferida = folioMayus.startsWith('VVMASCOTA') ? 'mascotas' : (folioMayus.startsWith('VVITALQR') ? 'personas' : null);
+  const rutasPosibles = carpetaPreferida
+    ? [`${carpetaPreferida}/datos/${folio}.json`, `datos/${folio}.json`]
+    : [`datos/${folio}.json`, `personas/datos/${folio}.json`, `mascotas/datos/${folio}.json`]; // folio con formato desconocido — se revisan todas por si acaso
+
   let datos;
   try {
     const s3 = getS3Client();
     const bucket = process.env.S3_BUCKET_FICHAS || BUCKET_FICHAS;
-    const resp = await s3.send(new GetObjectCommand({ Bucket: bucket, Key: `datos/${folio}.json` }));
-    const texto = await streamToString(resp.Body);
-    datos = JSON.parse(texto);
+    let encontrado = null;
+    for (const ruta of rutasPosibles) {
+      try {
+        const resp = await s3.send(new GetObjectCommand({ Bucket: bucket, Key: ruta }));
+        encontrado = await streamToString(resp.Body);
+        break;
+      } catch (err) {
+        const noExiste = err.name === 'NoSuchKey' || err.Code === 'NoSuchKey' || err.$metadata?.httpStatusCode === 404;
+        if (!noExiste) throw err;
+      }
+    }
+    if (!encontrado) throw new Error('No encontrado en ninguna ubicación.');
+    datos = JSON.parse(encontrado);
   } catch (err) {
     return { statusCode: 404, headers, body: paginaError('No se encontró información para este código.') };
   }
