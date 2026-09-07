@@ -6,15 +6,19 @@
 // Columnas (en este orden):
 //  1) Actualización          — contador de cuántas veces se ha guardado esta ficha (1, 2, 3…)
 //  2) Contador                — folio/código de la ficha
-//  3) Nombre completo
-//  4) Fecha de inicio         — fecha de la primera vez que se guardó la ficha
-//  5) Fecha de actualización  — fecha del guardado más reciente (la renovación reinicia el conteo)
-//  6) Meses transcurridos     — fórmula de Excel: meses completos desde "Fecha de actualización"
+//  3) PIN                     — el PIN de acceso vigente de esa ficha, en texto plano. Se
+//                               guarda aquí (además de su hash en login/<folio>.json) para que
+//                               se pueda recuperar manualmente si el usuario pierde su PIN y
+//                               escribe pidiendo ayuda (por ejemplo, por el botón de WhatsApp).
+//  4) Nombre completo
+//  5) Fecha de inicio         — fecha de la primera vez que se guardó la ficha
+//  6) Fecha de actualización  — fecha del guardado más reciente (la renovación reinicia el conteo)
+//  7) Meses transcurridos     — fórmula de Excel: meses completos desde "Fecha de actualización"
 //                               hasta hoy — se recalcula solo cada vez que se abre el archivo,
 //                               así siempre queda claro cuándo se vence la renovación (1 año).
-//  7) URL del objeto (PDF)
-//  8) Fotografía
-//  9) Código QR
+//  8) URL del objeto (PDF)
+//  9) Fotografía
+// 10) Código QR
 //
 // Comportamiento:
 //  - Si el archivo resumen.xlsx no existe todavía en el bucket, lo crea con el
@@ -36,13 +40,14 @@ const FECHA_FORMATO = 'dd/mm/yyyy';
 // ---- índices de columna (1-based, como los usa exceljs) ----
 const COL_ACTUALIZACION = 1;
 const COL_CONTADOR = 2;
-const COL_NOMBRE = 3;
-const COL_FECHA_INICIO = 4;
-const COL_FECHA_ACTUALIZACION = 5;
-const COL_MESES = 6;
-const COL_PDF = 7;
-const COL_FOTO = 8;
-const COL_QR = 9;
+const COL_PIN = 3;
+const COL_NOMBRE = 4;
+const COL_FECHA_INICIO = 5;
+const COL_FECHA_ACTUALIZACION = 6;
+const COL_MESES = 7;
+const COL_PDF = 8;
+const COL_FOTO = 9;
+const COL_QR = 10;
 
 const FOTO_ANCHO_PX = 74;
 const FOTO_ALTO_PX = 74;
@@ -55,6 +60,15 @@ function streamToBuffer(stream) {
     stream.on('data', (chunk) => chunks.push(chunk));
     stream.on('error', reject);
     stream.on('end', () => resolve(Buffer.concat(chunks)));
+  });
+}
+
+function streamToString(stream) {
+  return new Promise((resolve, reject) => {
+    const chunks = [];
+    stream.on('data', (chunk) => chunks.push(chunk));
+    stream.on('error', reject);
+    stream.on('end', () => resolve(Buffer.concat(chunks).toString('utf-8')));
   });
 }
 
@@ -77,6 +91,7 @@ function nuevaHojaConEstilo(workbook) {
   sheet.columns = [
     { header: 'Actualización', key: 'actualizacion', width: 14 },
     { header: 'Contador', key: 'contador', width: 20 },
+    { header: 'PIN', key: 'pin', width: 12 },
     { header: 'Nombre completo', key: 'nombre', width: 28 },
     { header: 'Fecha de inicio', key: 'fecha', width: 15 },
     { header: 'Fecha de actualización', key: 'fechaActualizacion', width: 18 },
@@ -96,18 +111,43 @@ function nuevaHojaConEstilo(workbook) {
   return sheet;
 }
 
-// ---- migración del esquema antiguo (6 columnas) al nuevo (9 columnas) ----
+// ---- intenta recuperar el PIN en texto plano guardado en login/<folio>.json, para poder ----
+// ---- rellenar la columna "PIN" al migrar filas que no la tenían todavía ----
+async function buscarPinDesdeLogin(s3, bucket, folio) {
+  if (!folio) return '';
+  try {
+    const resp = await s3.send(new GetObjectCommand({ Bucket: bucket, Key: `login/${String(folio).trim()}.json` }));
+    const texto = await streamToString(resp.Body);
+    const registro = JSON.parse(texto);
+    return registro && registro.pin ? String(registro.pin) : '';
+  } catch (err) {
+    return ''; // no existe login guardado para ese folio, o no se pudo leer — se deja en blanco
+  }
+}
+
+// ---- migración del esquema antiguo (6 columnas) al esquema con "PIN" (10 columnas) ----
 // El archivo resumen.xlsx pudo haberse creado ANTES de que existieran las columnas
-// "Actualización", "Fecha de actualización" y "Meses transcurridos". Esa hoja antigua tiene
-// como encabezados, en orden: Contador | Nombre completo | Fecha de inicio |
+// "Actualización", "Fecha de actualización", "Meses transcurridos" y "PIN". Esa hoja antigua
+// tiene como encabezados, en orden: Contador | Nombre completo | Fecha de inicio |
 // URL del objeto (PDF) | Fotografía | Código QR.
 // Si se detecta ese encabezado, se reconstruye la hoja completa con el formato nuevo,
 // trasladando cada fila existente (datos, enlaces y fotografías incrustadas) antes de
-// continuar con el guardado que disparó esta actualización.
+// continuar con el guardado que disparó esta actualización. El PIN se intenta recuperar desde
+// login/<folio>.json; si no existe (fichas muy antiguas, de antes del sistema de PIN), queda en
+// blanco hasta que esa ficha se vuelva a guardar.
 
 function esEsquemaAntiguo(sheet) {
   const encabezado1 = sheet.getRow(1).getCell(1).value;
   return String(encabezado1 || '').trim() === 'Contador';
+}
+
+// ---- esquema intermedio (9 columnas, sin "PIN") — el que existía justo antes de agregar esta
+// columna. Se distingue del esquema más nuevo porque la tercera columna es "Nombre completo" en
+// vez de "PIN".
+function esEsquemaSinPin(sheet) {
+  if (esEsquemaAntiguo(sheet)) return false;
+  const encabezado3 = sheet.getRow(1).getCell(3).value;
+  return String(encabezado3 || '').trim() !== 'PIN';
 }
 
 function parseFechaLegacy(valor) {
@@ -130,7 +170,37 @@ function extraerHyperlink(valor) {
   return '';
 }
 
-function migrarEsquemaAntiguo(workbook, sheetAntigua) {
+function estilizarFilaMigrada(row, rowNumber, { pdfUrl, qrUrl }) {
+  row.eachCell({ includeEmpty: true }, (cell) => {
+    cell.border = { top: BORDER, left: BORDER, bottom: BORDER, right: BORDER };
+    cell.alignment = { vertical: 'middle', horizontal: 'left', wrapText: true };
+  });
+  [COL_ACTUALIZACION, COL_PIN, COL_FECHA_INICIO, COL_FECHA_ACTUALIZACION, COL_MESES].forEach((col) => {
+    row.getCell(col).alignment = { vertical: 'middle', horizontal: 'center' };
+  });
+  [COL_PDF, COL_QR].forEach((col) => {
+    const cell = row.getCell(col);
+    if (cell.value) cell.font = { color: { argb: 'FF1155CC' }, underline: true };
+  });
+}
+
+function colocarFoto(sheetNueva, rowNumber, imageId) {
+  const colFotoIdx0 = COL_FOTO - 1;
+  if (imageId !== undefined) {
+    const { offX, offY } = offsetParaCentrar(FOTO_COL_WIDTH, FILA_ALTO_PT, FOTO_ANCHO_PX, FOTO_ALTO_PX);
+    sheetNueva.addImage(imageId, {
+      tl: { col: colFotoIdx0 + offX, row: rowNumber - 1 + offY },
+      ext: { width: FOTO_ANCHO_PX, height: FOTO_ALTO_PX },
+      editAs: 'oneCell',
+    });
+    sheetNueva.getRow(rowNumber).getCell(COL_FOTO).value = '';
+  } else {
+    sheetNueva.getRow(rowNumber).getCell(COL_FOTO).value = 'Sin foto';
+    sheetNueva.getRow(rowNumber).getCell(COL_FOTO).alignment = { vertical: 'middle', horizontal: 'center' };
+  }
+}
+
+async function migrarEsquemaAntiguo(workbook, sheetAntigua, s3, bucket) {
   // Esquema antiguo (1-based): 1 Contador, 2 Nombre completo, 3 Fecha de inicio,
   // 4 URL del objeto (PDF), 5 Fotografía, 6 Código QR.
   const filasLegacy = [];
@@ -161,13 +231,15 @@ function migrarEsquemaAntiguo(workbook, sheetAntigua) {
   workbook.removeWorksheet(sheetAntigua.id);
   const sheetNueva = nuevaHojaConEstilo(workbook);
 
-  filasLegacy.forEach((legacy) => {
+  for (const legacy of filasLegacy) {
     const rowNumber = sheetNueva.rowCount + 1;
     const fechaInicio = parseFechaLegacy(legacy.fecha);
+    const pin = await buscarPinDesdeLogin(s3, bucket, legacy.contador);
     const row = sheetNueva.getRow(rowNumber);
     row.height = FILA_ALTO_PT;
     row.getCell(COL_ACTUALIZACION).value = 1;
     row.getCell(COL_CONTADOR).value = legacy.contador || '';
+    row.getCell(COL_PIN).value = pin;
     row.getCell(COL_NOMBRE).value = legacy.nombre || '';
     row.getCell(COL_FECHA_INICIO).value = fechaInicio;
     row.getCell(COL_FECHA_INICIO).numFmt = FECHA_FORMATO;
@@ -178,34 +250,70 @@ function migrarEsquemaAntiguo(workbook, sheetAntigua) {
     row.getCell(COL_PDF).value = legacy.pdfUrl ? { text: 'Ver PDF', hyperlink: legacy.pdfUrl } : '';
     row.getCell(COL_QR).value = legacy.qrUrl ? { text: 'Ver código QR', hyperlink: legacy.qrUrl } : '';
 
-    row.eachCell({ includeEmpty: true }, (cell) => {
-      cell.border = { top: BORDER, left: BORDER, bottom: BORDER, right: BORDER };
-      cell.alignment = { vertical: 'middle', horizontal: 'left', wrapText: true };
-    });
-    [COL_ACTUALIZACION, COL_FECHA_INICIO, COL_FECHA_ACTUALIZACION, COL_MESES].forEach((col) => {
-      row.getCell(col).alignment = { vertical: 'middle', horizontal: 'center' };
-    });
-    [COL_PDF, COL_QR].forEach((col) => {
-      const cell = row.getCell(col);
-      if (cell.value) cell.font = { color: { argb: 'FF1155CC' }, underline: true };
-    });
-
-    const colFotoIdx0 = COL_FOTO - 1;
-    const imageId = imagenesPorFila[legacy.rowNumber];
-    if (imageId !== undefined) {
-      const { offX, offY } = offsetParaCentrar(FOTO_COL_WIDTH, FILA_ALTO_PT, FOTO_ANCHO_PX, FOTO_ALTO_PX);
-      sheetNueva.addImage(imageId, {
-        tl: { col: colFotoIdx0 + offX, row: rowNumber - 1 + offY },
-        ext: { width: FOTO_ANCHO_PX, height: FOTO_ALTO_PX },
-        editAs: 'oneCell',
-      });
-      row.getCell(COL_FOTO).value = '';
-    } else {
-      row.getCell(COL_FOTO).value = 'Sin foto';
-      row.getCell(COL_FOTO).alignment = { vertical: 'middle', horizontal: 'center' };
-    }
+    estilizarFilaMigrada(row, rowNumber, legacy);
+    colocarFoto(sheetNueva, rowNumber, imagenesPorFila[legacy.rowNumber]);
     row.commit();
+  }
+
+  return sheetNueva;
+}
+
+// ---- migración del esquema intermedio (9 columnas, sin "PIN") al esquema actual (10 columnas) ----
+// Traslada cada fila (y sus fotos) una columna a la derecha a partir de "Nombre completo", y
+// rellena la nueva columna "PIN" buscando el PIN en texto plano guardado en login/<folio>.json.
+async function migrarAgregarColumnaPin(workbook, sheetVieja, s3, bucket) {
+  // Esquema viejo (1-based, sin PIN): 1 Actualización, 2 Contador, 3 Nombre completo,
+  // 4 Fecha de inicio, 5 Fecha de actualización, 6 Meses transcurridos, 7 PDF, 8 Foto, 9 QR.
+  const filasViejas = [];
+  sheetVieja.eachRow((row, rowNumber) => {
+    if (rowNumber === 1) return; // encabezado
+    const contador = row.getCell(2).value;
+    if (contador === null || contador === undefined || String(contador).trim() === '') return;
+    filasViejas.push({
+      rowNumber,
+      actualizacion: row.getCell(1).value,
+      contador,
+      nombre: row.getCell(3).value,
+      fechaInicio: row.getCell(4).value,
+      fechaActualizacion: row.getCell(5).value,
+      pdfUrl: extraerHyperlink(row.getCell(7).value),
+      qrUrl: extraerHyperlink(row.getCell(9).value),
+    });
   });
+
+  const imagenesPorFila = {};
+  if (typeof sheetVieja.getImages === 'function') {
+    sheetVieja.getImages().forEach((img) => {
+      const filaAsociada = Math.round(img.range.tl.row) + 1;
+      imagenesPorFila[filaAsociada] = img.imageId;
+    });
+  }
+
+  workbook.removeWorksheet(sheetVieja.id);
+  const sheetNueva = nuevaHojaConEstilo(workbook);
+
+  for (const vieja of filasViejas) {
+    const rowNumber = sheetNueva.rowCount + 1;
+    const pin = await buscarPinDesdeLogin(s3, bucket, vieja.contador);
+    const row = sheetNueva.getRow(rowNumber);
+    row.height = FILA_ALTO_PT;
+    row.getCell(COL_ACTUALIZACION).value = vieja.actualizacion || 1;
+    row.getCell(COL_CONTADOR).value = vieja.contador || '';
+    row.getCell(COL_PIN).value = pin;
+    row.getCell(COL_NOMBRE).value = vieja.nombre || '';
+    row.getCell(COL_FECHA_INICIO).value = vieja.fechaInicio || new Date();
+    row.getCell(COL_FECHA_INICIO).numFmt = FECHA_FORMATO;
+    row.getCell(COL_FECHA_ACTUALIZACION).value = vieja.fechaActualizacion || new Date();
+    row.getCell(COL_FECHA_ACTUALIZACION).numFmt = FECHA_FORMATO;
+    const celdaFechaActualizacion = `${colALetra(COL_FECHA_ACTUALIZACION)}${rowNumber}`;
+    row.getCell(COL_MESES).value = { formula: `IFERROR(DATEDIF(${celdaFechaActualizacion},TODAY(),"m"),"")` };
+    row.getCell(COL_PDF).value = vieja.pdfUrl ? { text: 'Ver PDF', hyperlink: vieja.pdfUrl } : '';
+    row.getCell(COL_QR).value = vieja.qrUrl ? { text: 'Ver código QR', hyperlink: vieja.qrUrl } : '';
+
+    estilizarFilaMigrada(row, rowNumber, vieja);
+    colocarFoto(sheetNueva, rowNumber, imagenesPorFila[vieja.rowNumber]);
+    row.commit();
+  }
 
   return sheetNueva;
 }
@@ -221,7 +329,9 @@ async function cargarOCrearLibro(s3, bucket, key) {
     if (!sheet) {
       sheet = nuevaHojaConEstilo(workbook);
     } else if (esEsquemaAntiguo(sheet)) {
-      sheet = migrarEsquemaAntiguo(workbook, sheet);
+      sheet = await migrarEsquemaAntiguo(workbook, sheet, s3, bucket);
+    } else if (esEsquemaSinPin(sheet)) {
+      sheet = await migrarAgregarColumnaPin(workbook, sheet, s3, bucket);
     }
   } catch (err) {
     const noExiste = err.name === 'NoSuchKey' || err.Code === 'NoSuchKey' || err.$metadata?.httpStatusCode === 404;
@@ -269,7 +379,7 @@ function offsetParaCentrar(colWidthChars, rowHeightPt, imgWidthPx, imgHeightPx) 
 }
 
 async function actualizarResumenXlsx(s3, bucket, key, fila) {
-  const { contador, nombre, fecha, pdfUrl, fotoBase64, qrUrl } = fila;
+  const { contador, pin, nombre, fecha, pdfUrl, fotoBase64, qrUrl } = fila;
   const { workbook, sheet } = await cargarOCrearLibro(s3, bucket, key);
 
   let rowNumber = buscarFilaPorContador(sheet, contador);
@@ -299,6 +409,7 @@ async function actualizarResumenXlsx(s3, bucket, key, fila) {
   row.height = FILA_ALTO_PT;
   row.getCell(COL_ACTUALIZACION).value = numeroActualizacion;
   row.getCell(COL_CONTADOR).value = contador || '';
+  row.getCell(COL_PIN).value = pin || '';
   row.getCell(COL_NOMBRE).value = nombre || '';
   row.getCell(COL_FECHA_INICIO).value = fechaInicioFinal;
   row.getCell(COL_FECHA_INICIO).numFmt = FECHA_FORMATO;
@@ -315,7 +426,7 @@ async function actualizarResumenXlsx(s3, bucket, key, fila) {
     cell.border = { top: BORDER, left: BORDER, bottom: BORDER, right: BORDER };
     cell.alignment = { vertical: 'middle', horizontal: 'left', wrapText: true };
   });
-  [COL_ACTUALIZACION, COL_FECHA_INICIO, COL_FECHA_ACTUALIZACION, COL_MESES].forEach((col) => {
+  [COL_ACTUALIZACION, COL_PIN, COL_FECHA_INICIO, COL_FECHA_ACTUALIZACION, COL_MESES].forEach((col) => {
     row.getCell(col).alignment = { vertical: 'middle', horizontal: 'center' };
   });
   [COL_PDF, COL_QR].forEach((col) => {
