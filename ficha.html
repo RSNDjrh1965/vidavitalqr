@@ -84,7 +84,8 @@
   .section .hint{font-size:12.5px;color:var(--slate);margin:0 0 16px;}
   .grid{display:grid;grid-template-columns:repeat(2,1fr);gap:14px 18px;}
   .grid.cols3{grid-template-columns:repeat(3,1fr);}
-  @media(max-width:640px){.grid,.grid.cols3{grid-template-columns:1fr;}}
+  .grid.cols4{grid-template-columns:repeat(4,1fr);}
+  @media(max-width:640px){.grid,.grid.cols3,.grid.cols4{grid-template-columns:1fr;}}
   .contact-rows{display:flex;flex-direction:column;gap:14px;margin-top:16px;padding-top:14px;border-top:1px dashed var(--line);}
   .field{display:flex;flex-direction:column;gap:5px;}
   .field.full{grid-column:1/-1;}
@@ -234,15 +235,22 @@
 <!-- Aviso de renovación: solo se muestra si se llega con ?renovar=1 en la URL -->
 <div class="section no-print" id="renewalGate" style="display:none; border:2px solid var(--red,#c0392b); background:#fff6f0;">
 <h2 style="margin-top:0;">🔄 Renovación de ficha existente</h2>
-<p style="margin:0 0 14px;">Ingresa el código que aparece debajo del código QR de tu ficha actual (ejemplo: <b>VVITALQR00000012</b>). Al confirmarlo, tu ficha se actualizará usando ese mismo código — el código QR que ya tienes seguirá funcionando y mostrará la información nueva, sin generar un código duplicado.</p>
+<p style="margin:0 0 14px;">Ingresa el código que aparece debajo del código QR de tu ficha actual (ejemplo: <b>VVITALQR00000012</b>). Si además ingresas tu PIN de acceso (te lo mostramos la primera vez que guardaste la ficha), precargamos automáticamente tus datos para que solo edites lo que cambió — si no lo tienes a mano, puedes continuar sin PIN y llenar el formulario de nuevo.</p>
 <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:flex-end;">
 <div class="field" style="flex:1; min-width:220px; margin:0;">
 <label>Código de tu ficha</label>
 <input type="text" id="renewalCodeInput" placeholder="VVITALQR00000012" style="text-transform:uppercase;">
 </div>
-<button type="button" id="renewalConfirmBtn" class="select-btn" style="white-space:nowrap;">Continuar con este código</button>
+<div class="field" style="flex:1; min-width:160px; margin:0;">
+<label>PIN de acceso (opcional)</label>
+<input type="text" id="renewalPinInput" placeholder="Ej. 3U7D3D" style="text-transform:uppercase;" maxlength="6">
 </div>
+<button type="button" id="renewalConfirmBtn" class="select-btn" style="white-space:nowrap;">Continuar</button>
+</div>
+<p id="renewalPinError" style="display:none; margin:14px 0 0; color:#c0392b; font-weight:600;">✘ Folio o PIN incorrectos. Verifica ambos, o continúa dejando el PIN en blanco para llenar el formulario de nuevo.</p>
+<p style="margin:10px 0 0; font-size:0.85rem; color:#6b6558;">¿Olvidaste tu PIN? Escríbenos por el botón de WhatsApp en vidavitalqr.com indicando tu código de ficha, y te ayudamos a recuperar el acceso.</p>
 <p id="renewalConfirmedMsg" style="display:none; margin:14px 0 0; color:#1a7a3c; font-weight:600;">✔ Código confirmado. Completa el formulario y envía para actualizar tu ficha.</p>
+<p id="renewalPrecargadoMsg" style="display:none; margin:6px 0 0; color:#1a7a3c; font-weight:600;">✔ Tus datos anteriores ya se cargaron en el formulario — revisa y edita lo que necesites.</p>
 </div>
 
 <!-- Datos personales -->
@@ -289,16 +297,19 @@
 </div>
 <div class="field full"><label>Otras señales</label><input type="text" id="senales" placeholder="Referencias de ubicación"></div>
 </div>
+<p class="hint" style="margin-top:14px;">Si agrega el correo de un contacto, le llegará un aviso automático cada vez que alguien escanee el código QR de esta ficha.</p>
 <div class="contact-rows">
-<div class="grid cols3">
+<div class="grid cols4">
 <div class="field"><label>Nombre de contacto 1</label><input type="text" id="contacto1"></div>
 <div class="field"><label>Teléfono</label><input type="tel" id="telcontacto1"></div>
 <div class="field"><label>Parentesco</label><input type="text" id="parentesco1"></div>
+<div class="field no-print"><label>Correo (opcional, para el aviso)</label><input type="email" id="emailcontacto1" placeholder="correo@ejemplo.com"></div>
 </div>
-<div class="grid cols3">
+<div class="grid cols4">
 <div class="field"><label>Nombre de contacto 2</label><input type="text" id="contacto2"></div>
 <div class="field"><label>Teléfono</label><input type="tel" id="telcontacto2"></div>
 <div class="field"><label>Parentesco</label><input type="text" id="parentesco2"></div>
+<div class="field no-print"><label>Correo (opcional, para el aviso)</label><input type="email" id="emailcontacto2" placeholder="correo@ejemplo.com"></div>
 </div>
 </div>
 </div>
@@ -476,13 +487,47 @@ $('photoRemove').addEventListener('click', e => {
     $('renewalGate').style.display = 'block';
     $('btnEmail').disabled = true;
 
-    $('renewalConfirmBtn').addEventListener('click', () => {
+    $('renewalConfirmBtn').addEventListener('click', async () => {
       const codigo = $('renewalCodeInput').value.trim().toUpperCase();
+      const pin = $('renewalPinInput').value.trim().toUpperCase();
       if (!codigo) { alert('Ingresa el código de tu ficha para continuar.'); return; }
+
+      $('renewalPinError').style.display = 'none';
+      const btn = $('renewalConfirmBtn');
+      const textoOriginal = btn.textContent;
+
+      if (pin) {
+        btn.disabled = true;
+        btn.textContent = 'Verificando…';
+        try{
+          const resp = await fetch('/.netlify/functions/login-ficha', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ folio: codigo, pin }),
+          });
+          if (!resp.ok) {
+            $('renewalPinError').style.display = 'block';
+            btn.disabled = false;
+            btn.textContent = textoOriginal;
+            return;
+          }
+          const data = await resp.json();
+          precargarDatosFicha(data.datosFormulario);
+          $('renewalPrecargadoMsg').style.display = 'block';
+        }catch(err){
+          $('renewalPinError').style.display = 'block';
+          btn.disabled = false;
+          btn.textContent = textoOriginal;
+          return;
+        }
+      }
+
       $('counterNum').textContent = codigo;
       $('renewalConfirmedMsg').style.display = 'block';
       $('renewalCodeInput').disabled = true;
-      $('renewalConfirmBtn').disabled = true;
+      $('renewalPinInput').disabled = true;
+      btn.disabled = true;
+      btn.textContent = textoOriginal;
       $('btnEmail').disabled = false;
     });
     return;
@@ -834,6 +879,55 @@ function goToPayment(folio){
   }
 }
 
+// ---- muestra en pantalla el PIN de acceso recién generado, y espera a que el usuario lo
+// confirme antes de continuar (así se asegura de que lo vio y lo guardó) ----
+function mostrarPinModal(pin, folio){
+  return new Promise((resolve) => {
+    const overlay = document.createElement('div');
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(18,40,43,0.72);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px;';
+    overlay.innerHTML = `
+      <div style="background:#fff;border-radius:16px;max-width:420px;width:100%;padding:28px 26px;text-align:center;font-family:inherit;">
+        <div style="font-size:2rem;">🔑</div>
+        <h3 style="margin:10px 0 6px;">Guarda tu PIN de acceso</h3>
+        <p style="margin:0 0 10px;color:#444;font-size:0.95rem;">Con tu folio (<b>${folio}</b>) y este PIN podrás entrar más adelante a actualizar tu ficha sin llenar el formulario de nuevo.</p>
+        <p style="margin:0 0 16px;color:#8A3A16;font-size:0.9rem;font-weight:600;">Este PIN es único y es indispensable para poder actualizar tu ficha médica en el futuro — guárdalo en un lugar seguro, ya que nadie más podrá verlo.</p>
+        <div style="font-family:'Courier New',monospace;font-size:1.8rem;font-weight:700;letter-spacing:4px;background:#F7F4EE;border:2px dashed #C1552F;border-radius:10px;padding:14px;margin-bottom:16px;">${pin}</div>
+        <p style="margin:0 0 16px;color:#666;font-size:0.82rem;">Este PIN, igual que el resto de tu información médica, se guarda de forma protegida — nunca queda visible en ninguna página pública del sitio.</p>
+        <button type="button" id="pinModalCerrar" style="background:#1F4448;color:#fff;border:none;border-radius:8px;padding:12px 20px;font-weight:700;cursor:pointer;width:100%;">Ya lo guardé, continuar</button>
+      </div>`;
+    document.body.appendChild(overlay);
+    overlay.querySelector('#pinModalCerrar').addEventListener('click', () => {
+      document.body.removeChild(overlay);
+      resolve();
+    });
+  });
+}
+
+// ---- precarga el formulario completo con los datos de una ficha existente (usado al entrar
+// al panel de renovación con folio + PIN válidos) ----
+function precargarDatosFicha(datos){
+  if (!datos) return;
+  const setVal = (id, val) => { const el = $(id); if (el && val !== undefined && val !== null) el.value = val; };
+  setVal('nombres', datos.nombres);
+  setVal('apellidos', datos.apellidos);
+  setVal('fnac', datos.fnac);
+  setVal('asegurado', datos.asegurado);
+  setVal('sangre', datos.sangre);
+  setVal('documento', datos.documento);
+  setVal('pais', datos.pais);
+  setVal('ciudad', datos.ciudad);
+  setVal('distrito', datos.distrito);
+  setVal('senales', datos.senales);
+  setVal('comentarios', datos.comentarios);
+  setVal('contacto1', datos.contacto1); setVal('telcontacto1', datos.telcontacto1); setVal('parentesco1', datos.parentesco1); setVal('emailcontacto1', datos.emailcontacto1);
+  setVal('contacto2', datos.contacto2); setVal('telcontacto2', datos.telcontacto2); setVal('parentesco2', datos.parentesco2); setVal('emailcontacto2', datos.emailcontacto2);
+  if (datos.donador) {
+    const radio = document.querySelector(`input[name="donador"][value="${datos.donador === 'Sí' ? 'Sí' : 'No'}"]`);
+    if (radio) radio.checked = true;
+  }
+  if (typeof updatePreview === 'function') updatePreview();
+}
+
 // ---- convertir un Blob a base64 (para enviarlo en el cuerpo del JSON) ----
 function blobToBase64(blob){
   return new Promise((resolve, reject) => {
@@ -871,16 +965,52 @@ $('btnEmail').addEventListener('click', async () => {
     const nombreCompleto = [$('nombres').value, $('apellidos').value].filter(Boolean).join(' ') || 'Sin nombre';
     const fotoBase64 = ($('photoImg').style.display !== 'none' && $('photoImg').src.startsWith('data:')) ? $('photoImg').src : null;
 
+    const contactos = [
+      { nombre: $('contacto1').value || '', telefono: $('telcontacto1').value || '', parentesco: $('parentesco1').value || '', email: $('emailcontacto1').value || '' },
+      { nombre: $('contacto2').value || '', telefono: $('telcontacto2').value || '', parentesco: $('parentesco2').value || '', email: $('emailcontacto2').value || '' },
+    ].filter(c => c.nombre || c.telefono || c.email);
+
+    const datosVisor = {
+      sangre: $('sangre').value || '',
+      comentarios: $('comentarios').value || '',
+      pais: $('pais').value || '',
+    };
+
+    const donadorEl = document.querySelector('input[name="donador"]:checked');
+    const datosFormulario = {
+      nombres: $('nombres').value || '',
+      apellidos: $('apellidos').value || '',
+      fnac: $('fnac').value || '',
+      asegurado: $('asegurado').value || '',
+      sangre: $('sangre').value || '',
+      donador: donadorEl ? donadorEl.value : 'No',
+      documento: $('documento').value || '',
+      pais: $('pais').value || '',
+      ciudad: $('ciudad').value || '',
+      distrito: $('distrito').value || '',
+      senales: $('senales').value || '',
+      comentarios: $('comentarios').value || '',
+      contacto1: $('contacto1').value || '', telcontacto1: $('telcontacto1').value || '', parentesco1: $('parentesco1').value || '', emailcontacto1: $('emailcontacto1').value || '',
+      contacto2: $('contacto2').value || '', telcontacto2: $('telcontacto2').value || '', parentesco2: $('parentesco2').value || '', emailcontacto2: $('emailcontacto2').value || '',
+    };
+
     const resp = await fetch('/.netlify/functions/send-ficha', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({ folio, filename, pdfBase64, nombreCompleto, tipo: 'Persona', fotoBase64 })
+      body: JSON.stringify({ folio, filename, pdfBase64, nombreCompleto, tipo: 'Persona', fotoBase64, contactos, datosVisor, datosFormulario })
     });
 
     if(!resp.ok){
       let detalle = '';
       try{ detalle = await resp.text(); }catch(e){}
       throw new Error(`El servidor respondió ${resp.status}. ${detalle}`.trim());
+    }
+
+    let pinNuevo = null;
+    try{ const respJson = await resp.json(); pinNuevo = respJson && respJson.pin; }catch(e){}
+
+    if (pinNuevo) {
+      await mostrarPinModal(pinNuevo, folio);
     }
 
     goToPayment(folio);
