@@ -11,6 +11,16 @@ const { pinValido } = require('./lib/pin');
 
 const BUCKET_RESUMEN = process.env.S3_BUCKET_RESUMEN || 'resumen-vidavitalqr';
 
+// ---- carpeta de organización dentro del bucket, según el tipo de ficha (ver la misma función,
+// con más detalle, en send-ficha.js) — el folio manda: "VVITALQR..." es persona,
+// "VVMASCOTA..." es mascota; el campo "tipo" solo se usa como respaldo ----
+function carpetaTipo(tipo, folio) {
+  const f = String(folio || '').toUpperCase();
+  if (f.startsWith('VVMASCOTA')) return 'mascotas';
+  if (f.startsWith('VVITALQR')) return 'personas';
+  return tipo === 'Mascota' ? 'mascotas' : 'personas';
+}
+
 function getS3Client() {
   const region = process.env.S3_REGION || 'us-east-1';
   const accessKeyId = process.env.S3_ACCESS_KEY_ID;
@@ -54,6 +64,7 @@ exports.handler = async (event) => {
 
   const folio = String(payload.folio || '').trim().toUpperCase();
   const pin = String(payload.pin || '').trim().toUpperCase();
+  const carpeta = carpetaTipo(payload.tipo, folio);
 
   if (!folio || !pin) {
     return { statusCode: 400, headers, body: JSON.stringify({ error: 'Faltan el folio o el PIN.' }) };
@@ -63,9 +74,17 @@ exports.handler = async (event) => {
 
   try {
     const s3 = getS3Client();
-    const resp = await s3.send(new GetObjectCommand({ Bucket: BUCKET_RESUMEN, Key: `login/${folio}.json` }));
-    const texto = await streamToString(resp.Body);
-    const registro = JSON.parse(texto);
+    let registro;
+    try {
+      const resp = await s3.send(new GetObjectCommand({ Bucket: BUCKET_RESUMEN, Key: `${carpeta}/login/${folio}.json` }));
+      registro = JSON.parse(await streamToString(resp.Body));
+    } catch (err) {
+      const noExiste = err.name === 'NoSuchKey' || err.Code === 'NoSuchKey' || err.$metadata?.httpStatusCode === 404;
+      if (!noExiste) throw err;
+      // ficha todavía no migrada a la carpeta nueva — se busca en la ubicación anterior
+      const respLegacy = await s3.send(new GetObjectCommand({ Bucket: BUCKET_RESUMEN, Key: `login/${folio}.json` }));
+      registro = JSON.parse(await streamToString(respLegacy.Body));
+    }
 
     if (!pinValido(pin, registro.pinHash)) {
       return respuestaInvalida;
