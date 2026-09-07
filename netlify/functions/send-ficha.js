@@ -76,6 +76,26 @@ function streamToString(stream) {
   });
 }
 
+// ---- carpeta de organización dentro de cada bucket, según el tipo de ficha ----
+// El folio mismo ya distingue el tipo sin ambigüedad — el de persona siempre empieza con
+// "VVITALQR" y el de mascota con "VVMASCOTA" (son prefijos distintos, con contadores
+// independientes) — así que se usa el folio como fuente de verdad, y el campo "tipo" que manda
+// el formulario solo como respaldo para el caso raro de que todavía no exista folio.
+// Esto también es lo que permite que ver.js (la página que abre el código QR) sepa en qué
+// carpeta buscar sin tener que adivinar ni revisar las dos.
+//
+// Solo afecta a lo que se guarda de aquí en adelante — lo ya guardado antes de este cambio
+// permanece en su ubicación anterior (sin carpeta) y se sigue pudiendo leer con normalidad
+// (login-ficha.js, recuperar-ficha.js y ver.js revisan ahí como respaldo si no encuentran el
+// dato en la carpeta nueva). Así cada ficha que se crea o se renueva a partir de ahora queda
+// ordenada, sin necesidad de mover de golpe todo lo que ya existía.
+function carpetaTipo(tipo, folio) {
+  const f = String(folio || '').toUpperCase();
+  if (f.startsWith('VVMASCOTA')) return 'mascotas';
+  if (f.startsWith('VVITALQR')) return 'personas';
+  return tipo === 'Mascota' ? 'mascotas' : 'personas';
+}
+
 // ---- crea o actualiza el "registro de acceso" (folio + PIN) que permite entrar al panel de
 // edición sin volver a llenar el formulario completo ----
 // Se guarda en el bucket de resumen (BUCKET_RESUMEN), que nunca se expone como URL pública —
@@ -87,8 +107,9 @@ function streamToString(stream) {
 // — nunca se cambia solo, para no dejar al usuario sin acceso. Si el registro es de una versión
 // anterior que solo guardaba el hash (sin el texto plano), se genera un PIN nuevo esta vez, para
 // que a partir de ahora también quede recuperable.
-async function cargarOCrearLogin(s3, folio, datosFormulario) {
-  const key = `login/${folio}.json`;
+async function cargarOCrearLogin(s3, folio, datosFormulario, carpeta) {
+  const key = `${carpeta}/login/${folio}.json`;
+  const keyLegacy = `login/${folio}.json`;
   let registro = null;
   try {
     const resp = await s3.send(new GetObjectCommand({ Bucket: BUCKET_RESUMEN, Key: key }));
@@ -97,6 +118,16 @@ async function cargarOCrearLogin(s3, folio, datosFormulario) {
   } catch (err) {
     const noExiste = err.name === 'NoSuchKey' || err.Code === 'NoSuchKey' || err.$metadata?.httpStatusCode === 404;
     if (!noExiste) throw err;
+    // todavía no se ha tocado esta ficha desde que existe la organización por carpetas —
+    // se busca en la ubicación anterior para conservar su PIN y sus datos ya guardados
+    try {
+      const respLegacy = await s3.send(new GetObjectCommand({ Bucket: BUCKET_RESUMEN, Key: keyLegacy }));
+      const textoLegacy = await streamToString(respLegacy.Body);
+      registro = JSON.parse(textoLegacy);
+    } catch (err2) {
+      const noExisteLegacy = err2.name === 'NoSuchKey' || err2.Code === 'NoSuchKey' || err2.$metadata?.httpStatusCode === 404;
+      if (!noExisteLegacy) throw err2;
+    }
   }
 
   // Se trata como "nuevo" tanto si no existía registro como si existía pero de una versión
@@ -173,9 +204,10 @@ async function enviarCodigoPorCorreo(contactos, { folio, pin, nombreCompleto, ti
 
 async function subirABuckets(s3, region, { folio, filename, pdfBase64, fotoBase64, nombreCompleto, tipo, contactos, datosVisor }) {
   const region_ = region;
+  const carpeta = carpetaTipo(tipo, folio);
 
-  // 1) PDF de la ficha
-  const pdfKey = filename;
+  // 1) PDF de la ficha — ahora dentro de personas/ o mascotas/, según corresponda.
+  const pdfKey = `${carpeta}/${filename}`;
   await s3.send(new PutObjectCommand({
     Bucket: BUCKET_FICHAS,
     Key: pdfKey,
@@ -190,7 +222,7 @@ async function subirABuckets(s3, region, { folio, filename, pdfBase64, fotoBase6
   let fotoUrl = '';
   if (fotoBase64) {
     const ext = (contentTypeFromDataUrl(fotoBase64, 'image/jpeg').split('/')[1] || 'jpg').replace('jpeg', 'jpg');
-    const fotoKey = `fotos/${folio}.${ext}`;
+    const fotoKey = `${carpeta}/fotos/${folio}.${ext}`;
     await s3.send(new PutObjectCommand({
       Bucket: BUCKET_FICHAS,
       Key: fotoKey,
@@ -199,20 +231,27 @@ async function subirABuckets(s3, region, { folio, filename, pdfBase64, fotoBase6
     }));
     fotoUrl = publicUrlFor(BUCKET_FICHAS, region_, fotoKey);
   } else {
+    // busca la foto anterior primero en la carpeta nueva y, si esta ficha todavía no se había
+    // tocado desde que existe la organización por carpetas, en la ubicación antigua (sin carpeta)
+    let datosAnteriores = null;
     try {
-      const anterior = await s3.send(new GetObjectCommand({ Bucket: BUCKET_FICHAS, Key: `datos/${folio}.json` }));
-      const texto = await streamToString(anterior.Body);
-      const datosAnteriores = JSON.parse(texto);
-      if (datosAnteriores && datosAnteriores.fotoUrl) fotoUrl = datosAnteriores.fotoUrl;
+      const anterior = await s3.send(new GetObjectCommand({ Bucket: BUCKET_FICHAS, Key: `${carpeta}/datos/${folio}.json` }));
+      datosAnteriores = JSON.parse(await streamToString(anterior.Body));
     } catch (err) {
-      // sin foto anterior que conservar (ficha nueva, o nunca tuvo foto) — no es un error
+      try {
+        const anteriorLegacy = await s3.send(new GetObjectCommand({ Bucket: BUCKET_FICHAS, Key: `datos/${folio}.json` }));
+        datosAnteriores = JSON.parse(await streamToString(anteriorLegacy.Body));
+      } catch (err2) {
+        // sin foto anterior que conservar (ficha nueva, o nunca tuvo foto) — no es un error
+      }
     }
+    if (datosAnteriores && datosAnteriores.fotoUrl) fotoUrl = datosAnteriores.fotoUrl;
   }
 
   // 3) Datos estructurados para el visor público (lo que se muestra y traduce cuando alguien
   // escanea el código) y para saber a quién avisar. Se guarda como JSON, separado del PDF, para
   // no tener que volver a interpretar el PDF cada vez que alguien escanea.
-  const datosKey = `datos/${folio}.json`;
+  const datosKey = `${carpeta}/datos/${folio}.json`;
   await s3.send(new PutObjectCommand({
     Bucket: BUCKET_FICHAS,
     Key: datosKey,
@@ -232,7 +271,7 @@ async function subirABuckets(s3, region, { folio, filename, pdfBase64, fotoBase6
   // 4) Código QR — apunta al visor público (no directamente al PDF), para poder avisar a los
   // contactos cuando se escanee y para poder mostrar el botón de idioma.
   const qrSvg = await buildQrSvg(urlDelVisor(folio), folio);
-  const qrKey = `${folio}.svg`;
+  const qrKey = `${carpeta}/${folio}.svg`;
   await s3.send(new PutObjectCommand({
     Bucket: BUCKET_QR,
     Key: qrKey,
@@ -305,6 +344,7 @@ exports.handler = async (event) => {
   let pdfUrl = '', fotoUrl = '', qrUrl = '';
   let s3Error = null;
   let pinNuevo = null;
+  const carpeta = carpetaTipo(tipo, folio);
   try {
     const region = process.env.S3_REGION || 'us-east-1';
     const s3 = getS3Client();
@@ -315,7 +355,7 @@ exports.handler = async (event) => {
     // vigente en la columna "PIN" de resumen.xlsx en el mismo guardado.
     let pinActual = '';
     if (folio) {
-      const login = await cargarOCrearLogin(s3, folio, datosFormulario);
+      const login = await cargarOCrearLogin(s3, folio, datosFormulario, carpeta);
       pinActual = login.pin || '';
       if (login.esNuevo) pinNuevo = login.pin;
       // se envía en cada guardado (ficha nueva o actualización), no solo cuando el PIN es nuevo,
@@ -323,7 +363,10 @@ exports.handler = async (event) => {
       await enviarCodigoPorCorreo(contactos, { folio, pin: pinActual, nombreCompleto, tipo });
     }
 
-    await actualizarResumenXlsx(s3, BUCKET_RESUMEN, RESUMEN_KEY, {
+    // resumen.xlsx separado por tipo (personas/resumen.xlsx y mascotas/resumen.xlsx), para
+    // poder revisarlos por separado. El resumen.xlsx combinado que ya existía en la raíz del
+    // bucket queda como respaldo histórico — deja de actualizarse a partir de este cambio.
+    await actualizarResumenXlsx(s3, BUCKET_RESUMEN, `${carpeta}/${RESUMEN_KEY}`, {
       contador: folio || '',
       pin: pinActual,
       nombre: nombreCompleto || '',
