@@ -18,9 +18,10 @@
 // (son reservados por el propio entorno de ejecución). Por eso aquí se usan nombres propios:
 // S3_ACCESS_KEY_ID, S3_SECRET_ACCESS_KEY, S3_REGION.
 
-const { S3Client, PutObjectCommand } = require('@aws-sdk/client-s3');
+const { S3Client, PutObjectCommand, GetObjectCommand } = require('@aws-sdk/client-s3');
 const { buildQrSvg } = require('./lib/qr-svg');
 const { actualizarResumenXlsx } = require('./lib/xlsx-resumen');
+const { generarPin, hashPin } = require('./lib/pin');
 
 const DESTINATARIO = 'vidavitalqr@zohomail.com';
 const REMITENTE = 'VidaVitalQR <ficha@vidavitalqr.com>';
@@ -56,7 +57,76 @@ function contentTypeFromDataUrl(dataUrl, fallback) {
   return m ? m[1] : fallback;
 }
 
-async function subirABuckets(s3, region, { folio, filename, pdfBase64, fotoBase64 }) {
+// URL pública del "visor" que se abre al escanear el código QR (en vez de abrir el PDF
+// directamente). Esa página es la que dispara el aviso por correo a los contactos de
+// emergencia y la que muestra el botón de idioma. Se puede sobreescribir con una variable de
+// entorno si el dominio cambia.
+const SITE_URL = process.env.SITE_URL || 'https://vidavitalqr.com';
+
+function urlDelVisor(folio) {
+  return `${SITE_URL}/.netlify/functions/ver?folio=${encodeURIComponent(folio)}`;
+}
+
+function streamToString(stream) {
+  return new Promise((resolve, reject) => {
+    const chunks = [];
+    stream.on('data', (chunk) => chunks.push(chunk));
+    stream.on('error', reject);
+    stream.on('end', () => resolve(Buffer.concat(chunks).toString('utf-8')));
+  });
+}
+
+// ---- crea o actualiza el "registro de acceso" (folio + PIN) que permite entrar al panel de
+// edición sin volver a llenar el formulario completo ----
+// Se guarda en el bucket de resumen (BUCKET_RESUMEN), que nunca se expone como URL pública —
+// a diferencia de BUCKET_FICHAS, donde el PDF/foto/QR sí son públicos a propósito. Para poder
+// recuperar el acceso de un usuario que perdió su PIN (por ejemplo, si escribe por WhatsApp), el
+// PIN también se guarda en texto plano aquí (además de su hash, que es lo que se usa para
+// validar el ingreso) — nunca se expone en una URL pública, así que esto no reduce la seguridad
+// de cara al público. Si la ficha ya tenía un PIN guardado en texto plano, se conserva el mismo
+// — nunca se cambia solo, para no dejar al usuario sin acceso. Si el registro es de una versión
+// anterior que solo guardaba el hash (sin el texto plano), se genera un PIN nuevo esta vez, para
+// que a partir de ahora también quede recuperable.
+async function cargarOCrearLogin(s3, folio, datosFormulario) {
+  const key = `login/${folio}.json`;
+  let registro = null;
+  try {
+    const resp = await s3.send(new GetObjectCommand({ Bucket: BUCKET_RESUMEN, Key: key }));
+    const texto = await streamToString(resp.Body);
+    registro = JSON.parse(texto);
+  } catch (err) {
+    const noExiste = err.name === 'NoSuchKey' || err.Code === 'NoSuchKey' || err.$metadata?.httpStatusCode === 404;
+    if (!noExiste) throw err;
+  }
+
+  // Se trata como "nuevo" tanto si no existía registro como si existía pero de una versión
+  // anterior que no guardaba el PIN en texto plano (solo el hash) — en ambos casos hay que
+  // generar (o regenerar) un PIN y mostrárselo al usuario en el modal.
+  const esNuevo = !registro || !registro.pin;
+  const pin = esNuevo ? generarPin() : registro.pin;
+  const nuevoRegistro = {
+    folio,
+    pin,
+    pinHash: esNuevo ? hashPin(pin) : registro.pinHash,
+    datosFormulario: datosFormulario && typeof datosFormulario === 'object' ? datosFormulario : {},
+    creado: (registro && registro.creado) ? registro.creado : new Date().toISOString(),
+    actualizado: new Date().toISOString(),
+  };
+
+  await s3.send(new PutObjectCommand({
+    Bucket: BUCKET_RESUMEN,
+    Key: key,
+    Body: Buffer.from(JSON.stringify(nuevoRegistro), 'utf-8'),
+    ContentType: 'application/json',
+  }));
+
+  // "pin" siempre viene relleno (con el PIN actual, nuevo o ya existente) — se usa tanto para
+  // mostrarlo en el modal (solo cuando esNuevo) como para registrarlo en la columna "PIN" de
+  // resumen.xlsx (siempre, para que James pueda recuperarlo si el usuario escribe por WhatsApp).
+  return { esNuevo, pin };
+}
+
+async function subirABuckets(s3, region, { folio, filename, pdfBase64, fotoBase64, nombreCompleto, tipo, contactos, datosVisor }) {
   const region_ = region;
 
   // 1) PDF de la ficha
@@ -69,7 +139,9 @@ async function subirABuckets(s3, region, { folio, filename, pdfBase64, fotoBase6
   }));
   const pdfUrl = publicUrlFor(BUCKET_FICHAS, region_, pdfKey);
 
-  // 2) Foto (opcional)
+  // 2) Foto (opcional). Si esta actualización no trae una foto nueva (por ejemplo, una
+  // renovación donde el usuario no volvió a adjuntarla), se conserva la URL de la foto que ya
+  // tenía guardada, en vez de borrarla del visor público.
   let fotoUrl = '';
   if (fotoBase64) {
     const ext = (contentTypeFromDataUrl(fotoBase64, 'image/jpeg').split('/')[1] || 'jpg').replace('jpeg', 'jpg');
@@ -81,10 +153,40 @@ async function subirABuckets(s3, region, { folio, filename, pdfBase64, fotoBase6
       ContentType: contentTypeFromDataUrl(fotoBase64, 'image/jpeg'),
     }));
     fotoUrl = publicUrlFor(BUCKET_FICHAS, region_, fotoKey);
+  } else {
+    try {
+      const anterior = await s3.send(new GetObjectCommand({ Bucket: BUCKET_FICHAS, Key: `datos/${folio}.json` }));
+      const texto = await streamToString(anterior.Body);
+      const datosAnteriores = JSON.parse(texto);
+      if (datosAnteriores && datosAnteriores.fotoUrl) fotoUrl = datosAnteriores.fotoUrl;
+    } catch (err) {
+      // sin foto anterior que conservar (ficha nueva, o nunca tuvo foto) — no es un error
+    }
   }
 
-  // 3) Código QR apuntando al PDF, con folio debajo
-  const qrSvg = await buildQrSvg(pdfUrl, folio);
+  // 3) Datos estructurados para el visor público (lo que se muestra y traduce cuando alguien
+  // escanea el código) y para saber a quién avisar. Se guarda como JSON, separado del PDF, para
+  // no tener que volver a interpretar el PDF cada vez que alguien escanea.
+  const datosKey = `datos/${folio}.json`;
+  await s3.send(new PutObjectCommand({
+    Bucket: BUCKET_FICHAS,
+    Key: datosKey,
+    Body: Buffer.from(JSON.stringify({
+      folio,
+      nombreCompleto: nombreCompleto || '',
+      tipo: tipo || 'Persona',
+      pdfUrl,
+      fotoUrl,
+      contactos: Array.isArray(contactos) ? contactos : [],
+      datosVisor: datosVisor && typeof datosVisor === 'object' ? datosVisor : {},
+      actualizado: new Date().toISOString(),
+    }), 'utf-8'),
+    ContentType: 'application/json',
+  }));
+
+  // 4) Código QR — apunta al visor público (no directamente al PDF), para poder avisar a los
+  // contactos cuando se escanee y para poder mostrar el botón de idioma.
+  const qrSvg = await buildQrSvg(urlDelVisor(folio), folio);
   const qrKey = `${folio}.svg`;
   await s3.send(new PutObjectCommand({
     Bucket: BUCKET_QR,
@@ -143,7 +245,7 @@ exports.handler = async (event) => {
     return { statusCode: 400, headers, body: JSON.stringify({ error: 'JSON inválido.' }) };
   }
 
-  const { folio, filename, pdfBase64, nombreCompleto, tipo, fotoBase64 } = payload;
+  const { folio, filename, pdfBase64, nombreCompleto, tipo, fotoBase64, contactos, datosVisor, datosFormulario } = payload;
 
   if (!pdfBase64 || !filename) {
     return {
@@ -153,17 +255,29 @@ exports.handler = async (event) => {
     };
   }
 
-  // ---- Paso 1: subir a S3 (PDF + foto + código QR) y actualizar la tabla resumen ----
+  // ---- Paso 1: subir a S3 (PDF + foto + código QR), actualizar la tabla resumen, y crear o
+  // actualizar el acceso con PIN para el panel de edición ----
   let pdfUrl = '', fotoUrl = '', qrUrl = '';
   let s3Error = null;
+  let pinNuevo = null;
   try {
     const region = process.env.S3_REGION || 'us-east-1';
     const s3 = getS3Client();
-    const subido = await subirABuckets(s3, region, { folio, filename, pdfBase64, fotoBase64 });
+    const subido = await subirABuckets(s3, region, { folio, filename, pdfBase64, fotoBase64, nombreCompleto, tipo, contactos, datosVisor });
     pdfUrl = subido.pdfUrl; fotoUrl = subido.fotoUrl; qrUrl = subido.qrUrl;
+
+    // El login (y su PIN) se resuelve ANTES de escribir el resumen, para poder incluir el PIN
+    // vigente en la columna "PIN" de resumen.xlsx en el mismo guardado.
+    let pinActual = '';
+    if (folio) {
+      const login = await cargarOCrearLogin(s3, folio, datosFormulario);
+      pinActual = login.pin || '';
+      if (login.esNuevo) pinNuevo = login.pin;
+    }
 
     await actualizarResumenXlsx(s3, BUCKET_RESUMEN, RESUMEN_KEY, {
       contador: folio || '',
+      pin: pinActual,
       nombre: nombreCompleto || '',
       fecha: fechaInicioHoy(),
       pdfUrl,
@@ -227,20 +341,20 @@ exports.handler = async (event) => {
       return {
         statusCode: resendResp.status,
         headers,
-        body: JSON.stringify({ error: 'Resend rechazó el envío.', detalle: resultado, s3Error, pdfUrl, fotoUrl, qrUrl }),
+        body: JSON.stringify({ error: 'Resend rechazó el envío.', detalle: resultado, s3Error, pdfUrl, fotoUrl, qrUrl, pin: pinNuevo }),
       };
     }
 
     return {
       statusCode: 200,
       headers,
-      body: JSON.stringify({ ok: true, id: resultado.id, s3Error, pdfUrl, fotoUrl, qrUrl }),
+      body: JSON.stringify({ ok: true, id: resultado.id, s3Error, pdfUrl, fotoUrl, qrUrl, pin: pinNuevo }),
     };
   } catch (err) {
     return {
       statusCode: 500,
       headers,
-      body: JSON.stringify({ error: 'Error al contactar a Resend.', detalle: String(err), s3Error, pdfUrl, fotoUrl, qrUrl }),
+      body: JSON.stringify({ error: 'Error al contactar a Resend.', detalle: String(err), s3Error, pdfUrl, fotoUrl, qrUrl, pin: pinNuevo }),
     };
   }
 };
