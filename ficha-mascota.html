@@ -248,7 +248,30 @@
 <button type="button" id="renewalConfirmBtn" class="select-btn" style="white-space:nowrap;">Continuar</button>
 </div>
 <p id="renewalPinError" style="display:none; margin:14px 0 0; color:#c0392b; font-weight:600;">✘ Folio o PIN incorrectos. Verifica ambos, o continúa dejando el PIN en blanco para llenar el formulario de nuevo.</p>
-<p style="margin:10px 0 0; font-size:0.85rem; color:#6b6558;">¿Olvidaste tu PIN? Escríbenos por el botón de WhatsApp en vidavitalqr.com indicando tu código de ficha, y te ayudamos a recuperar el acceso.</p>
+<p style="margin:10px 0 0; font-size:0.85rem; color:#6b6558;">¿Olvidaste tu PIN? <a href="#" id="recuperarPinToggle" style="color:var(--teal-deep,#1F4448); font-weight:600;">Recupéralo con el nombre y la fecha de nacimiento de tu mascota</a>, o escríbenos por el botón de WhatsApp en vidavitalqr.com indicando tu código de ficha.</p>
+<div id="recuperarPinBox" class="no-print" style="display:none; margin-top:14px; padding:14px; background:#fff; border:1px solid var(--line,#DAD3C4); border-radius:10px;">
+<p style="margin:0 0 10px; font-size:0.85rem; color:#6b6558;">Para verificar que la ficha es de tu mascota, escribe primero el código de la ficha arriba y luego el nombre y la fecha de nacimiento de tu mascota, tal como los escribiste al crearla.</p>
+<div style="display:flex; gap:10px; flex-wrap:wrap; align-items:flex-end;">
+<div class="field" style="flex:1; min-width:220px; margin:0;">
+<label>Nombre de la mascota</label>
+<input type="text" id="recuperarNombreInput" placeholder="Nombre de la mascota">
+</div>
+<div class="field" style="flex:1; min-width:160px; margin:0;">
+<label>Fecha de nacimiento</label>
+<input type="date" id="recuperarFnacInput">
+</div>
+<button type="button" id="recuperarPinBtn" class="select-btn" style="white-space:nowrap;">Buscar mi PIN</button>
+</div>
+<p id="recuperarPinError" style="display:none; margin:10px 0 0; color:#c0392b; font-weight:600;">✘ No pudimos verificar los datos. Revisa el código de la ficha, el nombre y la fecha de nacimiento de tu mascota.</p>
+<div id="recuperarPinOpciones" style="display:none; margin-top:12px; padding-top:12px; border-top:1px dashed var(--line,#DAD3C4);">
+<p style="margin:0 0 10px; font-size:0.85rem; color:#6b6558;">✔ Verificamos los datos. ¿Cómo quieres recibir el PIN?</p>
+<div style="display:flex; gap:10px; flex-wrap:wrap;">
+<button type="button" id="recuperarVerBtn" class="select-btn" style="white-space:nowrap;">Ver el PIN en pantalla (15 seg.)</button>
+<button type="button" id="recuperarCorreoBtn" class="select-btn" style="white-space:nowrap;">Enviármelo por correo</button>
+</div>
+</div>
+<p id="recuperarPinOk" style="display:none; margin:10px 0 0; color:#1a7a3c; font-weight:600;"></p>
+</div>
 <p id="renewalConfirmedMsg" style="display:none; margin:14px 0 0; color:#1a7a3c; font-weight:600;">✔ Código confirmado. Completa el formulario y envía para actualizar tu ficha.</p>
 <p id="renewalPrecargadoMsg" style="display:none; margin:6px 0 0; color:#1a7a3c; font-weight:600;">✔ Tus datos anteriores ya se cargaron en el formulario — revisa y edita lo que necesites.</p>
 </div>
@@ -308,13 +331,13 @@
 </div>
 <div class="field full"><label>Otras señales</label><input type="text" id="senales" placeholder="Referencias de ubicación"></div>
 </div>
-<p class="hint" style="margin-top:14px;">Si agrega el correo de un contacto, le llegará un aviso automático cada vez que alguien escanee el código QR de esta mascota.</p>
+<p class="hint" style="margin-top:14px;">El correo del contacto 1 es obligatorio: ahí se enviará el código de acceso (folio y PIN) cada vez que se cree o actualice esta ficha, y también un aviso automático cada vez que alguien escanee el código QR. Cualquier información importante relacionada con la ficha se enviará a este correo.</p>
 <div class="contact-rows">
 <div class="grid cols4">
 <div class="field"><label>Nombre de contacto 1</label><input type="text" id="contacto1"></div>
 <div class="field"><label>Teléfono</label><input type="tel" id="telcontacto1"></div>
 <div class="field"><label>Relación con la mascota</label><input type="text" id="parentesco1" placeholder="Dueño, tutor, cuidador…"></div>
-<div class="field no-print"><label>Correo (opcional, para el aviso)</label><input type="email" id="emailcontacto1" placeholder="correo@ejemplo.com"></div>
+<div class="field no-print"><label>Correo (obligatorio)</label><input type="email" id="emailcontacto1" placeholder="correo@ejemplo.com" required></div>
 </div>
 <div class="grid cols4">
 <div class="field"><label>Nombre de contacto 2</label><input type="text" id="contacto2"></div>
@@ -510,6 +533,129 @@ $('photoRemove').addEventListener('click', e => {
       btn.disabled = true;
       btn.textContent = textoOriginal;
       $('btnEmail').disabled = false;
+    });
+
+    // ---- recuperar el PIN con folio + nombre (de la mascota) + fecha de nacimiento (los tres
+    // datos juntos verifican que quien pide el PIN realmente es dueño de la ficha) ----
+    $('recuperarPinToggle').addEventListener('click', (e) => {
+      e.preventDefault();
+      const box = $('recuperarPinBox');
+      box.style.display = box.style.display === 'none' ? 'block' : 'none';
+    });
+
+    let pinRecuperado = null;
+    let recuperarCuentaAtras = null;
+
+    function detenerCuentaAtras() {
+      if (recuperarCuentaAtras) { clearInterval(recuperarCuentaAtras); recuperarCuentaAtras = null; }
+    }
+
+    $('recuperarPinBtn').addEventListener('click', async () => {
+      const folio = $('renewalCodeInput').value.trim().toUpperCase();
+      const nombreCompleto = $('recuperarNombreInput').value.trim();
+      const fnac = $('recuperarFnacInput').value.trim();
+
+      $('recuperarPinError').style.display = 'none';
+      $('recuperarPinOk').style.display = 'none';
+      $('recuperarPinOpciones').style.display = 'none';
+      detenerCuentaAtras();
+      pinRecuperado = null;
+
+      if (!folio) { alert('Primero escribe el código de la ficha, arriba.'); return; }
+      if (!nombreCompleto || !fnac) { alert('Completa el nombre y la fecha de nacimiento de tu mascota.'); return; }
+
+      const btn = $('recuperarPinBtn');
+      const textoOriginal = btn.textContent;
+      btn.disabled = true;
+      btn.textContent = 'Buscando…';
+
+      try{
+        const resp = await fetch('/.netlify/functions/recuperar-ficha', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({ folio, nombreCompleto, fnac }),
+        });
+        if (!resp.ok) {
+          $('recuperarPinError').style.display = 'block';
+          return;
+        }
+        const data = await resp.json();
+        pinRecuperado = data.pin;
+        $('recuperarPinOpciones').style.display = 'block';
+      }catch(err){
+        $('recuperarPinError').style.display = 'block';
+      }finally{
+        btn.disabled = false;
+        btn.textContent = textoOriginal;
+      }
+    });
+
+    // ---- opción 1: mostrarlo en pantalla, pero solo por 15 segundos, con cuenta atrás visible,
+    // para no dejarlo expuesto indefinidamente en una computadora compartida. El campo de PIN
+    // igual queda cargado (aunque se oculte visualmente al terminar la cuenta atrás), para que
+    // "Continuar" siga funcionando sin necesidad de volver a buscarlo. ----
+    $('recuperarVerBtn').addEventListener('click', () => {
+      if (!pinRecuperado) return;
+      detenerCuentaAtras();
+      $('renewalPinInput').type = 'text';
+      $('renewalPinInput').value = pinRecuperado;
+
+      let segundos = 15;
+      const actualizarMensaje = () => {
+        $('recuperarPinOk').textContent = `✔ El PIN es: ${pinRecuperado} — se ocultará en ${segundos} segundo${segundos === 1 ? '' : 's'}. Cópialo y haz clic en "Continuar".`;
+        $('recuperarPinOk').style.display = 'block';
+      };
+      actualizarMensaje();
+      recuperarCuentaAtras = setInterval(() => {
+        segundos -= 1;
+        if (segundos <= 0) {
+          detenerCuentaAtras();
+          $('renewalPinInput').type = 'password';
+          $('recuperarPinOk').textContent = '✔ Por seguridad ocultamos el PIN. Ya quedó cargado arriba — haz clic en "Continuar", o vuelve a mostrarlo si lo necesitas de nuevo.';
+          return;
+        }
+        actualizarMensaje();
+      }, 1000);
+    });
+
+    // ---- opción 2: enviarlo por correo al contacto registrado, en vez de mostrarlo en pantalla ----
+    $('recuperarCorreoBtn').addEventListener('click', async () => {
+      const folio = $('renewalCodeInput').value.trim().toUpperCase();
+      const nombreCompleto = $('recuperarNombreInput').value.trim();
+      const fnac = $('recuperarFnacInput').value.trim();
+      if (!pinRecuperado) return;
+
+      const btn = $('recuperarCorreoBtn');
+      const textoOriginal = btn.textContent;
+      btn.disabled = true;
+      btn.textContent = 'Enviando…';
+      $('recuperarPinError').style.display = 'none';
+
+      try{
+        const resp = await fetch('/.netlify/functions/recuperar-ficha', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({ folio, nombreCompleto, fnac, accion: 'correo' }),
+        });
+        const data = await resp.json().catch(() => ({}));
+        if (!resp.ok || !data.ok) {
+          $('recuperarPinOk').style.display = 'none';
+          $('recuperarPinError').textContent = data.error || 'No pudimos enviar el correo. Intenta con la opción de verlo en pantalla.';
+          $('recuperarPinError').style.display = 'block';
+          return;
+        }
+        detenerCuentaAtras();
+        $('renewalPinInput').type = 'password';
+        $('renewalPinInput').value = pinRecuperado;
+        $('recuperarPinOk').textContent = `✔ Enviamos el PIN al correo ${data.correo || 'registrado'}. Ya quedó cargado arriba — haz clic en "Continuar".`;
+        $('recuperarPinOk').style.display = 'block';
+      }catch(err){
+        $('recuperarPinError').textContent = 'No pudimos enviar el correo. Intenta con la opción de verlo en pantalla.';
+        $('recuperarPinError').style.display = 'block';
+      }finally{
+        btn.disabled = false;
+        btn.textContent = textoOriginal;
+      }
     });
     return;
   }
@@ -980,7 +1126,18 @@ function blobToBase64(blob){
 }
 
 // ---- generar el PDF y guardarlo directamente en AWS S3 (no se envía ningún correo) ----
+// ---- validación básica de formato de correo (no verifica que exista, solo la forma) ----
+function emailValido(str){
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test((str || '').trim());
+}
+
 $('btnEmail').addEventListener('click', async () => {
+  if (!emailValido($('emailcontacto1').value)) {
+    alert('El correo del contacto 1 es obligatorio y debe tener un formato válido (por ejemplo, correo@ejemplo.com). Ahí se enviará el código de acceso de esta ficha.');
+    $('emailcontacto1').focus();
+    return;
+  }
+
   const btn = $('btnEmail');
   const originalText = btn.textContent;
   btn.disabled = true;
