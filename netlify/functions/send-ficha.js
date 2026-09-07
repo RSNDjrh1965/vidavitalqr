@@ -126,6 +126,51 @@ async function cargarOCrearLogin(s3, folio, datosFormulario) {
   return { esNuevo, pin };
 }
 
+// ---- envía el código de acceso (folio + PIN) por correo al o los contactos de emergencia que
+// tengan un correo registrado, cada vez que se crea o actualiza una ficha — así el contacto
+// siempre tiene a mano el código vigente para poder actualizar la ficha en el futuro, sin
+// depender de que la persona titular guarde el PIN por su cuenta. No bloquea ni interrumpe el
+// resto del guardado si falla (por ejemplo, si no hay RESEND_API_KEY configurado).
+async function enviarCodigoPorCorreo(contactos, { folio, pin, nombreCompleto, tipo }) {
+  const apiKey = process.env.RESEND_API_KEY;
+  if (!apiKey || !folio || !pin) return;
+
+  const correos = Array.from(new Set(
+    (Array.isArray(contactos) ? contactos : [])
+      .map((c) => (c && c.email ? String(c.email).trim() : ''))
+      .filter(Boolean)
+  ));
+  if (correos.length === 0) return;
+
+  const deQuien = nombreCompleto ? ` de "${nombreCompleto}"` : '';
+  const asunto = `Código de acceso a la ficha VidaVitalQR${deQuien} — ${folio}`;
+
+  const cuerpo = [
+    `Este es el código de acceso vigente para la ficha${deQuien} en VidaVitalQR (folio ${folio}):`,
+    '',
+    `Folio: ${folio}`,
+    `PIN de acceso: ${pin}`,
+    '',
+    'Este código es necesario para poder actualizar la ficha en el futuro (por ejemplo, para renovarla o corregir algún dato). Guárdalo en un lugar seguro — nunca queda visible en ninguna página pública del sitio.',
+    '',
+    'Recibes este correo porque quedaste registrado(a) como contacto de emergencia de esta ficha. Este mensaje se envía automáticamente cada vez que la ficha se crea o se actualiza, para que siempre tengas a la mano el código más reciente.',
+    '',
+    'Este es un correo automático de VidaVitalQR.',
+  ].join('\n');
+
+  const envios = correos.map((email) =>
+    fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ from: REMITENTE, to: [email], subject: asunto, text: cuerpo }),
+    }).catch((err) => {
+      console.error('No se pudo enviar el código a', email, err);
+    })
+  );
+
+  await Promise.allSettled(envios);
+}
+
 async function subirABuckets(s3, region, { folio, filename, pdfBase64, fotoBase64, nombreCompleto, tipo, contactos, datosVisor }) {
   const region_ = region;
 
@@ -273,6 +318,9 @@ exports.handler = async (event) => {
       const login = await cargarOCrearLogin(s3, folio, datosFormulario);
       pinActual = login.pin || '';
       if (login.esNuevo) pinNuevo = login.pin;
+      // se envía en cada guardado (ficha nueva o actualización), no solo cuando el PIN es nuevo,
+      // para que el contacto de emergencia siempre tenga a la mano el código vigente
+      await enviarCodigoPorCorreo(contactos, { folio, pin: pinActual, nombreCompleto, tipo });
     }
 
     await actualizarResumenXlsx(s3, BUCKET_RESUMEN, RESUMEN_KEY, {
