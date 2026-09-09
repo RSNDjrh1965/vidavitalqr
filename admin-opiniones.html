@@ -1,0 +1,204 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Opiniones pendientes — VidaVitalQR</title>
+<style>
+  :root{
+    --ink:#12282B;
+    --paper:#F7F4EE;
+    --card:#FFFFFF;
+    --teal-deep:#1F4448;
+    --line:#DAD3C4;
+    --muted:#6C7A76;
+    --signal:#C1552F;
+    --ok:#2E7D4F;
+  }
+  *{ box-sizing:border-box; }
+  body{
+    margin:0;
+    font-family:"Source Sans 3", Arial, Helvetica, sans-serif;
+    background:var(--paper);
+    color:var(--ink);
+    padding:28px 16px;
+  }
+  .wrap{ max-width:720px; margin:0 auto; }
+  h1{ font-family:Georgia, "Times New Roman", serif; font-size:1.7rem; margin:0 0 4px; }
+  .sub{ color:var(--muted); margin-top:0; margin-bottom:24px; font-size:0.95rem; }
+  .card{
+    background:var(--card);
+    border:1px solid var(--line);
+    border-radius:14px;
+    padding:20px 22px;
+    margin-bottom:16px;
+  }
+  label{ display:block; font-size:0.85rem; color:var(--muted); margin-bottom:6px; }
+  input[type=password]{
+    width:100%;
+    padding:11px 12px;
+    border:1px solid var(--line);
+    border-radius:8px;
+    font-size:1rem;
+    margin-bottom:14px;
+    font-family:inherit;
+  }
+  button{
+    font-family:inherit;
+    font-weight:600;
+    font-size:0.92rem;
+    padding:10px 18px;
+    border:none;
+    border-radius:8px;
+    cursor:pointer;
+  }
+  button:disabled{ opacity:0.55; cursor:default; }
+  .btn-primary{ background:var(--teal-deep); color:var(--paper); }
+  .btn-approve{ background:var(--ok); color:#fff; margin-right:8px; }
+  .btn-reject{ background:var(--signal); color:#fff; }
+  .toolbar{ display:flex; justify-content:flex-end; margin-bottom:10px; }
+  .toolbar button{ padding:8px 14px; font-size:0.85rem; }
+  .msg{ font-size:0.88rem; margin:10px 0 0; }
+  .msg.err{ color:var(--signal); }
+  .msg.ok{ color:var(--ok); }
+  .testi-name{ font-weight:700; font-size:1.02rem; }
+  .testi-role{ font-size:0.85rem; color:var(--muted); margin-bottom:8px; }
+  .testi-text{ margin:8px 0 14px; line-height:1.5; }
+  .testi-fecha{ font-size:0.75rem; color:var(--muted); margin-top:12px; }
+  .empty{ color:var(--muted); font-style:italic; }
+  [hidden]{ display:none !important; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Opiniones pendientes</h1>
+  <p class="sub">Panel privado para revisar y publicar las opiniones que llegan desde el formulario "Comparta su experiencia" de vidavitalqr.com. Aprobar o rechazar aquí no requiere volver a desplegar el sitio.</p>
+
+  <div class="card" id="loginBox">
+    <label for="pwInput">Contraseña de administración</label>
+    <input type="password" id="pwInput" autocomplete="current-password">
+    <button class="btn-primary" id="btnEntrar">Ver opiniones pendientes</button>
+    <p class="msg" id="loginMsg"></p>
+  </div>
+
+  <div id="listaBox" hidden>
+    <div class="toolbar">
+      <button class="btn-primary" id="btnRefrescar">Actualizar lista</button>
+    </div>
+    <div id="listaContenido"></div>
+  </div>
+</div>
+
+<script>
+  var pw = '';
+  var pwInput = document.getElementById('pwInput');
+  var btnEntrar = document.getElementById('btnEntrar');
+  var loginMsg = document.getElementById('loginMsg');
+  var loginBox = document.getElementById('loginBox');
+  var listaBox = document.getElementById('listaBox');
+  var listaContenido = document.getElementById('listaContenido');
+  var btnRefrescar = document.getElementById('btnRefrescar');
+
+  function escapeHtml(s){
+    return String(s || '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
+
+  function cargarPendientes(){
+    listaContenido.innerHTML = '<p class="empty">Cargando…</p>';
+    fetch('/.netlify/functions/list-pending-testimonials', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ password: pw }),
+    })
+      .then(function(resp){
+        if (resp.status === 401) { throw new Error('unauthorized'); }
+        if (!resp.ok) { throw new Error('error'); }
+        return resp.json();
+      })
+      .then(function(data){
+        renderLista(data.pendientes || []);
+      })
+      .catch(function(err){
+        if (err && err.message === 'unauthorized') {
+          listaBox.hidden = true;
+          loginBox.hidden = false;
+          loginMsg.textContent = 'Contraseña incorrecta.';
+          loginMsg.className = 'msg err';
+        } else {
+          listaContenido.innerHTML = '<p class="msg err">No se pudo cargar la lista. Intente de nuevo.</p>';
+        }
+      });
+  }
+
+  function renderLista(pendientes){
+    if (!pendientes.length) {
+      listaContenido.innerHTML = '<p class="empty">No hay opiniones pendientes por ahora.</p>';
+      return;
+    }
+    listaContenido.innerHTML = pendientes.map(function(t){
+      return '' +
+        '<div class="card" data-id="' + escapeHtml(t.id) + '">' +
+          '<div class="testi-name">' + escapeHtml(t.nombre) + '</div>' +
+          (t.rol ? '<div class="testi-role">' + escapeHtml(t.rol) + '</div>' : '') +
+          '<div class="testi-text">' + escapeHtml(t.texto) + '</div>' +
+          '<button class="btn-approve" data-accion="aprobar">Aprobar y publicar</button>' +
+          '<button class="btn-reject" data-accion="rechazar">Rechazar</button>' +
+          '<div class="testi-fecha">' + escapeHtml(t.fecha) + '</div>' +
+          '<p class="msg" data-rol="msg"></p>' +
+        '</div>';
+    }).join('');
+  }
+
+  listaContenido.addEventListener('click', function(ev){
+    var btn = ev.target.closest('button[data-accion]');
+    if (!btn) return;
+    var card = btn.closest('.card');
+    var id = card.getAttribute('data-id');
+    var accion = btn.getAttribute('data-accion');
+    var msgEl = card.querySelector('[data-rol="msg"]');
+
+    Array.prototype.forEach.call(card.querySelectorAll('button'), function(b){ b.disabled = true; });
+    msgEl.textContent = accion === 'aprobar' ? 'Publicando…' : 'Rechazando…';
+    msgEl.className = 'msg';
+
+    fetch('/.netlify/functions/moderar-testimonial', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ password: pw, id: id, accion: accion }),
+    })
+      .then(function(resp){ if (!resp.ok) throw new Error('error'); return resp.json(); })
+      .then(function(){
+        card.style.opacity = '0.5';
+        msgEl.textContent = accion === 'aprobar' ? 'Publicada en el sitio.' : 'Rechazada.';
+        msgEl.className = 'msg ok';
+        setTimeout(function(){ card.remove(); }, 900);
+      })
+      .catch(function(){
+        Array.prototype.forEach.call(card.querySelectorAll('button'), function(b){ b.disabled = false; });
+        msgEl.textContent = 'No se pudo procesar. Intente de nuevo.';
+        msgEl.className = 'msg err';
+      });
+  });
+
+  btnEntrar.addEventListener('click', function(){
+    pw = pwInput.value || '';
+    if (!pw) { loginMsg.textContent = 'Escriba la contraseña.'; loginMsg.className = 'msg err'; return; }
+    loginMsg.textContent = '';
+    loginBox.hidden = true;
+    listaBox.hidden = false;
+    cargarPendientes();
+  });
+
+  pwInput.addEventListener('keydown', function(ev){
+    if (ev.key === 'Enter') { btnEntrar.click(); }
+  });
+
+  btnRefrescar.addEventListener('click', cargarPendientes);
+</script>
+</body>
+</html>
