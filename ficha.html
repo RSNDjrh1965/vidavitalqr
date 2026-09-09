@@ -49,6 +49,15 @@
     font-size:11px;color:var(--red);border:1px solid var(--red);border-radius:20px;
     padding:5px 12px;font-weight:600;letter-spacing:.3px;white-space:nowrap;
   }
+  .top-right{display:flex;flex-direction:column;align-items:flex-end;gap:8px;}
+  .langbar{display:flex;gap:6px;}
+  .langbar button{
+    border:1px solid var(--line);background:#fff;color:var(--navy-light);
+    border-radius:6px;padding:4px 9px;font-size:11.5px;font-weight:700;letter-spacing:.3px;
+    cursor:pointer;
+  }
+  .langbar button.activo{background:var(--navy);border-color:var(--navy);color:#fff;}
+  .langbar button:hover{border-color:var(--navy);}
 
   /* ---------- Live ID card preview ---------- */
   .idcard{
@@ -199,10 +208,18 @@
 <div class="cross"></div>
 <div>
 <h1>VidaVitalQR</h1>
-<p>Ficha de datos personales · uso en emergencias</p>
+<p data-i18n="subtitle">Ficha de datos personales · uso en emergencias</p>
 </div>
 </div>
-<span class="warn-badge">Información confidencial de emergencia</span>
+<div class="top-right">
+<div class="langbar no-print" id="langbar">
+<button type="button" data-lang="es">ES</button>
+<button type="button" data-lang="en">EN</button>
+<button type="button" data-lang="fr">FR</button>
+<button type="button" data-lang="pt">PT</button>
+</div>
+<span class="warn-badge" data-i18n="warnBadge">Información confidencial de emergencia</span>
+</div>
 </div>
 
 <!-- Live ID card preview -->
@@ -212,17 +229,17 @@
 <div class="idcard-info">
 <div class="idname" id="pvNombre">Nombre y apellidos</div>
 <div class="idmeta">
-<div><span>Edad</span><b id="pvEdad">—</b></div>
-<div><span>Documento</span><b id="pvDoc">—</b></div>
-<div><span>Contacto emergencia</span><b id="pvContacto">—</b></div>
-<div><span>Teléfono</span><b id="pvTelefono">—</b></div>
+<div><span data-i18n="lblEdad">Edad</span><b id="pvEdad">—</b></div>
+<div><span data-i18n="lblDocumento">Documento</span><b id="pvDoc">—</b></div>
+<div><span data-i18n="lblContactoEmergencia">Contacto emergencia</span><b id="pvContacto">—</b></div>
+<div><span data-i18n="lblTelefono">Teléfono</span><b id="pvTelefono">—</b></div>
 </div>
 </div>
-<div class="blood-chip" id="pvBlood">— TIPO —</div>
+<div class="blood-chip" id="pvBlood" data-i18n="bloodPlaceholder">— TIPO —</div>
 </div>
 <div class="idcard-photo-wrap">
 <div class="photo-box idcard-photo" id="photoBox">
-<span id="photoHint">📷 Foto<br>Clic para subir</span>
+<span id="photoHint" data-i18n-html="photoHint">📷 Foto<br>Clic para subir</span>
 <img id="photoImg" style="display:none;">
 <button type="button" class="photo-remove no-print" id="photoRemove" style="display:none;">✕</button>
 <input type="file" id="photoInput" accept="image/*">
@@ -234,161 +251,161 @@
 
 <!-- Aviso de renovación: solo se muestra si se llega con ?renovar=1 en la URL -->
 <div class="section no-print" id="renewalGate" style="display:none; border:2px solid var(--red,#c0392b); background:#fff6f0;">
-<h2 style="margin-top:0;">🔄 Renovación de ficha existente</h2>
-<p style="margin:0 0 14px;">Ingresa el código que aparece debajo del código QR de tu ficha actual (ejemplo: <b>VVITALQR00000012</b>). Si además ingresas tu PIN de acceso (te lo mostramos la primera vez que guardaste la ficha), precargamos automáticamente tus datos para que solo edites lo que cambió — si no lo tienes a mano, puedes continuar sin PIN y llenar el formulario de nuevo.</p>
+<h2 style="margin-top:0;" data-i18n="renewH2">🔄 Renovación de ficha existente</h2>
+<p style="margin:0 0 14px;" data-i18n-html="renewIntro">Ingresa el código que aparece debajo del código QR de tu ficha actual (ejemplo: <b>VVITALQR00000012</b>). Si además ingresas tu PIN de acceso (te lo mostramos la primera vez que guardaste la ficha), precargamos automáticamente tus datos para que solo edites lo que cambió — si no lo tienes a mano, puedes continuar sin PIN y llenar el formulario de nuevo.</p>
 <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:flex-end;">
 <div class="field" style="flex:1; min-width:220px; margin:0;">
-<label>Código de tu ficha</label>
+<label data-i18n="renewCodeLabel">Código de tu ficha</label>
 <input type="text" id="renewalCodeInput" placeholder="VVITALQR00000012" style="text-transform:uppercase;">
 </div>
 <div class="field" style="flex:1; min-width:160px; margin:0;">
-<label>PIN de acceso (opcional)</label>
+<label data-i18n="renewPinLabel">PIN de acceso (opcional)</label>
 <input type="text" id="renewalPinInput" placeholder="Ej. 3U7D3D" style="text-transform:uppercase;" maxlength="6">
 </div>
-<button type="button" id="renewalConfirmBtn" class="select-btn" style="white-space:nowrap;">Continuar</button>
+<button type="button" id="renewalConfirmBtn" class="select-btn" style="white-space:nowrap;" data-i18n="btnContinuar">Continuar</button>
 </div>
-<p id="renewalPinError" style="display:none; margin:14px 0 0; color:#c0392b; font-weight:600;">✘ Folio o PIN incorrectos. Verifica ambos, o continúa dejando el PIN en blanco para llenar el formulario de nuevo.</p>
-<p style="margin:10px 0 0; font-size:0.85rem; color:#6b6558;">¿Olvidaste tu PIN? <a href="#" id="recuperarPinToggle" style="color:var(--teal-deep,#1F4448); font-weight:600;">Recupéralo con tu nombre completo y fecha de nacimiento</a>, o escríbenos por el botón de WhatsApp en vidavitalqr.com indicando tu código de ficha.</p>
+<p id="renewalPinError" style="display:none; margin:14px 0 0; color:#c0392b; font-weight:600;" data-i18n="renewPinError">✘ Folio o PIN incorrectos. Verifica ambos, o continúa dejando el PIN en blanco para llenar el formulario de nuevo.</p>
+<p style="margin:10px 0 0; font-size:0.85rem; color:#6b6558;" data-i18n-html="renewForgotPin">¿Olvidaste tu PIN? <a href="#" id="recuperarPinToggle" style="color:var(--teal-deep,#1F4448); font-weight:600;">Recupéralo con tu nombre completo y fecha de nacimiento</a>, o escríbenos por el botón de WhatsApp en vidavitalqr.com indicando tu código de ficha.</p>
 <div id="recuperarPinBox" class="no-print" style="display:none; margin-top:14px; padding:14px; background:#fff; border:1px solid var(--line,#DAD3C4); border-radius:10px;">
-<p style="margin:0 0 10px; font-size:0.85rem; color:#6b6558;">Para verificar que la ficha es tuya, escribe primero el código de tu ficha arriba y luego tu nombre completo y tu fecha de nacimiento, tal como los escribiste al crearla.</p>
+<p style="margin:0 0 10px; font-size:0.85rem; color:#6b6558;" data-i18n="recuperarIntro">Para verificar que la ficha es tuya, escribe primero el código de tu ficha arriba y luego tu nombre completo y tu fecha de nacimiento, tal como los escribiste al crearla.</p>
 <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:flex-end;">
 <div class="field" style="flex:1; min-width:220px; margin:0;">
-<label>Nombre completo</label>
-<input type="text" id="recuperarNombreInput" placeholder="Nombres y apellidos">
+<label data-i18n="recuperarNombreLabel">Nombre completo</label>
+<input type="text" id="recuperarNombreInput" placeholder="Nombres y apellidos" data-i18n-ph="recuperarNombrePh">
 </div>
 <div class="field" style="flex:1; min-width:160px; margin:0;">
-<label>Fecha de nacimiento</label>
+<label data-i18n="lblFnac">Fecha de nacimiento</label>
 <input type="date" id="recuperarFnacInput">
 </div>
-<button type="button" id="recuperarPinBtn" class="select-btn" style="white-space:nowrap;">Buscar mi PIN</button>
+<button type="button" id="recuperarPinBtn" class="select-btn" style="white-space:nowrap;" data-i18n="btnBuscarPin">Buscar mi PIN</button>
 </div>
-<p id="recuperarPinError" style="display:none; margin:10px 0 0; color:#c0392b; font-weight:600;">✘ No pudimos verificar los datos. Revisa el código de tu ficha, el nombre completo y la fecha de nacimiento.</p>
+<p id="recuperarPinError" style="display:none; margin:10px 0 0; color:#c0392b; font-weight:600;" data-i18n="recuperarError">✘ No pudimos verificar los datos. Revisa el código de tu ficha, el nombre completo y la fecha de nacimiento.</p>
 <div id="recuperarPinOpciones" style="display:none; margin-top:12px; padding-top:12px; border-top:1px dashed var(--line,#DAD3C4);">
-<p style="margin:0 0 10px; font-size:0.85rem; color:#6b6558;">✔ Verificamos tus datos. ¿Cómo quieres recibir tu PIN?</p>
+<p style="margin:0 0 10px; font-size:0.85rem; color:#6b6558;" data-i18n="recuperarVerificado">✔ Verificamos tus datos. ¿Cómo quieres recibir tu PIN?</p>
 <div style="display:flex; gap:10px; flex-wrap:wrap;">
-<button type="button" id="recuperarVerBtn" class="select-btn" style="white-space:nowrap;">Ver mi PIN en pantalla (15 seg.)</button>
-<button type="button" id="recuperarCorreoBtn" class="select-btn" style="white-space:nowrap;">Enviármelo por correo</button>
+<button type="button" id="recuperarVerBtn" class="select-btn" style="white-space:nowrap;" data-i18n="btnVerPin">Ver mi PIN en pantalla (15 seg.)</button>
+<button type="button" id="recuperarCorreoBtn" class="select-btn" style="white-space:nowrap;" data-i18n="btnCorreoPin">Enviármelo por correo</button>
 </div>
 </div>
 <p id="recuperarPinOk" style="display:none; margin:10px 0 0; color:#1a7a3c; font-weight:600;"></p>
 </div>
-<p id="renewalConfirmedMsg" style="display:none; margin:14px 0 0; color:#1a7a3c; font-weight:600;">✔ Código confirmado. Completa el formulario y envía para actualizar tu ficha.</p>
-<p id="renewalPrecargadoMsg" style="display:none; margin:6px 0 0; color:#1a7a3c; font-weight:600;">✔ Tus datos anteriores ya se cargaron en el formulario — revisa y edita lo que necesites.</p>
+<p id="renewalConfirmedMsg" style="display:none; margin:14px 0 0; color:#1a7a3c; font-weight:600;" data-i18n="renewConfirmedMsg">✔ Código confirmado. Completa el formulario y envía para actualizar tu ficha.</p>
+<p id="renewalPrecargadoMsg" style="display:none; margin:6px 0 0; color:#1a7a3c; font-weight:600;" data-i18n="renewPrecargadoMsg">✔ Tus datos anteriores ya se cargaron en el formulario — revisa y edita lo que necesites.</p>
 </div>
 
 <!-- Datos personales -->
 <div class="section">
-<h2><em>1</em>Datos personales</h2>
+<h2><em>1</em><span data-i18n="h2DatosPersonales">Datos personales</span></h2>
 <div class="grid">
-<div class="field"><label>Nombres</label><input type="text" id="nombres"></div>
-<div class="field"><label>Apellidos</label><input type="text" id="apellidos"></div>
-<div class="field"><label>Fecha de nacimiento</label><input type="date" id="fnac"></div>
-<div class="field"><label>Edad</label><input type="text" id="edad" readonly placeholder="Calculada automáticamente"></div>
-<div class="field"><label>Número de asegurado</label><input type="text" id="asegurado"></div>
-<div class="field"><label>Tipo de sangre</label>
+<div class="field"><label data-i18n="lblNombres">Nombres</label><input type="text" id="nombres"></div>
+<div class="field"><label data-i18n="lblApellidos">Apellidos</label><input type="text" id="apellidos"></div>
+<div class="field"><label data-i18n="lblFnac">Fecha de nacimiento</label><input type="date" id="fnac"></div>
+<div class="field"><label data-i18n="lblEdad">Edad</label><input type="text" id="edad" readonly placeholder="Calculada automáticamente" data-i18n-ph="edadPh"></div>
+<div class="field"><label data-i18n="lblAsegurado">Número de asegurado</label><input type="text" id="asegurado"></div>
+<div class="field"><label data-i18n="lblSangre">Tipo de sangre</label>
 <select id="sangre">
-<option value="">Seleccione…</option>
+<option value="" data-i18n="optSeleccione">Seleccione…</option>
 <option>O+</option><option>O-</option><option>A+</option><option>A-</option>
 <option>B+</option><option>B-</option><option>AB+</option><option>AB-</option>
 </select>
 </div>
 <div class="field">
-<label>¿Donador?</label>
+<label data-i18n="lblDonador">¿Donador?</label>
 <div class="donor-toggle">
-<label><input type="radio" name="donador" value="Sí"> Sí</label>
-<label><input type="radio" name="donador" value="No" checked> No</label>
+<label><input type="radio" name="donador" value="Sí"> <span data-i18n="si">Sí</span></label>
+<label><input type="radio" name="donador" value="No" checked> <span data-i18n="no">No</span></label>
 </div>
 </div>
-<div class="field"><label>Documento de identidad</label><input type="text" id="documento"></div>
+<div class="field"><label data-i18n="lblDocumento2">Documento de identidad</label><input type="text" id="documento"></div>
 </div>
 </div>
 
 <!-- Datos generales -->
 <div class="section">
-<h2><em>2</em>Datos generales</h2>
+<h2><em>2</em><span data-i18n="h2DatosGenerales">Datos generales</span></h2>
 <div class="grid cols3">
-<div class="field"><label>País</label><input type="text" id="pais" placeholder="Ej. Costa Rica"></div>
+<div class="field"><label data-i18n="lblPais">País</label><input type="text" id="pais" placeholder="Ej. Costa Rica" data-i18n-ph="paisPh"></div>
 <div class="field">
-<label>Ciudad / Cantón</label>
+<label data-i18n="lblCiudad">Ciudad / Cantón</label>
 <input type="text" id="ciudad" readonly>
-<select id="cantonSelect" class="no-print" style="display:none;"><option value="">Seleccione un cantón…</option></select>
+<select id="cantonSelect" class="no-print" style="display:none;"><option value="" data-i18n="optSeleccioneCanton">Seleccione un cantón…</option></select>
 </div>
 <div class="field">
-<label>Distrito</label>
-<input type="text" id="distrito" placeholder="Ej. Carmen">
-<select id="distritoSelect" class="no-print" style="display:none;"><option value="">Seleccione un cantón primero…</option></select>
+<label data-i18n="lblDistrito">Distrito</label>
+<input type="text" id="distrito" placeholder="Ej. Carmen" data-i18n-ph="distritoPh">
+<select id="distritoSelect" class="no-print" style="display:none;"><option value="" data-i18n="optSeleccioneCantonPrimero">Seleccione un cantón primero…</option></select>
 </div>
-<div class="field full"><label>Otras señales</label><input type="text" id="senales" placeholder="Referencias de ubicación"></div>
+<div class="field full"><label data-i18n="lblSenales">Otras señales</label><input type="text" id="senales" placeholder="Referencias de ubicación" data-i18n-ph="senalesPh"></div>
 </div>
-<p class="hint" style="margin-top:14px;">El correo del contacto 1 es obligatorio: ahí se enviará el código de acceso (folio y PIN) cada vez que se cree o actualice esta ficha, y también un aviso automático cada vez que alguien escanee el código QR. Cualquier información importante relacionada con la ficha se enviará a este correo.</p>
+<p class="hint" style="margin-top:14px;" data-i18n="hintCorreoObligatorio">El correo del contacto 1 es obligatorio: ahí se enviará el código de acceso (folio y PIN) cada vez que se cree o actualice esta ficha, y también un aviso automático cada vez que alguien escanee el código QR. Cualquier información importante relacionada con la ficha se enviará a este correo.</p>
 <div class="contact-rows">
 <div class="grid cols4">
-<div class="field"><label>Nombre de contacto 1</label><input type="text" id="contacto1"></div>
-<div class="field"><label>Teléfono</label><input type="tel" id="telcontacto1"></div>
-<div class="field"><label>Parentesco</label><input type="text" id="parentesco1"></div>
-<div class="field no-print"><label>Correo (obligatorio)</label><input type="email" id="emailcontacto1" placeholder="correo@ejemplo.com" required></div>
+<div class="field"><label data-i18n="lblContacto1">Nombre de contacto 1</label><input type="text" id="contacto1"></div>
+<div class="field"><label data-i18n="lblTelefono">Teléfono</label><input type="tel" id="telcontacto1"></div>
+<div class="field"><label data-i18n="lblParentesco">Parentesco</label><input type="text" id="parentesco1"></div>
+<div class="field no-print"><label data-i18n="lblCorreoObligatorio">Correo (obligatorio)</label><input type="email" id="emailcontacto1" placeholder="correo@ejemplo.com" required></div>
 </div>
 <div class="grid cols4">
-<div class="field"><label>Nombre de contacto 2</label><input type="text" id="contacto2"></div>
-<div class="field"><label>Teléfono</label><input type="tel" id="telcontacto2"></div>
-<div class="field"><label>Parentesco</label><input type="text" id="parentesco2"></div>
-<div class="field no-print"><label>Correo (opcional, para el aviso)</label><input type="email" id="emailcontacto2" placeholder="correo@ejemplo.com"></div>
+<div class="field"><label data-i18n="lblContacto2">Nombre de contacto 2</label><input type="text" id="contacto2"></div>
+<div class="field"><label data-i18n="lblTelefono">Teléfono</label><input type="tel" id="telcontacto2"></div>
+<div class="field"><label data-i18n="lblParentesco">Parentesco</label><input type="text" id="parentesco2"></div>
+<div class="field no-print"><label data-i18n="lblCorreoOpcional">Correo (opcional, para el aviso)</label><input type="email" id="emailcontacto2" placeholder="correo@ejemplo.com"></div>
 </div>
 </div>
 </div>
 
 <!-- Información médica -->
 <div class="section">
-<h2><em>3</em>Información médica</h2>
+<h2><em>3</em><span data-i18n="h2InfoMedica">Información médica</span></h2>
 <div class="grid">
-<div class="field full"><label>Comentarios importantes</label><textarea id="comentarios" placeholder="Alergias, condiciones, indicaciones para primeros auxilios…"></textarea></div>
+<div class="field full"><label data-i18n="lblComentarios">Comentarios importantes</label><textarea id="comentarios" placeholder="Alergias, condiciones, indicaciones para primeros auxilios…" data-i18n-ph="comentariosPh"></textarea></div>
 </div>
 <table class="med-table" id="medTable">
 <thead>
-<tr><th>Medicamento</th><th>Dosificación</th><th></th></tr>
+<tr><th data-i18n="thMedicamento">Medicamento</th><th data-i18n="thDosificacion">Dosificación</th><th></th></tr>
 </thead>
 <tbody id="medTableBody">
 <tr>
-<td><input type="text" class="med-name" placeholder="Nombre del medicamento"></td>
-<td><input type="text" class="med-dose" placeholder="Dosis / frecuencia"></td>
-<td class="rowbtn"><button type="button" class="med-remove" title="Quitar">✕</button></td>
+<td><input type="text" class="med-name" placeholder="Nombre del medicamento" data-i18n-ph="medNamePh"></td>
+<td><input type="text" class="med-dose" placeholder="Dosis / frecuencia" data-i18n-ph="medDosePh"></td>
+<td class="rowbtn"><button type="button" class="med-remove" title="Quitar" data-i18n-title="quitar">✕</button></td>
 </tr>
 <tr>
-<td><input type="text" class="med-name" placeholder="Nombre del medicamento"></td>
-<td><input type="text" class="med-dose" placeholder="Dosis / frecuencia"></td>
-<td class="rowbtn"><button type="button" class="med-remove" title="Quitar">✕</button></td>
+<td><input type="text" class="med-name" placeholder="Nombre del medicamento" data-i18n-ph="medNamePh"></td>
+<td><input type="text" class="med-dose" placeholder="Dosis / frecuencia" data-i18n-ph="medDosePh"></td>
+<td class="rowbtn"><button type="button" class="med-remove" title="Quitar" data-i18n-title="quitar">✕</button></td>
 </tr>
 <tr>
-<td><input type="text" class="med-name" placeholder="Nombre del medicamento"></td>
-<td><input type="text" class="med-dose" placeholder="Dosis / frecuencia"></td>
-<td class="rowbtn"><button type="button" class="med-remove" title="Quitar">✕</button></td>
+<td><input type="text" class="med-name" placeholder="Nombre del medicamento" data-i18n-ph="medNamePh"></td>
+<td><input type="text" class="med-dose" placeholder="Dosis / frecuencia" data-i18n-ph="medDosePh"></td>
+<td class="rowbtn"><button type="button" class="med-remove" title="Quitar" data-i18n-title="quitar">✕</button></td>
 </tr>
 <tr>
-<td><input type="text" class="med-name" placeholder="Nombre del medicamento"></td>
-<td><input type="text" class="med-dose" placeholder="Dosis / frecuencia"></td>
-<td class="rowbtn"><button type="button" class="med-remove" title="Quitar">✕</button></td>
+<td><input type="text" class="med-name" placeholder="Nombre del medicamento" data-i18n-ph="medNamePh"></td>
+<td><input type="text" class="med-dose" placeholder="Dosis / frecuencia" data-i18n-ph="medDosePh"></td>
+<td class="rowbtn"><button type="button" class="med-remove" title="Quitar" data-i18n-title="quitar">✕</button></td>
 </tr>
 <tr>
-<td><input type="text" class="med-name" placeholder="Nombre del medicamento"></td>
-<td><input type="text" class="med-dose" placeholder="Dosis / frecuencia"></td>
-<td class="rowbtn"><button type="button" class="med-remove" title="Quitar">✕</button></td>
+<td><input type="text" class="med-name" placeholder="Nombre del medicamento" data-i18n-ph="medNamePh"></td>
+<td><input type="text" class="med-dose" placeholder="Dosis / frecuencia" data-i18n-ph="medDosePh"></td>
+<td class="rowbtn"><button type="button" class="med-remove" title="Quitar" data-i18n-title="quitar">✕</button></td>
 </tr>
 <tr>
-<td><input type="text" class="med-name" placeholder="Nombre del medicamento"></td>
-<td><input type="text" class="med-dose" placeholder="Dosis / frecuencia"></td>
-<td class="rowbtn"><button type="button" class="med-remove" title="Quitar">✕</button></td>
+<td><input type="text" class="med-name" placeholder="Nombre del medicamento" data-i18n-ph="medNamePh"></td>
+<td><input type="text" class="med-dose" placeholder="Dosis / frecuencia" data-i18n-ph="medDosePh"></td>
+<td class="rowbtn"><button type="button" class="med-remove" title="Quitar" data-i18n-title="quitar">✕</button></td>
 </tr>
 </tbody>
 </table>
-<button type="button" class="add-row no-print" id="addMedRow">+ Agregar medicamento</button>
+<button type="button" class="add-row no-print" id="addMedRow" data-i18n="btnAgregarMed">+ Agregar medicamento</button>
 </div>
 
 <!-- Adjuntos -->
 <div class="section no-print">
-<h2><em>4</em>Archivos importantes (.jpg)</h2>
-<p class="hint">Documento de identidad, carné de seguro, récipes médicos, etc. — solo imágenes .jpg. Cada archivo se agrega como una página adicional dentro del PDF.</p>
+<h2><em>4</em><span data-i18n="h2Archivos">Archivos importantes (.jpg)</span></h2>
+<p class="hint" data-i18n="hintArchivos">Documento de identidad, carné de seguro, récipes médicos, etc. — solo imágenes .jpg. Cada archivo se agrega como una página adicional dentro del PDF.</p>
 <div class="drop" id="drop">
-<div>📎 Arrastra tus archivos .jpg aquí o haz clic para seleccionarlos</div>
+<div data-i18n="dropText">📎 Arrastra tus archivos .jpg aquí o haz clic para seleccionarlos</div>
 <input type="file" id="fileInput" accept=".jpg,.jpeg,image/jpeg" multiple>
 </div>
 <ul class="filelist" id="fileList"></ul>
@@ -399,15 +416,386 @@
 
 <!-- Acciones -->
 <div class="actions no-print">
-<button class="btn btn-primary" id="btnEmail">ENVIAR</button>
-<button class="btn btn-ghost" id="btnReset">↺ Limpiar formulario</button>
+<button class="btn btn-primary" id="btnEmail" data-i18n="btnEnviar">ENVIAR</button>
+<button class="btn btn-ghost" id="btnReset" data-i18n="btnLimpiar">↺ Limpiar formulario</button>
 </div>
 
-<footer>VidaVitalQR · Ficha de emergencia personal · Uso restringido a situaciones de emergencia</footer>
+<footer data-i18n="footerText">VidaVitalQR · Ficha de emergencia personal · Uso restringido a situaciones de emergencia</footer>
 </div>
 
 <script>
 const $ = id => document.getElementById(id);
+
+// ============================================================
+// ---- Sistema de idiomas (mismo esquema que el landing page: se sincroniza
+// automáticamente con el idioma elegido en vidavitalqr.com porque esta ficha
+// se abre en una pestaña nueva del MISMO dominio, y por lo tanto comparte el
+// mismo localStorage. También se puede cambiar manualmente aquí, algo
+// necesario cuando la ficha se abre directo desde el código QR (sin haber
+// pasado antes por el landing page). ----
+// ============================================================
+const TEXTOS_FICHA = {
+  es: {
+    subtitle: 'Ficha de datos personales · uso en emergencias',
+    warnBadge: 'Información confidencial de emergencia',
+    lblEdad: 'Edad', lblDocumento: 'Documento', lblContactoEmergencia: 'Contacto emergencia', lblTelefono: 'Teléfono',
+    bloodPlaceholder: '— TIPO —',
+    photoHint: '📷 Foto<br>Clic para subir',
+    renewH2: '🔄 Renovación de ficha existente',
+    renewIntro: 'Ingresa el código que aparece debajo del código QR de tu ficha actual (ejemplo: <b>VVITALQR00000012</b>). Si además ingresas tu PIN de acceso (te lo mostramos la primera vez que guardaste la ficha), precargamos automáticamente tus datos para que solo edites lo que cambió — si no lo tienes a mano, puedes continuar sin PIN y llenar el formulario de nuevo.',
+    renewCodeLabel: 'Código de tu ficha',
+    renewPinLabel: 'PIN de acceso (opcional)',
+    btnContinuar: 'Continuar',
+    renewPinError: '✘ Folio o PIN incorrectos. Verifica ambos, o continúa dejando el PIN en blanco para llenar el formulario de nuevo.',
+    renewForgotPin: '¿Olvidaste tu PIN? <a href="#" id="recuperarPinToggle" style="color:var(--teal-deep,#1F4448); font-weight:600;">Recupéralo con tu nombre completo y fecha de nacimiento</a>, o escríbenos por el botón de WhatsApp en vidavitalqr.com indicando tu código de ficha.',
+    recuperarIntro: 'Para verificar que la ficha es tuya, escribe primero el código de tu ficha arriba y luego tu nombre completo y tu fecha de nacimiento, tal como los escribiste al crearla.',
+    recuperarNombreLabel: 'Nombre completo',
+    recuperarNombrePh: 'Nombres y apellidos',
+    lblFnac: 'Fecha de nacimiento',
+    btnBuscarPin: 'Buscar mi PIN',
+    recuperarError: '✘ No pudimos verificar los datos. Revisa el código de tu ficha, el nombre completo y la fecha de nacimiento.',
+    recuperarVerificado: '✔ Verificamos tus datos. ¿Cómo quieres recibir tu PIN?',
+    btnVerPin: 'Ver mi PIN en pantalla (15 seg.)',
+    btnCorreoPin: 'Enviármelo por correo',
+    renewConfirmedMsg: '✔ Código confirmado. Completa el formulario y envía para actualizar tu ficha.',
+    renewPrecargadoMsg: '✔ Tus datos anteriores ya se cargaron en el formulario — revisa y edita lo que necesites.',
+    h2DatosPersonales: 'Datos personales',
+    lblNombres: 'Nombres', lblApellidos: 'Apellidos', edadPh: 'Calculada automáticamente',
+    lblAsegurado: 'Número de asegurado', lblSangre: 'Tipo de sangre', optSeleccione: 'Seleccione…',
+    lblDonador: '¿Donador?', si: 'Sí', no: 'No', lblDocumento2: 'Documento de identidad',
+    h2DatosGenerales: 'Datos generales', lblPais: 'País', paisPh: 'Ej. Costa Rica',
+    lblCiudad: 'Ciudad / Cantón', optSeleccioneCanton: 'Seleccione un cantón…',
+    lblDistrito: 'Distrito', distritoPh: 'Ej. Carmen', optSeleccioneCantonPrimero: 'Seleccione un cantón primero…',
+    lblSenales: 'Otras señales', senalesPh: 'Referencias de ubicación',
+    hintCorreoObligatorio: 'El correo del contacto 1 es obligatorio: ahí se enviará el código de acceso (folio y PIN) cada vez que se cree o actualice esta ficha, y también un aviso automático cada vez que alguien escanee el código QR. Cualquier información importante relacionada con la ficha se enviará a este correo.',
+    lblContacto1: 'Nombre de contacto 1', lblTelefono2: 'Teléfono', lblParentesco: 'Parentesco',
+    lblCorreoObligatorio: 'Correo (obligatorio)', lblContacto2: 'Nombre de contacto 2', lblCorreoOpcional: 'Correo (opcional, para el aviso)',
+    h2InfoMedica: 'Información médica', lblComentarios: 'Comentarios importantes',
+    comentariosPh: 'Alergias, condiciones, indicaciones para primeros auxilios…',
+    thMedicamento: 'Medicamento', thDosificacion: 'Dosificación', medNamePh: 'Nombre del medicamento', medDosePh: 'Dosis / frecuencia',
+    quitar: 'Quitar', btnAgregarMed: '+ Agregar medicamento',
+    h2Archivos: 'Archivos importantes (.jpg)',
+    hintArchivos: 'Documento de identidad, carné de seguro, récipes médicos, etc. — solo imágenes .jpg. Cada archivo se agrega como una página adicional dentro del PDF.',
+    dropText: '📎 Arrastra tus archivos .jpg aquí o haz clic para seleccionarlos',
+    btnEnviar: 'ENVIAR', btnLimpiar: '↺ Limpiar formulario',
+    footerText: 'VidaVitalQR · Ficha de emergencia personal · Uso restringido a situaciones de emergencia',
+    // ---- textos generados dinámicamente por JS ----
+    pvNombreDefault: 'Nombre y apellidos',
+    pendiente: '— pendiente —',
+    alertIngresaCodigo: 'Ingresa el código de tu ficha para continuar.',
+    verificando: 'Verificando…',
+    alertPrimeroCodigo: 'Primero escribe el código de tu ficha, arriba.',
+    alertCompletaNombreFnac: 'Completa tu nombre completo y tu fecha de nacimiento.',
+    buscando: 'Buscando…',
+    noPudimosEnviarCorreo: 'No pudimos enviar el correo. Intenta con la opción de verlo en pantalla.',
+    enviando: 'Enviando…',
+    verPinCuentaAtras: (pin, seg) => `✔ Tu PIN es: ${pin} — se ocultará en ${seg} segundo${seg === 1 ? '' : 's'}. Cópialo y haz clic en "Continuar".`,
+    verPinOculto: '✔ Por seguridad ocultamos el PIN. Ya quedó cargado arriba — haz clic en "Continuar", o vuelve a mostrarlo si lo necesitas de nuevo.',
+    pinEnviadoCorreo: (correo) => `✔ Te enviamos tu PIN al correo ${correo}. Ya quedó cargado arriba — haz clic en "Continuar".`,
+    registrado: 'registrado',
+    soloJpg: (nombres) => 'Solo se permiten archivos .jpg. No se agregaron: ' + nombres,
+    paginaAdicional: 'página adicional en el PDF',
+    archivoAdjunto: (nombre) => `Archivo adjunto: ${nombre}`,
+    errorMainCanvas: 'El navegador no pudo generar la imagen de la ficha (mainCanvas vacío). Prueba en otro navegador o desactiva bloqueadores de anuncios/privacidad y vuelve a intentar.',
+    pinModalTitulo: 'Guarda tu PIN de acceso',
+    pinModalTexto: (folio) => `Con tu folio (<b>${folio}</b>) y este PIN podrás entrar más adelante a actualizar tu ficha sin llenar el formulario de nuevo.`,
+    pinModalAdvertencia: 'Este PIN es único y es indispensable para poder actualizar tu ficha médica en el futuro — guárdalo en un lugar seguro, ya que nadie más podrá verlo.',
+    pinModalNota: 'Este PIN, igual que el resto de tu información médica, se guarda de forma protegida — nunca queda visible en ninguna página pública del sitio.',
+    pinModalBtn: 'Ya lo guardé, continuar',
+    alertEmailInvalido: 'El correo del contacto 1 es obligatorio y debe tener un formato válido (por ejemplo, correo@ejemplo.com). Ahí se enviará el código de acceso de esta ficha.',
+    generandoPdf: '⏳ Generando PDF…',
+    errorGenerarPdf: (msg) => 'No se pudo generar el PDF. Detalle: ' + msg + '\n\nIntenta de nuevo, o prueba en otro navegador.',
+    guardandoNube: '⏳ Guardando en la nube…',
+    errorServidor: (status, detalle) => `El servidor respondió ${status}. ${detalle}`.trim(),
+    errorGuardarFicha: (msg) => 'No se pudo guardar la ficha. Detalle: ' + msg + '\n\nPor favor intenta de nuevo. Si el problema continúa, contáctanos.',
+    confirmLimpiar: '¿Limpiar todos los campos del formulario?',
+  },
+  en: {
+    subtitle: 'Personal information card · for use in emergencies',
+    warnBadge: 'Confidential emergency information',
+    lblEdad: 'Age', lblDocumento: 'ID document', lblContactoEmergencia: 'Emergency contact', lblTelefono: 'Phone',
+    bloodPlaceholder: '— TYPE —',
+    photoHint: '📷 Photo<br>Click to upload',
+    renewH2: '🔄 Renew an existing card',
+    renewIntro: 'Enter the code shown below the QR code on your current card (example: <b>VVITALQR00000012</b>). If you also enter your access PIN (shown to you the first time you saved the card), we\'ll automatically preload your data so you only need to edit what changed — if you don\'t have it handy, you can continue without a PIN and fill out the form again.',
+    renewCodeLabel: 'Your card code',
+    renewPinLabel: 'Access PIN (optional)',
+    btnContinuar: 'Continue',
+    renewPinError: '✘ Incorrect code or PIN. Check both, or continue leaving the PIN blank to fill out the form again.',
+    renewForgotPin: 'Forgot your PIN? <a href="#" id="recuperarPinToggle" style="color:var(--teal-deep,#1F4448); font-weight:600;">Recover it with your full name and date of birth</a>, or write to us via the WhatsApp button on vidavitalqr.com with your card code.',
+    recuperarIntro: 'To verify the card is yours, first type your card code above, then your full name and date of birth exactly as you entered them when you created it.',
+    recuperarNombreLabel: 'Full name',
+    recuperarNombrePh: 'First and last name',
+    lblFnac: 'Date of birth',
+    btnBuscarPin: 'Look up my PIN',
+    recuperarError: '✘ We couldn\'t verify your details. Check the card code, full name, and date of birth.',
+    recuperarVerificado: '✔ We verified your details. How would you like to receive your PIN?',
+    btnVerPin: 'Show my PIN on screen (15 sec.)',
+    btnCorreoPin: 'Send it to my email',
+    renewConfirmedMsg: '✔ Code confirmed. Complete the form and submit to update your card.',
+    renewPrecargadoMsg: '✔ Your previous data has been loaded into the form — review and edit what you need.',
+    h2DatosPersonales: 'Personal information',
+    lblNombres: 'First name(s)', lblApellidos: 'Last name(s)', edadPh: 'Calculated automatically',
+    lblAsegurado: 'Insurance number', lblSangre: 'Blood type', optSeleccione: 'Select…',
+    lblDonador: 'Donor?', si: 'Yes', no: 'No', lblDocumento2: 'ID document',
+    h2DatosGenerales: 'General information', lblPais: 'Country', paisPh: 'E.g. Costa Rica',
+    lblCiudad: 'City / County', optSeleccioneCanton: 'Select a county…',
+    lblDistrito: 'District', distritoPh: 'E.g. Carmen', optSeleccioneCantonPrimero: 'Select a county first…',
+    lblSenales: 'Other landmarks', senalesPh: 'Location references',
+    hintCorreoObligatorio: 'Contact 1\'s email is required: the access code (folio and PIN) will be sent there every time this card is created or updated, along with an automatic alert every time someone scans the QR code. Any important information related to the card will be sent to this email.',
+    lblContacto1: 'Contact 1 name', lblTelefono2: 'Phone', lblParentesco: 'Relationship',
+    lblCorreoObligatorio: 'Email (required)', lblContacto2: 'Contact 2 name', lblCorreoOpcional: 'Email (optional, for the alert)',
+    h2InfoMedica: 'Medical information', lblComentarios: 'Important notes',
+    comentariosPh: 'Allergies, conditions, first-aid instructions…',
+    thMedicamento: 'Medication', thDosificacion: 'Dosage', medNamePh: 'Medication name', medDosePh: 'Dose / frequency',
+    quitar: 'Remove', btnAgregarMed: '+ Add medication',
+    h2Archivos: 'Important files (.jpg)',
+    hintArchivos: 'ID document, insurance card, medical prescriptions, etc. — .jpg images only. Each file is added as an extra page in the PDF.',
+    dropText: '📎 Drag your .jpg files here or click to select them',
+    btnEnviar: 'SUBMIT', btnLimpiar: '↺ Clear form',
+    footerText: 'VidaVitalQR · Personal emergency card · For emergency use only',
+    pvNombreDefault: 'First and last name',
+    pendiente: '— pending —',
+    alertIngresaCodigo: 'Enter your card code to continue.',
+    verificando: 'Verifying…',
+    alertPrimeroCodigo: 'First type your card code, above.',
+    alertCompletaNombreFnac: 'Complete your full name and date of birth.',
+    buscando: 'Searching…',
+    noPudimosEnviarCorreo: 'We couldn\'t send the email. Try the option to view it on screen.',
+    enviando: 'Sending…',
+    verPinCuentaAtras: (pin, seg) => `✔ Your PIN is: ${pin} — it will be hidden in ${seg} second${seg === 1 ? '' : 's'}. Copy it and click "Continue".`,
+    verPinOculto: '✔ For security we hid the PIN. It\'s already loaded above — click "Continue", or show it again if you need it.',
+    pinEnviadoCorreo: (correo) => `✔ We sent your PIN to ${correo}. It's already loaded above — click "Continue".`,
+    registrado: 'on file',
+    soloJpg: (nombres) => 'Only .jpg files are allowed. Not added: ' + nombres,
+    paginaAdicional: 'extra page in the PDF',
+    archivoAdjunto: (nombre) => `Attached file: ${nombre}`,
+    errorMainCanvas: 'Your browser could not generate the card image (empty canvas). Try another browser or disable ad/privacy blockers and try again.',
+    pinModalTitulo: 'Save your access PIN',
+    pinModalTexto: (folio) => `With your folio (<b>${folio}</b>) and this PIN you'll be able to come back later to update your card without filling out the form again.`,
+    pinModalAdvertencia: 'This PIN is unique and required to update your medical card in the future — keep it somewhere safe, since no one else will be able to see it.',
+    pinModalNota: 'This PIN, like the rest of your medical information, is stored securely — it is never shown on any public page of the site.',
+    pinModalBtn: 'I saved it, continue',
+    alertEmailInvalido: 'Contact 1\'s email is required and must be a valid format (e.g. name@example.com). The access code for this card will be sent there.',
+    generandoPdf: '⏳ Generating PDF…',
+    errorGenerarPdf: (msg) => 'The PDF could not be generated. Detail: ' + msg + '\n\nTry again, or use another browser.',
+    guardandoNube: '⏳ Saving to the cloud…',
+    errorServidor: (status, detalle) => `The server responded ${status}. ${detalle}`.trim(),
+    errorGuardarFicha: (msg) => 'The card could not be saved. Detail: ' + msg + '\n\nPlease try again. If the problem continues, contact us.',
+    confirmLimpiar: 'Clear all fields in the form?',
+  },
+  fr: {
+    subtitle: 'Fiche de données personnelles · à utiliser en cas d\'urgence',
+    warnBadge: 'Information confidentielle d\'urgence',
+    lblEdad: 'Âge', lblDocumento: 'Document', lblContactoEmergencia: 'Contact d\'urgence', lblTelefono: 'Téléphone',
+    bloodPlaceholder: '— GROUPE —',
+    photoHint: '📷 Photo<br>Cliquez pour téléverser',
+    renewH2: '🔄 Renouvellement d\'une fiche existante',
+    renewIntro: 'Entrez le code affiché sous le code QR de votre fiche actuelle (exemple : <b>VVITALQR00000012</b>). Si vous entrez aussi votre code PIN d\'accès (affiché la première fois que vous avez enregistré la fiche), nous préchargeons automatiquement vos données pour que vous n\'ayez qu\'à modifier ce qui a changé — si vous ne l\'avez pas sous la main, vous pouvez continuer sans PIN et remplir le formulaire à nouveau.',
+    renewCodeLabel: 'Code de votre fiche',
+    renewPinLabel: 'Code PIN d\'accès (facultatif)',
+    btnContinuar: 'Continuer',
+    renewPinError: '✘ Code ou PIN incorrect. Vérifiez les deux, ou continuez en laissant le PIN vide pour remplir le formulaire à nouveau.',
+    renewForgotPin: 'PIN oublié ? <a href="#" id="recuperarPinToggle" style="color:var(--teal-deep,#1F4448); font-weight:600;">Récupérez-le avec votre nom complet et votre date de naissance</a>, ou écrivez-nous via le bouton WhatsApp sur vidavitalqr.com en indiquant le code de votre fiche.',
+    recuperarIntro: 'Pour vérifier que la fiche est la vôtre, entrez d\'abord le code de votre fiche ci-dessus, puis votre nom complet et votre date de naissance, tels que saisis lors de la création.',
+    recuperarNombreLabel: 'Nom complet',
+    recuperarNombrePh: 'Prénoms et noms',
+    lblFnac: 'Date de naissance',
+    btnBuscarPin: 'Rechercher mon PIN',
+    recuperarError: '✘ Nous n\'avons pas pu vérifier les données. Vérifiez le code de la fiche, le nom complet et la date de naissance.',
+    recuperarVerificado: '✔ Données vérifiées. Comment souhaitez-vous recevoir votre PIN ?',
+    btnVerPin: 'Afficher mon PIN à l\'écran (15 s)',
+    btnCorreoPin: 'Me l\'envoyer par courriel',
+    renewConfirmedMsg: '✔ Code confirmé. Complétez le formulaire et envoyez-le pour mettre à jour votre fiche.',
+    renewPrecargadoMsg: '✔ Vos données précédentes ont été chargées dans le formulaire — vérifiez et modifiez au besoin.',
+    h2DatosPersonales: 'Informations personnelles',
+    lblNombres: 'Prénom(s)', lblApellidos: 'Nom(s)', edadPh: 'Calculé automatiquement',
+    lblAsegurado: 'Numéro d\'assuré', lblSangre: 'Groupe sanguin', optSeleccione: 'Sélectionnez…',
+    lblDonador: 'Donneur ?', si: 'Oui', no: 'Non', lblDocumento2: 'Pièce d\'identité',
+    h2DatosGenerales: 'Informations générales', lblPais: 'Pays', paisPh: 'Ex. Costa Rica',
+    lblCiudad: 'Ville / Canton', optSeleccioneCanton: 'Sélectionnez un canton…',
+    lblDistrito: 'District', distritoPh: 'Ex. Carmen', optSeleccioneCantonPrimero: 'Sélectionnez d\'abord un canton…',
+    lblSenales: 'Autres repères', senalesPh: 'Références de localisation',
+    hintCorreoObligatorio: 'L\'e-mail du contact 1 est obligatoire : le code d\'accès (folio et PIN) y sera envoyé à chaque création ou mise à jour de cette fiche, ainsi qu\'une alerte automatique chaque fois que quelqu\'un scanne le code QR. Toute information importante liée à la fiche sera envoyée à cet e-mail.',
+    lblContacto1: 'Nom du contact 1', lblTelefono2: 'Téléphone', lblParentesco: 'Lien de parenté',
+    lblCorreoObligatorio: 'E-mail (obligatoire)', lblContacto2: 'Nom du contact 2', lblCorreoOpcional: 'E-mail (facultatif, pour l\'alerte)',
+    h2InfoMedica: 'Informations médicales', lblComentarios: 'Remarques importantes',
+    comentariosPh: 'Allergies, pathologies, consignes de premiers secours…',
+    thMedicamento: 'Médicament', thDosificacion: 'Posologie', medNamePh: 'Nom du médicament', medDosePh: 'Dose / fréquence',
+    quitar: 'Retirer', btnAgregarMed: '+ Ajouter un médicament',
+    h2Archivos: 'Fichiers importants (.jpg)',
+    hintArchivos: 'Pièce d\'identité, carte d\'assurance, ordonnances médicales, etc. — images .jpg uniquement. Chaque fichier est ajouté comme page supplémentaire dans le PDF.',
+    dropText: '📎 Glissez vos fichiers .jpg ici ou cliquez pour les sélectionner',
+    btnEnviar: 'ENVOYER', btnLimpiar: '↺ Effacer le formulaire',
+    footerText: 'VidaVitalQR · Fiche d\'urgence personnelle · Usage réservé aux situations d\'urgence',
+    pvNombreDefault: 'Prénom et nom',
+    pendiente: '— en attente —',
+    alertIngresaCodigo: 'Entrez le code de votre fiche pour continuer.',
+    verificando: 'Vérification…',
+    alertPrimeroCodigo: 'Entrez d\'abord le code de votre fiche, ci-dessus.',
+    alertCompletaNombreFnac: 'Complétez votre nom complet et votre date de naissance.',
+    buscando: 'Recherche…',
+    noPudimosEnviarCorreo: 'Nous n\'avons pas pu envoyer l\'e-mail. Essayez l\'option d\'affichage à l\'écran.',
+    enviando: 'Envoi…',
+    verPinCuentaAtras: (pin, seg) => `✔ Votre PIN est : ${pin} — il sera masqué dans ${seg} seconde${seg === 1 ? '' : 's'}. Copiez-le et cliquez sur « Continuer ».`,
+    verPinOculto: '✔ Par sécurité, nous avons masqué le PIN. Il est déjà chargé ci-dessus — cliquez sur « Continuer », ou affichez-le à nouveau si besoin.',
+    pinEnviadoCorreo: (correo) => `✔ Nous avons envoyé votre PIN à ${correo}. Il est déjà chargé ci-dessus — cliquez sur « Continuer ».`,
+    registrado: 'enregistré',
+    soloJpg: (nombres) => 'Seuls les fichiers .jpg sont autorisés. Non ajoutés : ' + nombres,
+    paginaAdicional: 'page supplémentaire dans le PDF',
+    archivoAdjunto: (nombre) => `Fichier joint : ${nombre}`,
+    errorMainCanvas: 'Le navigateur n\'a pas pu générer l\'image de la fiche (canevas vide). Essayez un autre navigateur ou désactivez les bloqueurs de publicité/confidentialité et réessayez.',
+    pinModalTitulo: 'Enregistrez votre PIN d\'accès',
+    pinModalTexto: (folio) => `Avec votre folio (<b>${folio}</b>) et ce PIN, vous pourrez revenir plus tard mettre à jour votre fiche sans remplir le formulaire à nouveau.`,
+    pinModalAdvertencia: 'Ce PIN est unique et indispensable pour mettre à jour votre fiche médicale à l\'avenir — conservez-le en lieu sûr, car personne d\'autre ne pourra le voir.',
+    pinModalNota: 'Ce PIN, comme le reste de vos informations médicales, est stocké de façon protégée — il n\'apparaît jamais sur une page publique du site.',
+    pinModalBtn: 'Je l\'ai enregistré, continuer',
+    alertEmailInvalido: 'L\'e-mail du contact 1 est obligatoire et doit être valide (ex. nom@exemple.com). Le code d\'accès de cette fiche y sera envoyé.',
+    generandoPdf: '⏳ Génération du PDF…',
+    errorGenerarPdf: (msg) => 'Impossible de générer le PDF. Détail : ' + msg + '\n\nRéessayez, ou utilisez un autre navigateur.',
+    guardandoNube: '⏳ Enregistrement dans le cloud…',
+    errorServidor: (status, detalle) => `Le serveur a répondu ${status}. ${detalle}`.trim(),
+    errorGuardarFicha: (msg) => 'La fiche n\'a pas pu être enregistrée. Détail : ' + msg + '\n\nVeuillez réessayer. Si le problème persiste, contactez-nous.',
+    confirmLimpiar: 'Effacer tous les champs du formulaire ?',
+  },
+  pt: {
+    subtitle: 'Ficha de dados pessoais · uso em emergências',
+    warnBadge: 'Informação confidencial de emergência',
+    lblEdad: 'Idade', lblDocumento: 'Documento', lblContactoEmergencia: 'Contato de emergência', lblTelefono: 'Telefone',
+    bloodPlaceholder: '— TIPO —',
+    photoHint: '📷 Foto<br>Clique para enviar',
+    renewH2: '🔄 Renovação de ficha existente',
+    renewIntro: 'Digite o código que aparece abaixo do código QR da sua ficha atual (exemplo: <b>VVITALQR00000012</b>). Se você também digitar seu PIN de acesso (mostrado a primeira vez que salvou a ficha), pré-carregamos seus dados automaticamente para que só edite o que mudou — se não tiver em mãos, pode continuar sem PIN e preencher o formulário novamente.',
+    renewCodeLabel: 'Código da sua ficha',
+    renewPinLabel: 'PIN de acesso (opcional)',
+    btnContinuar: 'Continuar',
+    renewPinError: '✘ Código ou PIN incorretos. Verifique ambos, ou continue deixando o PIN em branco para preencher o formulário novamente.',
+    renewForgotPin: 'Esqueceu seu PIN? <a href="#" id="recuperarPinToggle" style="color:var(--teal-deep,#1F4448); font-weight:600;">Recupere-o com seu nome completo e data de nascimento</a>, ou escreva-nos pelo botão do WhatsApp em vidavitalqr.com indicando o código da sua ficha.',
+    recuperarIntro: 'Para verificar que a ficha é sua, digite primeiro o código da sua ficha acima e depois seu nome completo e data de nascimento, exatamente como você digitou ao criá-la.',
+    recuperarNombreLabel: 'Nome completo',
+    recuperarNombrePh: 'Nomes e sobrenomes',
+    lblFnac: 'Data de nascimento',
+    btnBuscarPin: 'Buscar meu PIN',
+    recuperarError: '✘ Não conseguimos verificar os dados. Revise o código da ficha, o nome completo e a data de nascimento.',
+    recuperarVerificado: '✔ Verificamos seus dados. Como deseja receber o seu PIN?',
+    btnVerPin: 'Ver meu PIN na tela (15 seg.)',
+    btnCorreoPin: 'Enviar por e-mail',
+    renewConfirmedMsg: '✔ Código confirmado. Complete o formulário e envie para atualizar sua ficha.',
+    renewPrecargadoMsg: '✔ Seus dados anteriores já foram carregados no formulário — revise e edite o que precisar.',
+    h2DatosPersonales: 'Dados pessoais',
+    lblNombres: 'Nomes', lblApellidos: 'Sobrenomes', edadPh: 'Calculada automaticamente',
+    lblAsegurado: 'Número do segurado', lblSangre: 'Tipo sanguíneo', optSeleccione: 'Selecione…',
+    lblDonador: 'Doador?', si: 'Sim', no: 'Não', lblDocumento2: 'Documento de identidade',
+    h2DatosGenerales: 'Dados gerais', lblPais: 'País', paisPh: 'Ex. Costa Rica',
+    lblCiudad: 'Cidade / Município', optSeleccioneCanton: 'Selecione um município…',
+    lblDistrito: 'Distrito', distritoPh: 'Ex. Carmen', optSeleccioneCantonPrimero: 'Selecione um município primeiro…',
+    lblSenales: 'Outros sinais', senalesPh: 'Referências de localização',
+    hintCorreoObligatorio: 'O e-mail do contato 1 é obrigatório: nele será enviado o código de acesso (folio e PIN) sempre que esta ficha for criada ou atualizada, além de um aviso automático sempre que alguém escanear o código QR. Qualquer informação importante relacionada à ficha será enviada a esse e-mail.',
+    lblContacto1: 'Nome do contato 1', lblTelefono2: 'Telefone', lblParentesco: 'Parentesco',
+    lblCorreoObligatorio: 'E-mail (obrigatório)', lblContacto2: 'Nome do contato 2', lblCorreoOpcional: 'E-mail (opcional, para o aviso)',
+    h2InfoMedica: 'Informação médica', lblComentarios: 'Comentários importantes',
+    comentariosPh: 'Alergias, condições, indicações de primeiros socorros…',
+    thMedicamento: 'Medicamento', thDosificacion: 'Dosagem', medNamePh: 'Nome do medicamento', medDosePh: 'Dose / frequência',
+    quitar: 'Remover', btnAgregarMed: '+ Adicionar medicamento',
+    h2Archivos: 'Arquivos importantes (.jpg)',
+    hintArchivos: 'Documento de identidade, carteirinha do seguro, receitas médicas, etc. — apenas imagens .jpg. Cada arquivo é adicionado como uma página extra no PDF.',
+    dropText: '📎 Arraste seus arquivos .jpg aqui ou clique para selecioná-los',
+    btnEnviar: 'ENVIAR', btnLimpiar: '↺ Limpar formulário',
+    footerText: 'VidaVitalQR · Ficha de emergência pessoal · Uso restrito a situações de emergência',
+    pvNombreDefault: 'Nome e sobrenomes',
+    pendiente: '— pendente —',
+    alertIngresaCodigo: 'Digite o código da sua ficha para continuar.',
+    verificando: 'Verificando…',
+    alertPrimeroCodigo: 'Primeiro digite o código da sua ficha, acima.',
+    alertCompletaNombreFnac: 'Complete seu nome completo e data de nascimento.',
+    buscando: 'Buscando…',
+    noPudimosEnviarCorreo: 'Não conseguimos enviar o e-mail. Tente a opção de ver na tela.',
+    enviando: 'Enviando…',
+    verPinCuentaAtras: (pin, seg) => `✔ Seu PIN é: ${pin} — será ocultado em ${seg} segundo${seg === 1 ? '' : 's'}. Copie-o e clique em "Continuar".`,
+    verPinOculto: '✔ Por segurança ocultamos o PIN. Já está carregado acima — clique em "Continuar", ou mostre-o novamente se precisar.',
+    pinEnviadoCorreo: (correo) => `✔ Enviamos seu PIN para o e-mail ${correo}. Já está carregado acima — clique em "Continuar".`,
+    registrado: 'registrado',
+    soloJpg: (nombres) => 'Só são permitidos arquivos .jpg. Não foram adicionados: ' + nombres,
+    paginaAdicional: 'página extra no PDF',
+    archivoAdjunto: (nombre) => `Arquivo anexado: ${nombre}`,
+    errorMainCanvas: 'O navegador não conseguiu gerar a imagem da ficha (canvas vazio). Tente outro navegador ou desative bloqueadores de anúncios/privacidade e tente novamente.',
+    pinModalTitulo: 'Guarde seu PIN de acesso',
+    pinModalTexto: (folio) => `Com o seu folio (<b>${folio}</b>) e este PIN você poderá entrar depois para atualizar sua ficha sem preencher o formulário novamente.`,
+    pinModalAdvertencia: 'Este PIN é único e indispensável para atualizar sua ficha médica no futuro — guarde-o em local seguro, pois mais ninguém poderá vê-lo.',
+    pinModalNota: 'Este PIN, assim como o restante das suas informações médicas, é guardado de forma protegida — nunca fica visível em nenhuma página pública do site.',
+    pinModalBtn: 'Já guardei, continuar',
+    alertEmailInvalido: 'O e-mail do contato 1 é obrigatório e deve ter um formato válido (por exemplo, nome@exemplo.com). O código de acesso desta ficha será enviado para lá.',
+    generandoPdf: '⏳ Gerando PDF…',
+    errorGenerarPdf: (msg) => 'Não foi possível gerar o PDF. Detalhe: ' + msg + '\n\nTente novamente, ou use outro navegador.',
+    guardandoNube: '⏳ Salvando na nuvem…',
+    errorServidor: (status, detalle) => `O servidor respondeu ${status}. ${detalle}`.trim(),
+    errorGuardarFicha: (msg) => 'Não foi possível salvar a ficha. Detalhe: ' + msg + '\n\nPor favor, tente novamente. Se o problema continuar, entre em contato.',
+    confirmLimpiar: 'Limpar todos os campos do formulário?',
+  },
+};
+
+let LANG_FICHA = 'es';
+function T(){ return TEXTOS_FICHA[LANG_FICHA] || TEXTOS_FICHA.es; }
+
+function aplicarIdiomaFicha(lang){
+  const dic = TEXTOS_FICHA[lang] ? lang : 'es';
+  LANG_FICHA = dic;
+  const t = TEXTOS_FICHA[dic];
+  document.documentElement.lang = dic;
+  document.querySelectorAll('[data-i18n]').forEach(el => {
+    const key = el.getAttribute('data-i18n');
+    if (t[key] !== undefined) el.textContent = t[key];
+  });
+  document.querySelectorAll('[data-i18n-html]').forEach(el => {
+    const key = el.getAttribute('data-i18n-html');
+    if (t[key] !== undefined) el.innerHTML = t[key];
+  });
+  document.querySelectorAll('[data-i18n-ph]').forEach(el => {
+    const key = el.getAttribute('data-i18n-ph');
+    if (t[key] !== undefined) el.placeholder = t[key];
+  });
+  document.querySelectorAll('[data-i18n-title]').forEach(el => {
+    const key = el.getAttribute('data-i18n-title');
+    if (t[key] !== undefined) el.title = t[key];
+  });
+  document.querySelectorAll('.langbar button').forEach(b => {
+    b.classList.toggle('activo', b.dataset.lang === dic);
+  });
+  try{ localStorage.setItem('vidavitalqr_lang', dic); }catch(e){}
+  // el título de la pestaña también se traduce
+  try{
+    document.title = dic === 'en' ? 'VidaVitalQR · Emergency Card'
+      : dic === 'fr' ? 'VidaVitalQR · Fiche d\'urgence'
+      : dic === 'pt' ? 'VidaVitalQR · Ficha de Emergência'
+      : 'VidaVitalQR · Ficha de Emergencia';
+  }catch(e){}
+  if (typeof updatePreview === 'function') updatePreview();
+  // si la renovación está pendiente de código, refleja el texto "pendiente" ya traducido
+  const counterEl = $('counterNum');
+  if (counterEl && counterEl.dataset.pendiente === '1') counterEl.textContent = t.pendiente;
+}
+
+document.getElementById('langbar').addEventListener('click', (e) => {
+  const btn = e.target.closest('button[data-lang]');
+  if (!btn) return;
+  aplicarIdiomaFicha(btn.dataset.lang);
+});
+
+(function(){
+  let preferido = null;
+  try{ preferido = localStorage.getItem('vidavitalqr_lang'); }catch(e){}
+  if (!preferido) {
+    try{
+      const urlLang = new URLSearchParams(window.location.search).get('lang');
+      if (urlLang && TEXTOS_FICHA[urlLang]) preferido = urlLang;
+    }catch(e){}
+  }
+  if (!preferido) {
+    const nav = (navigator.language || 'es').slice(0,2).toLowerCase();
+    if (TEXTOS_FICHA[nav]) preferido = nav;
+  }
+  aplicarIdiomaFicha(preferido || 'es');
+})();
 
 // ---- página de pago de VidaVitalQR a la que se regresa tras enviar la ficha ----
 const PAYMENT_URL = 'https://vidavitalqr.com/';
@@ -506,14 +894,15 @@ $('photoRemove').addEventListener('click', e => {
   if (esRenovacion) {
     // No se incrementa el contador global: el folio lo aporta el propio cliente,
     // reutilizando el código que ya tiene, para que el QR existente no cambie.
-    $('counterNum').textContent = '— pendiente —';
+    $('counterNum').textContent = T().pendiente;
+    $('counterNum').dataset.pendiente = '1';
     $('renewalGate').style.display = 'block';
     $('btnEmail').disabled = true;
 
     $('renewalConfirmBtn').addEventListener('click', async () => {
       const codigo = $('renewalCodeInput').value.trim().toUpperCase();
       const pin = $('renewalPinInput').value.trim().toUpperCase();
-      if (!codigo) { alert('Ingresa el código de tu ficha para continuar.'); return; }
+      if (!codigo) { alert(T().alertIngresaCodigo); return; }
 
       $('renewalPinError').style.display = 'none';
       const btn = $('renewalConfirmBtn');
@@ -521,7 +910,7 @@ $('photoRemove').addEventListener('click', e => {
 
       if (pin) {
         btn.disabled = true;
-        btn.textContent = 'Verificando…';
+        btn.textContent = T().verificando;
         try{
           const resp = await fetch('/.netlify/functions/login-ficha', {
             method: 'POST',
@@ -546,6 +935,7 @@ $('photoRemove').addEventListener('click', e => {
       }
 
       $('counterNum').textContent = codigo;
+      $('counterNum').dataset.pendiente = '';
       $('renewalConfirmedMsg').style.display = 'block';
       $('renewalCodeInput').disabled = true;
       $('renewalPinInput').disabled = true;
@@ -580,13 +970,13 @@ $('photoRemove').addEventListener('click', e => {
       detenerCuentaAtras();
       pinRecuperado = null;
 
-      if (!folio) { alert('Primero escribe el código de tu ficha, arriba.'); return; }
-      if (!nombreCompleto || !fnac) { alert('Completa tu nombre completo y tu fecha de nacimiento.'); return; }
+      if (!folio) { alert(T().alertPrimeroCodigo); return; }
+      if (!nombreCompleto || !fnac) { alert(T().alertCompletaNombreFnac); return; }
 
       const btn = $('recuperarPinBtn');
       const textoOriginal = btn.textContent;
       btn.disabled = true;
-      btn.textContent = 'Buscando…';
+      btn.textContent = T().buscando;
 
       try{
         const resp = await fetch('/.netlify/functions/recuperar-ficha', {
@@ -621,7 +1011,7 @@ $('photoRemove').addEventListener('click', e => {
 
       let segundos = 15;
       const actualizarMensaje = () => {
-        $('recuperarPinOk').textContent = `✔ Tu PIN es: ${pinRecuperado} — se ocultará en ${segundos} segundo${segundos === 1 ? '' : 's'}. Cópialo y haz clic en "Continuar".`;
+        $('recuperarPinOk').textContent = T().verPinCuentaAtras(pinRecuperado, segundos);
         $('recuperarPinOk').style.display = 'block';
       };
       actualizarMensaje();
@@ -630,7 +1020,7 @@ $('photoRemove').addEventListener('click', e => {
         if (segundos <= 0) {
           detenerCuentaAtras();
           $('renewalPinInput').type = 'password';
-          $('recuperarPinOk').textContent = '✔ Por seguridad ocultamos el PIN. Ya quedó cargado arriba — haz clic en "Continuar", o vuelve a mostrarlo si lo necesitas de nuevo.';
+          $('recuperarPinOk').textContent = T().verPinOculto;
           return;
         }
         actualizarMensaje();
@@ -647,7 +1037,7 @@ $('photoRemove').addEventListener('click', e => {
       const btn = $('recuperarCorreoBtn');
       const textoOriginal = btn.textContent;
       btn.disabled = true;
-      btn.textContent = 'Enviando…';
+      btn.textContent = T().enviando;
       $('recuperarPinError').style.display = 'none';
 
       try{
@@ -659,7 +1049,7 @@ $('photoRemove').addEventListener('click', e => {
         const data = await resp.json().catch(() => ({}));
         if (!resp.ok || !data.ok) {
           $('recuperarPinOk').style.display = 'none';
-          $('recuperarPinError').textContent = data.error || 'No pudimos enviar el correo. Intenta con la opción de verlo en pantalla.';
+          $('recuperarPinError').textContent = data.error || T().noPudimosEnviarCorreo;
           $('recuperarPinError').style.display = 'block';
           return;
         }
@@ -667,10 +1057,10 @@ $('photoRemove').addEventListener('click', e => {
         detenerCuentaAtras();
         $('renewalPinInput').type = 'password';
         $('renewalPinInput').value = pinRecuperado;
-        $('recuperarPinOk').textContent = `✔ Te enviamos tu PIN al correo ${data.correo || 'registrado'}. Ya quedó cargado arriba — haz clic en "Continuar".`;
+        $('recuperarPinOk').textContent = T().pinEnviadoCorreo(data.correo || T().registrado);
         $('recuperarPinOk').style.display = 'block';
       }catch(err){
-        $('recuperarPinError').textContent = 'No pudimos enviar el correo. Intenta con la opción de verlo en pantalla.';
+        $('recuperarPinError').textContent = T().noPudimosEnviarCorreo;
         $('recuperarPinError').style.display = 'block';
       }finally{
         btn.disabled = false;
@@ -704,12 +1094,16 @@ function wireMedRow(tr){
   });
 }
 document.querySelectorAll('#medTableBody tr').forEach(wireMedRow);
-$('addMedRow').addEventListener('click', () => {
+function nuevaFilaMedVacia(){
   const tr = document.createElement('tr');
   tr.innerHTML = `
-    <td><input type="text" class="med-name" placeholder="Nombre del medicamento"></td>
-    <td><input type="text" class="med-dose" placeholder="Dosis / frecuencia"></td>
-    <td class="rowbtn"><button type="button" class="med-remove" title="Quitar">✕</button></td>`;
+    <td><input type="text" class="med-name" placeholder="${T().medNamePh}"></td>
+    <td><input type="text" class="med-dose" placeholder="${T().medDosePh}"></td>
+    <td class="rowbtn"><button type="button" class="med-remove" title="${T().quitar}">✕</button></td>`;
+  return tr;
+}
+$('addMedRow').addEventListener('click', () => {
+  const tr = nuevaFilaMedVacia();
   $('medTableBody').appendChild(tr);
   wireMedRow(tr);
 });
@@ -853,8 +1247,8 @@ document.querySelectorAll('input[name="donador"]').forEach(r => r.addEventListen
 
 function updatePreview(){
   const nombreCompleto = [$('nombres').value, $('apellidos').value].filter(Boolean).join(' ');
-  $('pvNombre').textContent = nombreCompleto || 'Nombre y apellidos';
-  $('pvBlood').textContent = $('sangre').value ? $('sangre').value : '— TIPO —';
+  $('pvNombre').textContent = nombreCompleto || T().pvNombreDefault;
+  $('pvBlood').textContent = $('sangre').value ? $('sangre').value : T().bloodPlaceholder;
   $('pvEdad').textContent = $('edad').value || '—';
   $('pvDoc').textContent = $('documento').value || '—';
   $('pvContacto').textContent = $('contacto1').value || '—';
@@ -883,7 +1277,7 @@ async function addFiles(list){
     if(isJpg(f)) nuevos.push(f); else rejected.push(f.name);
   });
   if(rejected.length){
-    alert('Solo se permiten archivos .jpg. No se agregaron: ' + rejected.join(', '));
+    alert(T().soloJpg(rejected.join(', ')));
   }
   for (const f of nuevos) {
     const dataUrlOriginal = await new Promise((resolve, reject) => {
@@ -904,10 +1298,10 @@ function renderFiles(){
   attachments.forEach((a,i) => {
     const li = document.createElement('li');
     const sizeInfo = a.size ? `(${(a.size/1024).toFixed(0)} KB) · ` : '';
-    li.innerHTML = `<span>📄 ${a.name} <span style="color:var(--slate)">${sizeInfo}página adicional en el PDF</span></span>`;
+    li.innerHTML = `<span>📄 ${a.name} <span style="color:var(--slate)">${sizeInfo}${T().paginaAdicional}</span></span>`;
     const btn = document.createElement('button');
     btn.textContent = '✕';
-    btn.title = 'Quitar';
+    btn.title = T().quitar;
     btn.addEventListener('click', () => { attachments.splice(i,1); renderFiles(); buildPrintAttachments(); });
     li.appendChild(btn);
     ul.appendChild(li);
@@ -924,7 +1318,7 @@ function buildPrintAttachments(){
     page.className = 'print-attachment-page';
     const title = document.createElement('div');
     title.className = 'print-attachment-title';
-    title.textContent = `Archivo adjunto: ${a.name}`;
+    title.textContent = T().archivoAdjunto(a.name);
     page.appendChild(title);
     const img = document.createElement('img');
     img.src = a.dataUrl;
@@ -947,7 +1341,7 @@ async function generatePdfBlob(){
   });
 
   if (!mainCanvas || !mainCanvas.width || !mainCanvas.height) {
-    throw new Error('El navegador no pudo generar la imagen de la ficha (mainCanvas vacío). Prueba en otro navegador o desactiva bloqueadores de anuncios/privacidad y vuelve a intentar.');
+    throw new Error(T().errorMainCanvas);
   }
 
   // ---- Tamaño de página carta (Letter, 8.5"x11") en puntos, con márgenes ----
@@ -1038,12 +1432,12 @@ function mostrarPinModal(pin, folio){
     overlay.innerHTML = `
       <div style="background:#fff;border-radius:16px;max-width:420px;width:100%;padding:28px 26px;text-align:center;font-family:inherit;">
         <div style="font-size:2rem;">🔑</div>
-        <h3 style="margin:10px 0 6px;">Guarda tu PIN de acceso</h3>
-        <p style="margin:0 0 10px;color:#444;font-size:0.95rem;">Con tu folio (<b>${folio}</b>) y este PIN podrás entrar más adelante a actualizar tu ficha sin llenar el formulario de nuevo.</p>
-        <p style="margin:0 0 16px;color:#8A3A16;font-size:0.9rem;font-weight:600;">Este PIN es único y es indispensable para poder actualizar tu ficha médica en el futuro — guárdalo en un lugar seguro, ya que nadie más podrá verlo.</p>
+        <h3 style="margin:10px 0 6px;">${T().pinModalTitulo}</h3>
+        <p style="margin:0 0 10px;color:#444;font-size:0.95rem;">${T().pinModalTexto(folio)}</p>
+        <p style="margin:0 0 16px;color:#8A3A16;font-size:0.9rem;font-weight:600;">${T().pinModalAdvertencia}</p>
         <div style="font-family:'Courier New',monospace;font-size:1.8rem;font-weight:700;letter-spacing:4px;background:#F7F4EE;border:2px dashed #C1552F;border-radius:10px;padding:14px;margin-bottom:16px;">${pin}</div>
-        <p style="margin:0 0 16px;color:#666;font-size:0.82rem;">Este PIN, igual que el resto de tu información médica, se guarda de forma protegida — nunca queda visible en ninguna página pública del sitio.</p>
-        <button type="button" id="pinModalCerrar" style="background:#1F4448;color:#fff;border:none;border-radius:8px;padding:12px 20px;font-weight:700;cursor:pointer;width:100%;">Ya lo guardé, continuar</button>
+        <p style="margin:0 0 16px;color:#666;font-size:0.82rem;">${T().pinModalNota}</p>
+        <button type="button" id="pinModalCerrar" style="background:#1F4448;color:#fff;border:none;border-radius:8px;padding:12px 20px;font-weight:700;cursor:pointer;width:100%;">${T().pinModalBtn}</button>
       </div>`;
     document.body.appendChild(overlay);
     overlay.querySelector('#pinModalCerrar').addEventListener('click', () => {
@@ -1090,11 +1484,7 @@ function precargarDatosFicha(datos){
     const tbody = $('medTableBody');
     tbody.innerHTML = '';
     const nuevaFila = (m) => {
-      const tr = document.createElement('tr');
-      tr.innerHTML = `
-        <td><input type="text" class="med-name" placeholder="Nombre del medicamento"></td>
-        <td><input type="text" class="med-dose" placeholder="Dosis / frecuencia"></td>
-        <td class="rowbtn"><button type="button" class="med-remove" title="Quitar">✕</button></td>`;
+      const tr = nuevaFilaMedVacia();
       tr.querySelector('.med-name').value = (m && m.nombre) || '';
       tr.querySelector('.med-dose').value = (m && m.dosis) || '';
       tbody.appendChild(tr);
@@ -1134,7 +1524,7 @@ function emailValido(str){
 
 $('btnEmail').addEventListener('click', async () => {
   if (!emailValido($('emailcontacto1').value)) {
-    alert('El correo del contacto 1 es obligatorio y debe tener un formato válido (por ejemplo, correo@ejemplo.com). Ahí se enviará el código de acceso de esta ficha.');
+    alert(T().alertEmailInvalido);
     $('emailcontacto1').focus();
     return;
   }
@@ -1142,7 +1532,7 @@ $('btnEmail').addEventListener('click', async () => {
   const btn = $('btnEmail');
   const originalText = btn.textContent;
   btn.disabled = true;
-  btn.textContent = '⏳ Generando PDF…';
+  btn.textContent = T().generandoPdf;
 
   const folio = $('counterNum').textContent.trim() || 'VidaVitalQR';
   const filename = `${folio}.pdf`;
@@ -1152,14 +1542,14 @@ $('btnEmail').addEventListener('click', async () => {
     pdfBlob = await generatePdfBlob();
   }catch(err){
     console.error('Error generando el PDF:', err);
-    alert('No se pudo generar el PDF. Detalle: ' + (err && err.message ? err.message : err) + '\n\nIntenta de nuevo, o prueba en otro navegador.');
+    alert(T().errorGenerarPdf(err && err.message ? err.message : err));
     btn.disabled = false;
     btn.textContent = originalText;
     return;
   }
 
   try{
-    btn.textContent = '⏳ Guardando en la nube…';
+    btn.textContent = T().guardandoNube;
     const pdfBase64 = await blobToBase64(pdfBlob);
     const nombreCompleto = [$('nombres').value, $('apellidos').value].filter(Boolean).join(' ') || 'Sin nombre';
     const fotoBase64 = ($('photoImg').style.display !== 'none' && $('photoImg').src.startsWith('data:')) ? $('photoImg').src : null;
@@ -1210,7 +1600,7 @@ $('btnEmail').addEventListener('click', async () => {
     if(!resp.ok){
       let detalle = '';
       try{ detalle = await resp.text(); }catch(e){}
-      throw new Error(`El servidor respondió ${resp.status}. ${detalle}`.trim());
+      throw new Error(T().errorServidor(resp.status, detalle));
     }
 
     let pinNuevo = null;
@@ -1223,7 +1613,7 @@ $('btnEmail').addEventListener('click', async () => {
     goToPayment(folio);
   }catch(err){
     console.error('Error guardando la ficha en la nube:', err);
-    alert('No se pudo guardar la ficha. Detalle: ' + (err && err.message ? err.message : err) + '\n\nPor favor intenta de nuevo. Si el problema continúa, contáctanos.');
+    alert(T().errorGuardarFicha(err && err.message ? err.message : err));
   }finally{
     btn.disabled = false;
     btn.textContent = originalText;
@@ -1244,7 +1634,7 @@ function limpiarFormularioFicha(){
 }
 
 $('btnReset').addEventListener('click', () => {
-  if(!confirm('¿Limpiar todos los campos del formulario?')) return;
+  if(!confirm(T().confirmLimpiar)) return;
   limpiarFormularioFicha();
 });
 
