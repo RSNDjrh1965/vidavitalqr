@@ -258,12 +258,12 @@ async function subirABuckets(s3, region, { folio, filename, pdfBase64, fotoBase6
   // usuario no pudo generarla), simplemente se omite este paso sin afectar el resto del guardado.
   let tarjetaUrl = '';
   if (tarjetaBase64 && carpeta === 'personas') {
-    const tarjetaKey = `${carpeta}/identificador-qr/${folio}.png`;
+    const tarjetaKey = `${carpeta}/identificador-qr/${folio}.jpg`;
     await s3.send(new PutObjectCommand({
       Bucket: BUCKET_FICHAS,
       Key: tarjetaKey,
       Body: Buffer.from(base64PayloadOf(tarjetaBase64), 'base64'),
-      ContentType: 'image/png',
+      ContentType: 'image/jpeg',
     }));
     tarjetaUrl = publicUrlFor(BUCKET_FICHAS, region_, tarjetaKey);
   }
