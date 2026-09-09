@@ -1426,7 +1426,7 @@ async function generateTarjetaBlob(folio, fotoBase64){
   qr.addData(qrTargetUrl);
   qr.make();
   const n = qr.getModuleCount();
-  const qrPx = 248;
+  const qrPx = 320;
   const cell = qrPx / n;
   let qrRects = '';
   for (let ry = 0; ry < n; ry++) {
@@ -1448,24 +1448,34 @@ async function generateTarjetaBlob(folio, fotoBase64){
   holder.innerHTML = `
     <style>
       .t-card{width:638px;height:1011px;border-radius:26px;background:linear-gradient(160deg,#FFFFFF 0%,#F7F4EE 55%,#EFEAE0 100%);overflow:hidden;position:relative;font-family:Georgia,'Times New Roman',serif;display:flex;flex-direction:column;}
-      .t-card .t-header{background:linear-gradient(120deg,#1F4448 0%,#3A6B70 100%);padding:26px 28px 20px;}
+      .t-card .t-header{background:linear-gradient(120deg,#1F4448 0%,#3A6B70 100%);padding:28px 28px 22px;}
       .t-card .t-brand{color:#F7F4EE;text-align:center;}
-      .t-card .t-brand .t-name{font-size:30px;font-weight:700;letter-spacing:0.2px;}
+      .t-card .t-brand .t-name{font-size:34px;font-weight:700;letter-spacing:0.2px;}
       .t-card .t-brand .t-accent{color:#8FAFA6;}
-      .t-card .t-brand .t-tag{font-family:Helvetica,Arial,sans-serif;font-size:11.5px;letter-spacing:1.8px;text-transform:uppercase;color:#C7DAD6;margin-top:5px;font-weight:600;}
-      .t-card .t-body{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:10px 24px 30px;}
-      .t-card .t-photo-box{width:172px;height:172px;border-radius:18px;border:2.5px dashed #C7BFA9;background:#FFFFFF;display:flex;align-items:center;justify-content:center;position:relative;flex-shrink:0;overflow:hidden;}
-      .t-card .t-photo-box svg{width:76px;height:76px;color:#C1D2CC;}
-      .t-card .t-photo-label{position:absolute;bottom:11px;left:0;right:0;text-align:center;font-family:Helvetica,Arial,sans-serif;font-size:11px;letter-spacing:1.6px;text-transform:uppercase;color:#9AA8A3;font-weight:700;}
-      .t-card .t-qr-row{margin-top:24px;display:flex;align-items:center;justify-content:center;gap:14px;}
-      .t-card .t-side-label{width:60px;height:248px;display:flex;flex-direction:column;align-items:center;justify-content:center;}
-      .t-card .t-side-label.t-scan{background:#F0DACD;border-radius:30px;padding:18px 0;height:208px;}
-      .t-card .t-side-label .t-vtext{writing-mode:vertical-rl;font-family:Helvetica,Arial,sans-serif;font-weight:700;letter-spacing:2px;text-transform:uppercase;white-space:nowrap;}
-      .t-card .t-side-label.t-scan .t-vtext{color:#C1552F;font-size:16px;}
-      .t-card .t-side-label.t-web .t-vtext{color:#1F4448;font-size:15px;}
-      .t-card .t-side-label.t-scan .t-arrow{margin-top:10px;width:22px;height:22px;color:#C1552F;}
-      .t-card .t-qr-frame{width:280px;height:280px;background:#FFFFFF;border-radius:16px;border:1.5px solid #DAD3C4;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
-      .t-card .t-qr-id{margin-top:16px;font-family:'Courier New',Courier,monospace;font-size:19px;font-weight:700;letter-spacing:1px;color:#12282B;background:#EFEAE0;padding:6px 18px;border-radius:8px;}
+      .t-card .t-brand .t-tag{font-family:Helvetica,Arial,sans-serif;font-size:13px;letter-spacing:1.8px;text-transform:uppercase;color:#C7DAD6;margin-top:6px;font-weight:600;}
+      .t-card .t-body{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:10px 18px 28px;}
+      .t-card .t-photo-box{width:250px;height:250px;border-radius:24px;border:3px dashed #C7BFA9;background:#FFFFFF;display:flex;align-items:center;justify-content:center;position:relative;flex-shrink:0;overflow:hidden;}
+      .t-card .t-photo-box svg{width:108px;height:108px;color:#C1D2CC;}
+      .t-card .t-photo-label{position:absolute;bottom:14px;left:0;right:0;text-align:center;font-family:Helvetica,Arial,sans-serif;font-size:13px;letter-spacing:1.6px;text-transform:uppercase;color:#9AA8A3;font-weight:700;}
+      .t-card .t-qr-row{margin-top:32px;display:flex;align-items:center;justify-content:center;gap:16px;}
+      /* Nota: el texto vertical NO usa "writing-mode" porque html2canvas (la librería que
+         convierte esto en imagen dentro del navegador del usuario) no lo interpreta bien —
+         apila cada letra derecha en vez de rotar la palabra completa. En su lugar, se rota el
+         texto horizontal normal con "transform: rotate(90deg)", que sí se rasteriza de forma
+         confiable. rotate(90deg) hace que el INICIO del texto (la primera letra) quede arriba y
+         el final abajo, leyéndose de arriba hacia abajo — se usa el mismo valor en "Escanear" y
+         en "vidavitalqr.com" para que ambos giren en el mismo sentido, como se pidió. */
+      .t-card .t-side-label{position:relative;width:72px;height:300px;}
+      .t-card .t-side-label.t-scan{background:#F0DACD;border-radius:34px;height:260px;}
+      .t-card .t-side-label .t-vtext{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%) rotate(90deg);white-space:nowrap;font-family:Helvetica,Arial,sans-serif;font-weight:700;letter-spacing:2.2px;text-transform:uppercase;}
+      .t-card .t-side-label.t-scan .t-vtext{color:#C1552F;font-size:19px;top:40%;}
+      .t-card .t-side-label.t-web .t-vtext{color:#1F4448;font-size:18px;}
+      /* flecha hecha con bordes CSS (sin SVG): html2canvas no dibujaba de forma confiable el
+         icono SVG dentro de esta tarjeta, así que se reemplazó por un triángulo simple de CSS,
+         que sí se rasteriza siempre. Apunta hacia la derecha, hacia el código QR. */
+      .t-card .t-side-label.t-scan .t-arrow{position:absolute;left:50%;bottom:34px;transform:translateX(-50%);width:0;height:0;border-top:11px solid transparent;border-bottom:11px solid transparent;border-left:18px solid #C1552F;}
+      .t-card .t-qr-frame{width:360px;height:360px;background:#FFFFFF;border-radius:18px;border:1.5px solid #DAD3C4;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+      .t-card .t-qr-id{margin-top:22px;font-family:'Courier New',Courier,monospace;font-size:23px;font-weight:700;letter-spacing:1px;color:#12282B;background:#EFEAE0;padding:8px 22px;border-radius:9px;}
       .t-card .t-footer-strip{height:9px;background:linear-gradient(90deg,#1F4448,#8FAFA6,#C1552F);}
     </style>
     <div class="t-card" id="tarjetaCardEl">
@@ -1480,10 +1490,10 @@ async function generateTarjetaBlob(folio, fotoBase64){
         <div class="t-qr-row">
           <div class="t-side-label t-scan">
             <span class="t-vtext">Escanear</span>
-            <svg class="t-arrow" viewBox="0 0 24 24" fill="none"><path d="M4 12h15M13 6l6 6-6 6" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+<div class="t-arrow"></div>
           </div>
           <div class="t-qr-frame">
-            <svg viewBox="0 0 ${qrPx} ${qrPx}" width="248" height="248">${qrRects}</svg>
+            <svg viewBox="0 0 ${qrPx} ${qrPx}" width="${qrPx}" height="${qrPx}">${qrRects}</svg>
           </div>
           <div class="t-side-label t-web">
             <span class="t-vtext">vidavitalqr.com</span>
