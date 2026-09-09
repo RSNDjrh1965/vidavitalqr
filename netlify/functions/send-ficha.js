@@ -1,9 +1,12 @@
 // ---- Netlify Function: procesa cada ficha enviada desde el landing page ----
-// Recibe (POST, JSON): { folio, filename, pdfBase64, nombreCompleto, tipo, fotoBase64 }
+// Recibe (POST, JSON): { folio, filename, pdfBase64, nombreCompleto, tipo, fotoBase64, tarjetaBase64 }
 //
 // Hace, en orden:
 //  1) Sube el PDF de la ficha al bucket S3 "vidavitalqr".
 //  2) Si vino foto, la sube también al bucket "vidavitalqr" (carpeta fotos/).
+//  2.5) Si es ficha de PERSONA y vino la tarjeta "Identificador QR" (foto + QR real + folio,
+//     generada en el navegador al guardar), la sube al bucket "vidavitalqr", carpeta
+//     personas/identificador-qr/.
 //  3) Genera un código QR (SVG) que apunta a la URL del PDF, con "VIDAVITALQR" en el centro
 //     y el folio debajo, y lo sube al bucket S3 de códigos QR.
 //  4) Agrega una fila a la tabla "resumen.csv" dentro del bucket de resumen, con las columnas:
@@ -202,7 +205,7 @@ async function enviarCodigoPorCorreo(contactos, { folio, pin, nombreCompleto, ti
   await Promise.allSettled(envios);
 }
 
-async function subirABuckets(s3, region, { folio, filename, pdfBase64, fotoBase64, nombreCompleto, tipo, contactos, datosVisor }) {
+async function subirABuckets(s3, region, { folio, filename, pdfBase64, fotoBase64, tarjetaBase64, nombreCompleto, tipo, contactos, datosVisor }) {
   const region_ = region;
   const carpeta = carpetaTipo(tipo, folio);
 
@@ -248,6 +251,23 @@ async function subirABuckets(s3, region, { folio, filename, pdfBase64, fotoBase6
     if (datosAnteriores && datosAnteriores.fotoUrl) fotoUrl = datosAnteriores.fotoUrl;
   }
 
+  // 2.5) Tarjeta "Identificador QR" (foto + código QR real + identificador), generada en el
+  // propio navegador al guardar la ficha (en ficha.html, función generateTarjetaBlob). Solo
+  // aplica a fichas de PERSONA — las de mascota no envían este campo, así que aquí nunca se
+  // sube nada para ellas. Si por algún motivo no llegó (por ejemplo, si el navegador del
+  // usuario no pudo generarla), simplemente se omite este paso sin afectar el resto del guardado.
+  let tarjetaUrl = '';
+  if (tarjetaBase64 && carpeta === 'personas') {
+    const tarjetaKey = `${carpeta}/identificador-qr/${folio}.png`;
+    await s3.send(new PutObjectCommand({
+      Bucket: BUCKET_FICHAS,
+      Key: tarjetaKey,
+      Body: Buffer.from(base64PayloadOf(tarjetaBase64), 'base64'),
+      ContentType: 'image/png',
+    }));
+    tarjetaUrl = publicUrlFor(BUCKET_FICHAS, region_, tarjetaKey);
+  }
+
   // 3) Datos estructurados para el visor público (lo que se muestra y traduce cuando alguien
   // escanea el código) y para saber a quién avisar. Se guarda como JSON, separado del PDF, para
   // no tener que volver a interpretar el PDF cada vez que alguien escanea.
@@ -261,6 +281,7 @@ async function subirABuckets(s3, region, { folio, filename, pdfBase64, fotoBase6
       tipo: tipo || 'Persona',
       pdfUrl,
       fotoUrl,
+      tarjetaUrl,
       contactos: Array.isArray(contactos) ? contactos : [],
       datosVisor: datosVisor && typeof datosVisor === 'object' ? datosVisor : {},
       actualizado: new Date().toISOString(),
@@ -280,7 +301,7 @@ async function subirABuckets(s3, region, { folio, filename, pdfBase64, fotoBase6
   }));
   const qrUrl = publicUrlFor(BUCKET_QR, region_, qrKey);
 
-  return { pdfUrl, fotoUrl, qrUrl };
+  return { pdfUrl, fotoUrl, qrUrl, tarjetaUrl };
 }
 
 // ---- fecha de hoy (zona horaria de Costa Rica), como objeto Date real ----
@@ -329,7 +350,7 @@ exports.handler = async (event) => {
     return { statusCode: 400, headers, body: JSON.stringify({ error: 'JSON inválido.' }) };
   }
 
-  const { folio, filename, pdfBase64, nombreCompleto, tipo, fotoBase64, contactos, datosVisor, datosFormulario } = payload;
+  const { folio, filename, pdfBase64, nombreCompleto, tipo, fotoBase64, tarjetaBase64, contactos, datosVisor, datosFormulario } = payload;
 
   if (!pdfBase64 || !filename) {
     return {
@@ -339,17 +360,17 @@ exports.handler = async (event) => {
     };
   }
 
-  // ---- Paso 1: subir a S3 (PDF + foto + código QR), actualizar la tabla resumen, y crear o
-  // actualizar el acceso con PIN para el panel de edición ----
-  let pdfUrl = '', fotoUrl = '', qrUrl = '';
+  // ---- Paso 1: subir a S3 (PDF + foto + tarjeta Identificador QR + código QR), actualizar la
+  // tabla resumen, y crear o actualizar el acceso con PIN para el panel de edición ----
+  let pdfUrl = '', fotoUrl = '', qrUrl = '', tarjetaUrl = '';
   let s3Error = null;
   let pinNuevo = null;
   const carpeta = carpetaTipo(tipo, folio);
   try {
     const region = process.env.S3_REGION || 'us-east-1';
     const s3 = getS3Client();
-    const subido = await subirABuckets(s3, region, { folio, filename, pdfBase64, fotoBase64, nombreCompleto, tipo, contactos, datosVisor });
-    pdfUrl = subido.pdfUrl; fotoUrl = subido.fotoUrl; qrUrl = subido.qrUrl;
+    const subido = await subirABuckets(s3, region, { folio, filename, pdfBase64, fotoBase64, tarjetaBase64, nombreCompleto, tipo, contactos, datosVisor });
+    pdfUrl = subido.pdfUrl; fotoUrl = subido.fotoUrl; qrUrl = subido.qrUrl; tarjetaUrl = subido.tarjetaUrl;
 
     // El login (y su PIN) se resuelve ANTES de escribir el resumen, para poder incluir el PIN
     // vigente en la columna "PIN" de resumen.xlsx en el mismo guardado.
@@ -394,6 +415,7 @@ exports.handler = async (event) => {
   if (pdfUrl) lineasExtra.push(`PDF en la nube: ${pdfUrl}`);
   if (fotoUrl) lineasExtra.push(`Fotografía: ${fotoUrl}`);
   if (qrUrl) lineasExtra.push(`Código QR: ${qrUrl}`);
+  if (tarjetaUrl) lineasExtra.push(`Tarjeta Identificador QR: ${tarjetaUrl}`);
   if (s3Error) lineasExtra.push(`(Aviso: no se pudo subir a S3 / actualizar el resumen — ${s3Error})`);
 
   const cuerpoTexto = [
@@ -432,20 +454,20 @@ exports.handler = async (event) => {
       return {
         statusCode: resendResp.status,
         headers,
-        body: JSON.stringify({ error: 'Resend rechazó el envío.', detalle: resultado, s3Error, pdfUrl, fotoUrl, qrUrl, pin: pinNuevo }),
+        body: JSON.stringify({ error: 'Resend rechazó el envío.', detalle: resultado, s3Error, pdfUrl, fotoUrl, qrUrl, tarjetaUrl, pin: pinNuevo }),
       };
     }
 
     return {
       statusCode: 200,
       headers,
-      body: JSON.stringify({ ok: true, id: resultado.id, s3Error, pdfUrl, fotoUrl, qrUrl, pin: pinNuevo }),
+      body: JSON.stringify({ ok: true, id: resultado.id, s3Error, pdfUrl, fotoUrl, qrUrl, tarjetaUrl, pin: pinNuevo }),
     };
   } catch (err) {
     return {
       statusCode: 500,
       headers,
-      body: JSON.stringify({ error: 'Error al contactar a Resend.', detalle: String(err), s3Error, pdfUrl, fotoUrl, qrUrl, pin: pinNuevo }),
+      body: JSON.stringify({ error: 'Error al contactar a Resend.', detalle: String(err), s3Error, pdfUrl, fotoUrl, qrUrl, tarjetaUrl, pin: pinNuevo }),
     };
   }
 };
