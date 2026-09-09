@@ -205,7 +205,7 @@ async function enviarCodigoPorCorreo(contactos, { folio, pin, nombreCompleto, ti
   await Promise.allSettled(envios);
 }
 
-async function subirABuckets(s3, region, { folio, filename, pdfBase64, fotoBase64, tarjetaBase64, nombreCompleto, tipo, contactos, datosVisor }) {
+async function subirABuckets(s3, region, { folio, filename, pdfBase64, fotoBase64, tarjetaBase64, placaEstilo, nombreCompleto, tipo, contactos, datosVisor }) {
   const region_ = region;
   const carpeta = carpetaTipo(tipo, folio);
 
@@ -282,6 +282,7 @@ async function subirABuckets(s3, region, { folio, filename, pdfBase64, fotoBase6
       pdfUrl,
       fotoUrl,
       tarjetaUrl,
+      placaEstilo: placaEstilo || '',
       contactos: Array.isArray(contactos) ? contactos : [],
       datosVisor: datosVisor && typeof datosVisor === 'object' ? datosVisor : {},
       actualizado: new Date().toISOString(),
@@ -309,6 +310,20 @@ async function subirABuckets(s3, region, { folio, filename, pdfBase64, fotoBase6
 // servidor) y se fija al mediodía para evitar que un cambio de zona horaria la corra un día.
 // Se necesita como Date real (no como texto ya formateado) para que Excel pueda calcular con
 // ella la columna "Meses transcurridos" en xlsx-resumen.js.
+
+// ---- Nombre legible del estilo de "Placa con código QR" elegido en la página principal ----
+// (código -> lo que se ve en el correo / resumen). Si llega un código que no se reconoce,
+// se muestra tal cual llegó en vez de perder la información.
+function etiquetaPlacaEstilo(codigo) {
+  const nombres = {
+    clasica: 'Clásica (rectangular)',
+    llavero: 'Llavero (con orificio)',
+    ranuras: 'Con ranuras laterales',
+    dije: 'Dije / colgante (con argolla)',
+  };
+  return nombres[codigo] || codigo;
+}
+
 function fechaInicioHoy() {
   try {
     const iso = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Costa_Rica' }); // 'YYYY-MM-DD'
@@ -350,7 +365,7 @@ exports.handler = async (event) => {
     return { statusCode: 400, headers, body: JSON.stringify({ error: 'JSON inválido.' }) };
   }
 
-  const { folio, filename, pdfBase64, nombreCompleto, tipo, fotoBase64, tarjetaBase64, contactos, datosVisor, datosFormulario } = payload;
+  const { folio, filename, pdfBase64, nombreCompleto, tipo, fotoBase64, tarjetaBase64, placaEstilo, contactos, datosVisor, datosFormulario } = payload;
 
   if (!pdfBase64 || !filename) {
     return {
@@ -369,7 +384,7 @@ exports.handler = async (event) => {
   try {
     const region = process.env.S3_REGION || 'us-east-1';
     const s3 = getS3Client();
-    const subido = await subirABuckets(s3, region, { folio, filename, pdfBase64, fotoBase64, tarjetaBase64, nombreCompleto, tipo, contactos, datosVisor });
+    const subido = await subirABuckets(s3, region, { folio, filename, pdfBase64, fotoBase64, tarjetaBase64, placaEstilo, nombreCompleto, tipo, contactos, datosVisor });
     pdfUrl = subido.pdfUrl; fotoUrl = subido.fotoUrl; qrUrl = subido.qrUrl; tarjetaUrl = subido.tarjetaUrl;
 
     // El login (y su PIN) se resuelve ANTES de escribir el resumen, para poder incluir el PIN
@@ -395,6 +410,11 @@ exports.handler = async (event) => {
       pdfUrl,
       fotoBase64,
       qrUrl,
+      // NOTA: este campo solo se verá como columna en la hoja de resumen si lib/xlsx-resumen.js
+      // también se actualiza para leerlo y escribirlo (no forma parte de este archivo). Mientras
+      // tanto, el estilo elegido igual queda visible en el correo de notificación y en
+      // personas/datos/<folio>.json.
+      placaEstiloTexto: placaEstilo ? etiquetaPlacaEstilo(placaEstilo) : '',
     });
   } catch (err) {
     // No bloqueamos el envío del correo si falla la parte de S3 — se reporta en la respuesta
@@ -416,6 +436,7 @@ exports.handler = async (event) => {
   if (fotoUrl) lineasExtra.push(`Fotografía: ${fotoUrl}`);
   if (qrUrl) lineasExtra.push(`Código QR: ${qrUrl}`);
   if (tarjetaUrl) lineasExtra.push(`Tarjeta Identificador QR: ${tarjetaUrl}`);
+  if (placaEstilo) lineasExtra.push(`Estilo de placa elegido: ${etiquetaPlacaEstilo(placaEstilo)}`);
   if (s3Error) lineasExtra.push(`(Aviso: no se pudo subir a S3 / actualizar el resumen — ${s3Error})`);
 
   const cuerpoTexto = [
@@ -454,20 +475,20 @@ exports.handler = async (event) => {
       return {
         statusCode: resendResp.status,
         headers,
-        body: JSON.stringify({ error: 'Resend rechazó el envío.', detalle: resultado, s3Error, pdfUrl, fotoUrl, qrUrl, tarjetaUrl, pin: pinNuevo }),
+        body: JSON.stringify({ error: 'Resend rechazó el envío.', detalle: resultado, s3Error, pdfUrl, fotoUrl, qrUrl, tarjetaUrl, placaEstilo: placaEstilo || '', pin: pinNuevo }),
       };
     }
 
     return {
       statusCode: 200,
       headers,
-      body: JSON.stringify({ ok: true, id: resultado.id, s3Error, pdfUrl, fotoUrl, qrUrl, tarjetaUrl, pin: pinNuevo }),
+      body: JSON.stringify({ ok: true, id: resultado.id, s3Error, pdfUrl, fotoUrl, qrUrl, tarjetaUrl, placaEstilo: placaEstilo || '', pin: pinNuevo }),
     };
   } catch (err) {
     return {
       statusCode: 500,
       headers,
-      body: JSON.stringify({ error: 'Error al contactar a Resend.', detalle: String(err), s3Error, pdfUrl, fotoUrl, qrUrl, tarjetaUrl, pin: pinNuevo }),
+      body: JSON.stringify({ error: 'Error al contactar a Resend.', detalle: String(err), s3Error, pdfUrl, fotoUrl, qrUrl, tarjetaUrl, placaEstilo: placaEstilo || '', pin: pinNuevo }),
     };
   }
 };
