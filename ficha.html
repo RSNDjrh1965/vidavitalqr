@@ -895,6 +895,12 @@ $('photoRemove').addEventListener('click', e => {
   const params = new URLSearchParams(window.location.search);
   const esRenovacion = params.get('renovar') === '1';
 
+  // ---- Estilo de "Placa con código QR" elegido en la página principal (llega como
+  //      ?placaEstilo=clasica|llavero|ranuras|dije en la URL). Se guarda tal cual llegó, para
+  //      poder saber cuál escogió el cliente sin pedirle nada adicional aquí. Si la ficha no
+  //      viene de comprar una placa, este parámetro simplemente no llega y queda vacío. ----
+  const placaEstilo = params.get('placaEstilo') || '';
+
   if (esRenovacion) {
     // No se incrementa el contador global: el folio lo aporta el propio cliente,
     // reutilizando el código que ya tiene, para que el QR existente no cambie.
@@ -1715,7 +1721,7 @@ $('btnEmail').addEventListener('click', async () => {
     const resp = await fetch('/.netlify/functions/send-ficha', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({ folio, filename, pdfBase64, nombreCompleto, tipo: 'Persona', fotoBase64, tarjetaBase64, contactos, datosVisor, datosFormulario })
+      body: JSON.stringify({ folio, filename, pdfBase64, nombreCompleto, tipo: 'Persona', fotoBase64, tarjetaBase64, placaEstilo, contactos, datosVisor, datosFormulario })
     });
 
     if(!resp.ok){
