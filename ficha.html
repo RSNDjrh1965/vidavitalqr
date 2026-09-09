@@ -1499,11 +1499,16 @@ async function generateTarjetaBlob(folio, fotoBase64){
   try{
     await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
     const cardEl = holder.querySelector('#tarjetaCardEl');
-    const canvas = await html2canvas(cardEl, { scale: 2, backgroundColor: '#FFFFFF', useCORS: true });
+    // scale:1 (no 2) y JPEG (no PNG): a resolución doble y sin compresión, esta imagen pesaba
+    // ~500KB y, sumada al PDF y la foto que ya viajan en la misma petición al servidor,
+    // provocaba un error 413 (petición demasiado grande). A escala 1 (638x1011px, ~300dpi,
+    // suficiente para imprimir en una placa tamaño tarjeta de crédito) y JPEG de buena calidad
+    // pesa unos 60-90KB sin afectar la nitidez del QR (probado que sigue siendo escaneable).
+    const canvas = await html2canvas(cardEl, { scale: 1, backgroundColor: '#FFFFFF', useCORS: true });
     if (!canvas || !canvas.width || !canvas.height) {
       throw new Error('No se pudo generar la imagen de la tarjeta (canvas vacío).');
     }
-    return canvas.toDataURL('image/png');
+    return canvas.toDataURL('image/jpeg', 0.9);
   } finally {
     document.body.removeChild(holder);
   }
