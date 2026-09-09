@@ -1365,7 +1365,7 @@ function buildPrintAttachments(){
 // ---- generar el PDF real (diseño de la ficha + páginas de fotos .jpg) ----
 async function generatePdfBlob(){
   const { jsPDF } = window.jspdf;
-  const noPrintEls = Array.from(document.querySelectorAll('.no-print'));
+  const noPrintEls = Array.from(document.querySelectorAll('.no-print')).filter(el => el.id !== 'openCounter');
   const prevDisplays = noPrintEls.map(el => el.style.display);
   noPrintEls.forEach(el => { el.style.display = 'none'; });
 
