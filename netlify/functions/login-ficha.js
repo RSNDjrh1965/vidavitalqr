@@ -17,8 +17,11 @@ const BUCKET_RESUMEN = process.env.S3_BUCKET_RESUMEN || 'resumen-vidavitalqr';
 function carpetaTipo(tipo, folio) {
   const f = String(folio || '').toUpperCase();
   if (f.startsWith('VVMASCOTA')) return 'mascotas';
+  if (f.startsWith('VVOBJETO')) return 'objetos';
   if (f.startsWith('VVITALQR')) return 'personas';
-  return tipo === 'Mascota' ? 'mascotas' : 'personas';
+  if (tipo === 'Mascota') return 'mascotas';
+  if (tipo === 'Objeto') return 'objetos';
+  return 'personas';
 }
 
 function getS3Client() {
