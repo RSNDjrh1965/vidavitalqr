@@ -51,12 +51,16 @@ const TEXTOS = {
   es: {
     tituloPersona: 'Información de emergencia',
     tituloMascota: 'Mascota — información de emergencia',
+    tituloObjeto: 'Objeto — información de contacto',
     subtitulo: 'Este código pertenece a una ficha de VidaVitalQR.',
     nombre: 'Nombre',
     sangre: 'Tipo de sangre',
     especie: 'Especie',
     raza: 'Raza',
     veterinario: 'Veterinario de confianza',
+    tipoObjeto: 'Tipo de objeto',
+    marca: 'Marca',
+    senas: 'Señas particulares',
     pais: 'País',
     comentarios: 'Comentarios importantes',
     contactos: 'Contactos de emergencia',
@@ -73,12 +77,16 @@ const TEXTOS = {
   en: {
     tituloPersona: 'Emergency information',
     tituloMascota: 'Pet — emergency information',
+    tituloObjeto: 'Object — contact information',
     subtitulo: 'This code belongs to a VidaVitalQR record.',
     nombre: 'Name',
     sangre: 'Blood type',
     especie: 'Species',
     raza: 'Breed',
     veterinario: 'Trusted veterinarian',
+    tipoObjeto: 'Object type',
+    marca: 'Brand',
+    senas: 'Distinguishing marks',
     pais: 'Country',
     comentarios: 'Important notes',
     contactos: 'Emergency contacts',
@@ -95,12 +103,16 @@ const TEXTOS = {
   fr: {
     tituloPersona: "Informations d'urgence",
     tituloMascota: "Animal de compagnie — informations d'urgence",
+    tituloObjeto: "Objet — informations de contact",
     subtitulo: 'Ce code appartient à une fiche VidaVitalQR.',
     nombre: 'Nom',
     sangre: 'Groupe sanguin',
     especie: 'Espèce',
     raza: 'Race',
     veterinario: 'Vétérinaire de confiance',
+    tipoObjeto: "Type d'objet",
+    marca: 'Marque',
+    senas: 'Signes distinctifs',
     pais: 'Pays',
     comentarios: 'Remarques importantes',
     contactos: "Contacts d'urgence",
@@ -117,12 +129,16 @@ const TEXTOS = {
   pt: {
     tituloPersona: 'Informações de emergência',
     tituloMascota: 'Animal de estimação — informações de emergência',
+    tituloObjeto: 'Objeto — informações de contato',
     subtitulo: 'Este código pertence a uma ficha VidaVitalQR.',
     nombre: 'Nome',
     sangre: 'Tipo sanguíneo',
     especie: 'Espécie',
     raza: 'Raça',
     veterinario: 'Veterinário de confiança',
+    tipoObjeto: 'Tipo de objeto',
+    marca: 'Marca',
+    senas: 'Sinais particulares',
     pais: 'País',
     comentarios: 'Observações importantes',
     contactos: 'Contatos de emergência',
@@ -148,6 +164,7 @@ function paginaError(mensaje) {
 
 function paginaVisor(datos) {
   const esTipoMascota = datos.tipo === 'Mascota';
+  const esTipoObjeto = datos.tipo === 'Objeto';
   const dv = datos.datosVisor || {};
   const contactos = Array.isArray(datos.contactos) ? datos.contactos.filter((c) => c && (c.nombre || c.telefono)) : [];
 
@@ -156,6 +173,12 @@ function paginaVisor(datos) {
         ['especie', dv.especie],
         ['raza', dv.raza],
         ['veterinario', dv.veterinario],
+      ]
+    : esTipoObjeto
+    ? [
+        ['tipoObjeto', dv.tipoObjeto],
+        ['marca', dv.marca],
+        ['senas', dv.senas],
       ]
     : [['sangre', dv.sangre]];
 
@@ -218,7 +241,7 @@ function paginaVisor(datos) {
   </div>
   <div class="card">
     ${fotoHtml}
-    <h1 data-i18n="${esTipoMascota ? 'tituloMascota' : 'tituloPersona'}"></h1>
+    <h1 data-i18n="${esTipoMascota ? 'tituloMascota' : (esTipoObjeto ? 'tituloObjeto' : 'tituloPersona')}"></h1>
     <p class="subtitulo" data-i18n="subtitulo"></p>
     <p class="nombre-usuario">${escapeHtml(datos.nombreCompleto || '')}</p>
     ${filasExtraHtml}
@@ -337,10 +360,10 @@ exports.handler = async (event) => {
   // revisa como respaldo, para las fichas que todavía no se han vuelto a guardar desde ese
   // cambio.
   const folioMayus = folio.toUpperCase();
-  const carpetaPreferida = folioMayus.startsWith('VVMASCOTA') ? 'mascotas' : (folioMayus.startsWith('VVITALQR') ? 'personas' : null);
+  const carpetaPreferida = folioMayus.startsWith('VVMASCOTA') ? 'mascotas' : (folioMayus.startsWith('VVOBJETO') ? 'objetos' : (folioMayus.startsWith('VVITALQR') ? 'personas' : null));
   const rutasPosibles = carpetaPreferida
     ? [`${carpetaPreferida}/datos/${folio}.json`, `datos/${folio}.json`]
-    : [`datos/${folio}.json`, `personas/datos/${folio}.json`, `mascotas/datos/${folio}.json`]; // folio con formato desconocido — se revisan todas por si acaso
+    : [`datos/${folio}.json`, `personas/datos/${folio}.json`, `mascotas/datos/${folio}.json`, `objetos/datos/${folio}.json`]; // folio con formato desconocido — se revisan todas por si acaso
 
   let datos;
   try {
