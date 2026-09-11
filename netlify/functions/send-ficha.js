@@ -1,12 +1,9 @@
 // ---- Netlify Function: procesa cada ficha enviada desde el landing page ----
-// Recibe (POST, JSON): { folio, filename, pdfBase64, nombreCompleto, tipo, fotoBase64, tarjetaBase64 }
+// Recibe (POST, JSON): { folio, filename, pdfBase64, nombreCompleto, tipo, fotoBase64 }
 //
 // Hace, en orden:
 //  1) Sube el PDF de la ficha al bucket S3 "vidavitalqr".
 //  2) Si vino foto, la sube también al bucket "vidavitalqr" (carpeta fotos/).
-//  2.5) Si es ficha de PERSONA y vino la tarjeta "Identificador QR" (foto + QR real + folio,
-//     generada en el navegador al guardar), la sube al bucket "vidavitalqr", carpeta
-//     personas/identificador-qr/.
 //  3) Genera un código QR (SVG) que apunta a la URL del PDF, con "VIDAVITALQR" en el centro
 //     y el folio debajo, y lo sube al bucket S3 de códigos QR.
 //  4) Agrega una fila a la tabla "resumen.csv" dentro del bucket de resumen, con las columnas:
@@ -95,8 +92,11 @@ function streamToString(stream) {
 function carpetaTipo(tipo, folio) {
   const f = String(folio || '').toUpperCase();
   if (f.startsWith('VVMASCOTA')) return 'mascotas';
+  if (f.startsWith('VVOBJETO')) return 'objetos';
   if (f.startsWith('VVITALQR')) return 'personas';
-  return tipo === 'Mascota' ? 'mascotas' : 'personas';
+  if (tipo === 'Mascota') return 'mascotas';
+  if (tipo === 'Objeto') return 'objetos';
+  return 'personas';
 }
 
 // ---- crea o actualiza el "registro de acceso" (folio + PIN) que permite entrar al panel de
@@ -160,11 +160,15 @@ async function cargarOCrearLogin(s3, folio, datosFormulario, carpeta) {
   return { esNuevo, pin };
 }
 
-// ---- envía el código de acceso (folio + PIN) por correo al o los contactos de emergencia que
-// tengan un correo registrado, cada vez que se crea o actualiza una ficha — así el contacto
-// siempre tiene a mano el código vigente para poder actualizar la ficha en el futuro, sin
-// depender de que la persona titular guarde el PIN por su cuenta. No bloquea ni interrumpe el
-// resto del guardado si falla (por ejemplo, si no hay RESEND_API_KEY configurado).
+// ---- envía el código de acceso (folio + PIN) por correo a TODOS los contactos de emergencia
+// que tengan un correo registrado (contacto 1 y, si también tiene correo, contacto 2), cada vez
+// que se crea o actualiza una ficha — así cualquiera de los dos contactos siempre tiene a mano el
+// código vigente para poder actualizar la ficha en el futuro, sin depender de que la persona
+// titular lo guarde por su cuenta. No bloquea ni interrumpe el resto del guardado si falla (por
+// ejemplo, si no hay RESEND_API_KEY configurado).
+// Nota: este correo lleva solo el folio y el PIN — el código QR nunca se envía por correo, solo
+// se muestra en pantalla al momento de generar o renovar la ficha (a petición explícita del
+// usuario, 2026-09-11).
 async function enviarCodigoPorCorreo(contactos, { folio, pin, nombreCompleto, tipo }) {
   const apiKey = process.env.RESEND_API_KEY;
   if (!apiKey || !folio || !pin) return;
@@ -205,7 +209,7 @@ async function enviarCodigoPorCorreo(contactos, { folio, pin, nombreCompleto, ti
   await Promise.allSettled(envios);
 }
 
-async function subirABuckets(s3, region, { folio, filename, pdfBase64, fotoBase64, tarjetaBase64, placaEstilo, nombreCompleto, tipo, contactos, datosVisor }) {
+async function subirABuckets(s3, region, { folio, filename, pdfBase64, fotoBase64, nombreCompleto, tipo, contactos, datosVisor }) {
   const region_ = region;
   const carpeta = carpetaTipo(tipo, folio);
 
@@ -251,23 +255,6 @@ async function subirABuckets(s3, region, { folio, filename, pdfBase64, fotoBase6
     if (datosAnteriores && datosAnteriores.fotoUrl) fotoUrl = datosAnteriores.fotoUrl;
   }
 
-  // 2.5) Tarjeta "Identificador QR" (foto + código QR real + identificador), generada en el
-  // propio navegador al guardar la ficha (en ficha.html, función generateTarjetaBlob). Solo
-  // aplica a fichas de PERSONA — las de mascota no envían este campo, así que aquí nunca se
-  // sube nada para ellas. Si por algún motivo no llegó (por ejemplo, si el navegador del
-  // usuario no pudo generarla), simplemente se omite este paso sin afectar el resto del guardado.
-  let tarjetaUrl = '';
-  if (tarjetaBase64 && carpeta === 'personas') {
-    const tarjetaKey = `${carpeta}/identificador-qr/${folio}.jpg`;
-    await s3.send(new PutObjectCommand({
-      Bucket: BUCKET_FICHAS,
-      Key: tarjetaKey,
-      Body: Buffer.from(base64PayloadOf(tarjetaBase64), 'base64'),
-      ContentType: 'image/jpeg',
-    }));
-    tarjetaUrl = publicUrlFor(BUCKET_FICHAS, region_, tarjetaKey);
-  }
-
   // 3) Datos estructurados para el visor público (lo que se muestra y traduce cuando alguien
   // escanea el código) y para saber a quién avisar. Se guarda como JSON, separado del PDF, para
   // no tener que volver a interpretar el PDF cada vez que alguien escanea.
@@ -281,8 +268,6 @@ async function subirABuckets(s3, region, { folio, filename, pdfBase64, fotoBase6
       tipo: tipo || 'Persona',
       pdfUrl,
       fotoUrl,
-      tarjetaUrl,
-      placaEstilo: placaEstilo || '',
       contactos: Array.isArray(contactos) ? contactos : [],
       datosVisor: datosVisor && typeof datosVisor === 'object' ? datosVisor : {},
       actualizado: new Date().toISOString(),
@@ -302,7 +287,7 @@ async function subirABuckets(s3, region, { folio, filename, pdfBase64, fotoBase6
   }));
   const qrUrl = publicUrlFor(BUCKET_QR, region_, qrKey);
 
-  return { pdfUrl, fotoUrl, qrUrl, tarjetaUrl };
+  return { pdfUrl, fotoUrl, qrUrl, qrSvg };
 }
 
 // ---- fecha de hoy (zona horaria de Costa Rica), como objeto Date real ----
@@ -310,20 +295,6 @@ async function subirABuckets(s3, region, { folio, filename, pdfBase64, fotoBase6
 // servidor) y se fija al mediodía para evitar que un cambio de zona horaria la corra un día.
 // Se necesita como Date real (no como texto ya formateado) para que Excel pueda calcular con
 // ella la columna "Meses transcurridos" en xlsx-resumen.js.
-
-// ---- Nombre legible del estilo de "Placa con código QR" elegido en la página principal ----
-// (código -> lo que se ve en el correo / resumen). Si llega un código que no se reconoce,
-// se muestra tal cual llegó en vez de perder la información.
-function etiquetaPlacaEstilo(codigo) {
-  const nombres = {
-    clasica: 'Clásica (rectangular)',
-    llavero: 'Llavero (con orificio)',
-    ranuras: 'Con ranuras laterales',
-    dije: 'Dije / colgante (con argolla)',
-  };
-  return nombres[codigo] || codigo;
-}
-
 function fechaInicioHoy() {
   try {
     const iso = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Costa_Rica' }); // 'YYYY-MM-DD'
@@ -365,7 +336,7 @@ exports.handler = async (event) => {
     return { statusCode: 400, headers, body: JSON.stringify({ error: 'JSON inválido.' }) };
   }
 
-  const { folio, filename, pdfBase64, nombreCompleto, tipo, fotoBase64, tarjetaBase64, placaEstilo, contactos, datosVisor, datosFormulario } = payload;
+  const { folio, filename, pdfBase64, nombreCompleto, tipo, fotoBase64, contactos, datosVisor, datosFormulario } = payload;
 
   if (!pdfBase64 || !filename) {
     return {
@@ -375,17 +346,17 @@ exports.handler = async (event) => {
     };
   }
 
-  // ---- Paso 1: subir a S3 (PDF + foto + tarjeta Identificador QR + código QR), actualizar la
-  // tabla resumen, y crear o actualizar el acceso con PIN para el panel de edición ----
-  let pdfUrl = '', fotoUrl = '', qrUrl = '', tarjetaUrl = '';
+  // ---- Paso 1: subir a S3 (PDF + foto + código QR), actualizar la tabla resumen, y crear o
+  // actualizar el acceso con PIN para el panel de edición ----
+  let pdfUrl = '', fotoUrl = '', qrUrl = '', qrSvg = '';
   let s3Error = null;
   let pinNuevo = null;
   const carpeta = carpetaTipo(tipo, folio);
   try {
     const region = process.env.S3_REGION || 'us-east-1';
     const s3 = getS3Client();
-    const subido = await subirABuckets(s3, region, { folio, filename, pdfBase64, fotoBase64, tarjetaBase64, placaEstilo, nombreCompleto, tipo, contactos, datosVisor });
-    pdfUrl = subido.pdfUrl; fotoUrl = subido.fotoUrl; qrUrl = subido.qrUrl; tarjetaUrl = subido.tarjetaUrl;
+    const subido = await subirABuckets(s3, region, { folio, filename, pdfBase64, fotoBase64, nombreCompleto, tipo, contactos, datosVisor });
+    pdfUrl = subido.pdfUrl; fotoUrl = subido.fotoUrl; qrUrl = subido.qrUrl; qrSvg = subido.qrSvg;
 
     // El login (y su PIN) se resuelve ANTES de escribir el resumen, para poder incluir el PIN
     // vigente en la columna "PIN" de resumen.xlsx en el mismo guardado.
@@ -395,7 +366,8 @@ exports.handler = async (event) => {
       pinActual = login.pin || '';
       if (login.esNuevo) pinNuevo = login.pin;
       // se envía en cada guardado (ficha nueva o actualización), no solo cuando el PIN es nuevo,
-      // para que el contacto de emergencia siempre tenga a la mano el código vigente
+      // para que los contactos de emergencia siempre tengan a la mano el folio y el PIN vigentes
+      // (el código QR no se envía por correo — solo se muestra en pantalla)
       await enviarCodigoPorCorreo(contactos, { folio, pin: pinActual, nombreCompleto, tipo });
     }
 
@@ -410,11 +382,6 @@ exports.handler = async (event) => {
       pdfUrl,
       fotoBase64,
       qrUrl,
-      // NOTA: este campo solo se verá como columna en la hoja de resumen si lib/xlsx-resumen.js
-      // también se actualiza para leerlo y escribirlo (no forma parte de este archivo). Mientras
-      // tanto, el estilo elegido igual queda visible en el correo de notificación y en
-      // personas/datos/<folio>.json.
-      placaEstiloTexto: placaEstilo ? etiquetaPlacaEstilo(placaEstilo) : '',
     });
   } catch (err) {
     // No bloqueamos el envío del correo si falla la parte de S3 — se reporta en la respuesta
@@ -425,7 +392,7 @@ exports.handler = async (event) => {
   // ---- Paso 2: enviar el correo (igual que antes), con los enlaces de S3 si se generaron ----
   const base64Content = base64PayloadOf(pdfBase64);
 
-  const tipoTexto = tipo === 'Mascota' ? 'ficha de mascota' : 'ficha médica';
+  const tipoTexto = tipo === 'Mascota' ? 'ficha de mascota' : (tipo === 'Objeto' ? 'ficha de objeto' : 'ficha médica');
   const asunto = folio
     ? `Nueva ${tipoTexto} VidaVitalQR — ${folio}`
     : `Nueva ${tipoTexto} VidaVitalQR`;
@@ -435,8 +402,6 @@ exports.handler = async (event) => {
   if (pdfUrl) lineasExtra.push(`PDF en la nube: ${pdfUrl}`);
   if (fotoUrl) lineasExtra.push(`Fotografía: ${fotoUrl}`);
   if (qrUrl) lineasExtra.push(`Código QR: ${qrUrl}`);
-  if (tarjetaUrl) lineasExtra.push(`Tarjeta Identificador QR: ${tarjetaUrl}`);
-  if (placaEstilo) lineasExtra.push(`Estilo de placa elegido: ${etiquetaPlacaEstilo(placaEstilo)}`);
   if (s3Error) lineasExtra.push(`(Aviso: no se pudo subir a S3 / actualizar el resumen — ${s3Error})`);
 
   const cuerpoTexto = [
@@ -475,20 +440,20 @@ exports.handler = async (event) => {
       return {
         statusCode: resendResp.status,
         headers,
-        body: JSON.stringify({ error: 'Resend rechazó el envío.', detalle: resultado, s3Error, pdfUrl, fotoUrl, qrUrl, tarjetaUrl, placaEstilo: placaEstilo || '', pin: pinNuevo }),
+        body: JSON.stringify({ error: 'Resend rechazó el envío.', detalle: resultado, s3Error, pdfUrl, fotoUrl, qrUrl, pin: pinNuevo }),
       };
     }
 
     return {
       statusCode: 200,
       headers,
-      body: JSON.stringify({ ok: true, id: resultado.id, s3Error, pdfUrl, fotoUrl, qrUrl, tarjetaUrl, placaEstilo: placaEstilo || '', pin: pinNuevo }),
+      body: JSON.stringify({ ok: true, id: resultado.id, s3Error, pdfUrl, fotoUrl, qrUrl, pin: pinNuevo }),
     };
   } catch (err) {
     return {
       statusCode: 500,
       headers,
-      body: JSON.stringify({ error: 'Error al contactar a Resend.', detalle: String(err), s3Error, pdfUrl, fotoUrl, qrUrl, tarjetaUrl, placaEstilo: placaEstilo || '', pin: pinNuevo }),
+      body: JSON.stringify({ error: 'Error al contactar a Resend.', detalle: String(err), s3Error, pdfUrl, fotoUrl, qrUrl, pin: pinNuevo }),
     };
   }
 };
