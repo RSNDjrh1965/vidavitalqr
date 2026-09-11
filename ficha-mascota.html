@@ -49,15 +49,6 @@
     font-size:11px;color:var(--red);border:1px solid var(--red);border-radius:20px;
     padding:5px 12px;font-weight:600;letter-spacing:.3px;white-space:nowrap;
   }
-  .top-right{display:flex;flex-direction:column;align-items:flex-end;gap:8px;}
-  .langbar{display:flex;gap:6px;}
-  .langbar button{
-    border:1px solid var(--line);background:#fff;color:var(--navy-light);
-    border-radius:6px;padding:4px 9px;font-size:11.5px;font-weight:700;letter-spacing:.3px;
-    cursor:pointer;
-  }
-  .langbar button.activo{background:var(--navy);border-color:var(--navy);color:#fff;}
-  .langbar button:hover{border-color:var(--navy);}
 
   /* ---------- Live ID card preview ---------- */
   .idcard{
@@ -208,18 +199,10 @@
 <div class="cross"></div>
 <div>
 <h1>VidaVitalQR Mascotas</h1>
-<p data-i18n="subtitle">Ficha de datos de la mascota · uso en emergencias</p>
+<p>Ficha de datos de la mascota · uso en emergencias</p>
 </div>
 </div>
-<div class="top-right">
-<div class="langbar no-print" id="langbar">
-<button type="button" data-lang="es">ES</button>
-<button type="button" data-lang="en">EN</button>
-<button type="button" data-lang="fr">FR</button>
-<button type="button" data-lang="pt">PT</button>
-</div>
-<span class="warn-badge" data-i18n="warnBadge">Información confidencial de emergencia</span>
-</div>
+<span class="warn-badge">Información confidencial de emergencia</span>
 </div>
 
 <!-- Live ID card preview -->
@@ -229,17 +212,17 @@
 <div class="idcard-info">
 <div class="idname" id="pvNombre">Nombre de la mascota</div>
 <div class="idmeta">
-<div><span data-i18n="lblEdad">Edad</span><b id="pvEdad">—</b></div>
-<div><span data-i18n="lblRaza">Raza</span><b id="pvDoc">—</b></div>
-<div><span data-i18n="lblContactoEmergencia">Contacto emergencia</span><b id="pvContacto">—</b></div>
-<div><span data-i18n="lblTelefono">Teléfono</span><b id="pvTelefono">—</b></div>
+<div><span>Edad</span><b id="pvEdad">—</b></div>
+<div><span>Raza</span><b id="pvDoc">—</b></div>
+<div><span>Contacto emergencia</span><b id="pvContacto">—</b></div>
+<div><span>Teléfono</span><b id="pvTelefono">—</b></div>
 </div>
 </div>
-<div class="blood-chip" id="pvBlood" data-i18n="especiePlaceholder">— ESPECIE —</div>
+<div class="blood-chip" id="pvBlood">— ESPECIE —</div>
 </div>
 <div class="idcard-photo-wrap">
 <div class="photo-box idcard-photo" id="photoBox">
-<span id="photoHint" data-i18n-html="photoHint">📷 Foto<br>Clic para subir</span>
+<span id="photoHint">📷 Foto<br>Clic para subir</span>
 <img id="photoImg" style="display:none;">
 <button type="button" class="photo-remove no-print" id="photoRemove" style="display:none;">✕</button>
 <input type="file" id="photoInput" accept="image/*">
@@ -251,80 +234,80 @@
 
 <!-- Aviso de renovación: solo se muestra si se llega con ?renovar=1 en la URL -->
 <div class="section no-print" id="renewalGate" style="display:none; border:2px solid var(--red,#c0392b); background:#fff6f0;">
-<h2 style="margin-top:0;" data-i18n="renewH2">🔄 Renovación de ficha existente</h2>
-<p style="margin:0 0 14px;" data-i18n-html="renewIntro">Ingresa el código que aparece debajo del código QR de tu ficha actual (ejemplo: <b>VVMASCOTA00000012</b>). Si además ingresas el PIN de acceso (te lo mostramos la primera vez que guardaste la ficha), precargamos automáticamente los datos para que solo edites lo que cambió — si no lo tienes a mano, puedes continuar sin PIN y llenar el formulario de nuevo.</p>
+<h2 style="margin-top:0;">🔄 Renovación de ficha existente</h2>
+<p style="margin:0 0 14px;">Ingresa el código que aparece debajo del código QR de tu ficha actual (ejemplo: <b>VVMASCOTA00000012</b>). Si además ingresas el PIN de acceso (te lo mostramos la primera vez que guardaste la ficha), precargamos automáticamente los datos para que solo edites lo que cambió — si no lo tienes a mano, puedes continuar sin PIN y llenar el formulario de nuevo.</p>
 <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:flex-end;">
 <div class="field" style="flex:1; min-width:220px; margin:0;">
-<label data-i18n="renewCodeLabel">Código de tu ficha</label>
+<label>Código de tu ficha</label>
 <input type="text" id="renewalCodeInput" placeholder="VVMASCOTA00000012" style="text-transform:uppercase;">
 </div>
 <div class="field" style="flex:1; min-width:160px; margin:0;">
-<label data-i18n="renewPinLabel">PIN de acceso (opcional)</label>
+<label>PIN de acceso (opcional)</label>
 <input type="text" id="renewalPinInput" placeholder="Ej. 3U7D3D" style="text-transform:uppercase;" maxlength="6">
 </div>
-<button type="button" id="renewalConfirmBtn" class="select-btn" style="white-space:nowrap;" data-i18n="btnContinuar">Continuar</button>
+<button type="button" id="renewalConfirmBtn" class="select-btn" style="white-space:nowrap;">Continuar</button>
 </div>
-<p id="renewalPinError" style="display:none; margin:14px 0 0; color:#c0392b; font-weight:600;" data-i18n="renewPinError">✘ Folio o PIN incorrectos. Verifica ambos, o continúa dejando el PIN en blanco para llenar el formulario de nuevo.</p>
-<p style="margin:10px 0 0; font-size:0.85rem; color:#6b6558;" data-i18n-html="renewForgotPin">¿Olvidaste tu PIN? <a href="#" id="recuperarPinToggle" style="color:var(--teal-deep,#1F4448); font-weight:600;">Recupéralo con el nombre y la fecha de nacimiento de tu mascota</a>, o escríbenos por el botón de WhatsApp en vidavitalqr.com indicando tu código de ficha.</p>
+<p id="renewalPinError" style="display:none; margin:14px 0 0; color:#c0392b; font-weight:600;">✘ Folio o PIN incorrectos. Verifica ambos, o continúa dejando el PIN en blanco para llenar el formulario de nuevo.</p>
+<p style="margin:10px 0 0; font-size:0.85rem; color:#6b6558;">¿Olvidaste tu PIN? <a href="#" id="recuperarPinToggle" style="color:var(--teal-deep,#1F4448); font-weight:600;">Recupéralo con el nombre y la fecha de nacimiento de tu mascota</a>, o escríbenos por el botón de WhatsApp en vidavitalqr.com indicando tu código de ficha.</p>
 <div id="recuperarPinBox" class="no-print" style="display:none; margin-top:14px; padding:14px; background:#fff; border:1px solid var(--line,#DAD3C4); border-radius:10px;">
-<p style="margin:0 0 10px; font-size:0.85rem; color:#6b6558;" data-i18n="recuperarIntro">Para verificar que la ficha es de tu mascota, escribe primero el código de la ficha arriba y luego el nombre y la fecha de nacimiento de tu mascota, tal como los escribiste al crearla.</p>
+<p style="margin:0 0 10px; font-size:0.85rem; color:#6b6558;">Para verificar que la ficha es de tu mascota, escribe primero el código de la ficha arriba y luego el nombre y la fecha de nacimiento de tu mascota, tal como los escribiste al crearla.</p>
 <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:flex-end;">
 <div class="field" style="flex:1; min-width:220px; margin:0;">
-<label data-i18n="recuperarNombreLabel">Nombre de la mascota</label>
-<input type="text" id="recuperarNombreInput" placeholder="Nombre de la mascota" data-i18n-ph="recuperarNombrePh">
+<label>Nombre de la mascota</label>
+<input type="text" id="recuperarNombreInput" placeholder="Nombre de la mascota">
 </div>
 <div class="field" style="flex:1; min-width:160px; margin:0;">
-<label data-i18n="lblFnac">Fecha de nacimiento</label>
+<label>Fecha de nacimiento</label>
 <input type="date" id="recuperarFnacInput">
 </div>
-<button type="button" id="recuperarPinBtn" class="select-btn" style="white-space:nowrap;" data-i18n="btnBuscarPin">Buscar mi PIN</button>
+<button type="button" id="recuperarPinBtn" class="select-btn" style="white-space:nowrap;">Buscar mi PIN</button>
 </div>
-<p id="recuperarPinError" style="display:none; margin:10px 0 0; color:#c0392b; font-weight:600;" data-i18n="recuperarError">✘ No pudimos verificar los datos. Revisa el código de la ficha, el nombre y la fecha de nacimiento de tu mascota.</p>
+<p id="recuperarPinError" style="display:none; margin:10px 0 0; color:#c0392b; font-weight:600;">✘ No pudimos verificar los datos. Revisa el código de la ficha, el nombre y la fecha de nacimiento de tu mascota.</p>
 <div id="recuperarPinOpciones" style="display:none; margin-top:12px; padding-top:12px; border-top:1px dashed var(--line,#DAD3C4);">
-<p style="margin:0 0 10px; font-size:0.85rem; color:#6b6558;" data-i18n="recuperarVerificado">✔ Verificamos los datos. ¿Cómo quieres recibir el PIN?</p>
+<p style="margin:0 0 10px; font-size:0.85rem; color:#6b6558;">✔ Verificamos los datos. ¿Cómo quieres recibir el PIN?</p>
 <div style="display:flex; gap:10px; flex-wrap:wrap;">
-<button type="button" id="recuperarVerBtn" class="select-btn" style="white-space:nowrap;" data-i18n="btnVerPin">Ver el PIN en pantalla (15 seg.)</button>
-<button type="button" id="recuperarCorreoBtn" class="select-btn" style="white-space:nowrap;" data-i18n="btnCorreoPin">Enviármelo por correo</button>
+<button type="button" id="recuperarVerBtn" class="select-btn" style="white-space:nowrap;">Ver el PIN en pantalla (15 seg.)</button>
+<button type="button" id="recuperarCorreoBtn" class="select-btn" style="white-space:nowrap;">Enviármelo por correo</button>
 </div>
 </div>
 <p id="recuperarPinOk" style="display:none; margin:10px 0 0; color:#1a7a3c; font-weight:600;"></p>
 </div>
-<p id="renewalConfirmedMsg" style="display:none; margin:14px 0 0; color:#1a7a3c; font-weight:600;" data-i18n="renewConfirmedMsg">✔ Código confirmado. Completa el formulario y envía para actualizar tu ficha.</p>
-<p id="renewalPrecargadoMsg" style="display:none; margin:6px 0 0; color:#1a7a3c; font-weight:600;" data-i18n="renewPrecargadoMsg">✔ Tus datos anteriores ya se cargaron en el formulario — revisa y edita lo que necesites.</p>
+<p id="renewalConfirmedMsg" style="display:none; margin:14px 0 0; color:#1a7a3c; font-weight:600;">✔ Código confirmado. Completa el formulario y envía para actualizar tu ficha.</p>
+<p id="renewalPrecargadoMsg" style="display:none; margin:6px 0 0; color:#1a7a3c; font-weight:600;">✔ Tus datos anteriores ya se cargaron en el formulario — revisa y edita lo que necesites.</p>
 </div>
 
 <!-- Datos personales -->
 <div class="section">
-<h2><em>1</em><span data-i18n="h2DatosMascota">Datos de la mascota</span></h2>
+<h2><em>1</em>Datos de la mascota</h2>
 <div class="grid">
-<div class="field"><label data-i18n="lblNombreMascota">Nombre de la mascota</label><input type="text" id="nombres"></div>
-<div class="field"><label data-i18n="lblAlias">Alias o sobrenombre</label><input type="text" id="apellidos"></div>
-<div class="field"><label data-i18n="lblFnac">Fecha de nacimiento</label><input type="date" id="fnac"></div>
-<div class="field"><label data-i18n="lblEdad">Edad</label><input type="text" id="edad" readonly placeholder="Calculada automáticamente" data-i18n-ph="edadPh"></div>
-<div class="field"><label data-i18n="lblMicrochip">Número de microchip</label><input type="text" id="microchip" placeholder="Si cuenta con microchip" data-i18n-ph="microchipPh"></div>
-<div class="field"><label data-i18n="lblEspecie">Especie</label>
+<div class="field"><label>Nombre de la mascota</label><input type="text" id="nombres"></div>
+<div class="field"><label>Alias o sobrenombre</label><input type="text" id="apellidos"></div>
+<div class="field"><label>Fecha de nacimiento</label><input type="date" id="fnac"></div>
+<div class="field"><label>Edad</label><input type="text" id="edad" readonly placeholder="Calculada automáticamente"></div>
+<div class="field"><label>Número de microchip</label><input type="text" id="microchip" placeholder="Si cuenta con microchip"></div>
+<div class="field"><label>Especie</label>
 <select id="especie">
-<option value="" data-i18n="optSeleccione">Seleccione…</option>
-<option value="Perro" data-i18n="especiePerro">Perro</option><option value="Gato" data-i18n="especieGato">Gato</option><option value="Otro" data-i18n="especieOtro">Otro</option>
+<option value="">Seleccione…</option>
+<option>Perro</option><option>Gato</option><option>Otro</option>
 </select>
 </div>
 <div class="field">
-<label data-i18n="lblEsterilizado">¿Esterilizado/a?</label>
+<label>¿Esterilizado/a?</label>
 <div class="donor-toggle">
-<label><input type="radio" name="esterilizado" value="Sí"> <span data-i18n="si">Sí</span></label>
-<label><input type="radio" name="esterilizado" value="No" checked> <span data-i18n="no">No</span></label>
+<label><input type="radio" name="esterilizado" value="Sí"> Sí</label>
+<label><input type="radio" name="esterilizado" value="No" checked> No</label>
 </div>
 </div>
 <div class="field" style="position:relative;">
-<label data-i18n="lblRaza">Raza</label>
+<label>Raza</label>
 <div style="display:flex; gap:6px;">
-<input type="text" id="raza" placeholder="Ej. Mestizo, Labrador, Siamés…" style="flex:1;" data-i18n-ph="razaPh">
-<button type="button" id="razaToggle" class="add-row no-print" style="white-space:nowrap;" data-i18n="btnRazasComunes">Razas comunes ▾</button>
+<input type="text" id="raza" placeholder="Ej. Mestizo, Labrador, Siamés…" style="flex:1;">
+<button type="button" id="razaToggle" class="add-row no-print" style="white-space:nowrap;">Razas comunes ▾</button>
 </div>
 <div id="razaDropdown" class="no-print" style="display:none; position:absolute; top:100%; left:0; right:0; z-index:20; background:var(--card); border:1px solid var(--line); border-radius:8px; box-shadow:0 8px 20px rgba(0,0,0,0.15); padding:10px; margin-top:4px; max-height:260px; overflow-y:auto;">
-<div style="font-weight:600; font-size:0.85rem; margin-bottom:4px;" data-i18n="perrosHeading">🐶 Perros</div>
+<div style="font-weight:600; font-size:0.85rem; margin-bottom:4px;">🐶 Perros</div>
 <div id="razaListDog" style="display:flex; flex-wrap:wrap; gap:6px; margin-bottom:10px;"></div>
-<div style="font-weight:600; font-size:0.85rem; margin-bottom:4px;" data-i18n="gatosHeading">🐱 Gatos</div>
+<div style="font-weight:600; font-size:0.85rem; margin-bottom:4px;">🐱 Gatos</div>
 <div id="razaListCat" style="display:flex; flex-wrap:wrap; gap:6px;"></div>
 </div>
 </div>
@@ -333,60 +316,60 @@
 
 <!-- Datos generales -->
 <div class="section">
-<h2><em>2</em><span data-i18n="h2DatosDueno">Datos del dueño o tutor y ubicación</span></h2>
+<h2><em>2</em>Datos del dueño o tutor y ubicación</h2>
 <div class="grid cols3">
-<div class="field"><label data-i18n="lblPais">País</label><input type="text" id="pais" placeholder="Ej. Costa Rica" data-i18n-ph="paisPh"></div>
+<div class="field"><label>País</label><input type="text" id="pais" placeholder="Ej. Costa Rica"></div>
 <div class="field">
-<label data-i18n="lblCiudad">Ciudad / Cantón</label>
+<label>Ciudad / Cantón</label>
 <input type="text" id="ciudad" readonly>
-<select id="cantonSelect" class="no-print" style="display:none;"><option value="" data-i18n="optSeleccioneCanton">Seleccione un cantón…</option></select>
+<select id="cantonSelect" class="no-print" style="display:none;"><option value="">Seleccione un cantón…</option></select>
 </div>
 <div class="field">
-<label data-i18n="lblDistrito">Distrito</label>
-<input type="text" id="distrito" placeholder="Ej. Carmen" data-i18n-ph="distritoPh">
-<select id="distritoSelect" class="no-print" style="display:none;"><option value="" data-i18n="optSeleccioneCantonPrimero">Seleccione un cantón primero…</option></select>
+<label>Distrito</label>
+<input type="text" id="distrito" placeholder="Ej. Carmen">
+<select id="distritoSelect" class="no-print" style="display:none;"><option value="">Seleccione un cantón primero…</option></select>
 </div>
-<div class="field full"><label data-i18n="lblSenales">Otras señales</label><input type="text" id="senales" placeholder="Referencias de ubicación" data-i18n-ph="senalesPh"></div>
+<div class="field full"><label>Otras señales</label><input type="text" id="senales" placeholder="Referencias de ubicación"></div>
 </div>
-<p class="hint" style="margin-top:14px;" data-i18n="hintCorreoObligatorio">El correo del contacto 1 es obligatorio: ahí se enviará el código de acceso (folio y PIN) cada vez que se cree o actualice esta ficha, y también un aviso automático cada vez que alguien escanee el código QR. Cualquier información importante relacionada con la ficha se enviará a este correo.</p>
+<p class="hint" style="margin-top:14px;">El correo del contacto 1 es obligatorio: ahí se enviará el código de acceso (folio y PIN) cada vez que se cree o actualice esta ficha, y también un aviso automático cada vez que alguien escanee el código QR. Cualquier información importante relacionada con la ficha se enviará a este correo.</p>
 <div class="contact-rows">
 <div class="grid cols4">
-<div class="field"><label data-i18n="lblContacto1">Nombre de contacto 1</label><input type="text" id="contacto1"></div>
-<div class="field"><label data-i18n="lblTelefono">Teléfono</label><input type="tel" id="telcontacto1"></div>
-<div class="field"><label data-i18n="lblRelacionMascota">Relación con la mascota</label><input type="text" id="parentesco1" placeholder="Dueño, tutor, cuidador…" data-i18n-ph="relacionPh"></div>
-<div class="field no-print"><label data-i18n="lblCorreoObligatorio">Correo (obligatorio)</label><input type="email" id="emailcontacto1" placeholder="correo@ejemplo.com" required></div>
+<div class="field"><label>Nombre de contacto 1</label><input type="text" id="contacto1"></div>
+<div class="field"><label>Teléfono</label><input type="tel" id="telcontacto1"></div>
+<div class="field"><label>Relación con la mascota</label><input type="text" id="parentesco1" placeholder="Dueño, tutor, cuidador…"></div>
+<div class="field no-print"><label>Correo (obligatorio)</label><input type="email" id="emailcontacto1" placeholder="correo@ejemplo.com" required></div>
 </div>
 <div class="grid cols4">
-<div class="field"><label data-i18n="lblContacto2">Nombre de contacto 2</label><input type="text" id="contacto2"></div>
-<div class="field"><label data-i18n="lblTelefono">Teléfono</label><input type="tel" id="telcontacto2"></div>
-<div class="field"><label data-i18n="lblRelacionMascota">Relación con la mascota</label><input type="text" id="parentesco2" placeholder="Dueño, tutor, cuidador…" data-i18n-ph="relacionPh"></div>
-<div class="field no-print"><label data-i18n="lblCorreoOpcional">Correo (opcional, para el aviso)</label><input type="email" id="emailcontacto2" placeholder="correo@ejemplo.com"></div>
+<div class="field"><label>Nombre de contacto 2</label><input type="text" id="contacto2"></div>
+<div class="field"><label>Teléfono</label><input type="tel" id="telcontacto2"></div>
+<div class="field"><label>Relación con la mascota</label><input type="text" id="parentesco2" placeholder="Dueño, tutor, cuidador…"></div>
+<div class="field no-print"><label>Correo (opcional, para el aviso)</label><input type="email" id="emailcontacto2" placeholder="correo@ejemplo.com"></div>
 </div>
 </div>
 </div>
 
 <!-- Información médica -->
 <div class="section">
-<h2><em>3</em><span data-i18n="h2InfoVeterinaria">Información veterinaria</span></h2>
+<h2><em>3</em>Información veterinaria</h2>
 <div class="grid">
-<div class="field"><label data-i18n="lblVeterinario">Veterinario o clínica de confianza</label><input type="text" id="veterinario" placeholder="Nombre y teléfono" data-i18n-ph="veterinarioPh"></div>
+<div class="field"><label>Veterinario o clínica de confianza</label><input type="text" id="veterinario" placeholder="Nombre y teléfono"></div>
 <div class="field">
-<label data-i18n="lblVacunas">¿Vacunas al día?</label>
+<label>¿Vacunas al día?</label>
 <div class="donor-toggle">
-<label><input type="radio" name="vacunas" value="Sí" checked> <span data-i18n="si">Sí</span></label>
-<label><input type="radio" name="vacunas" value="No"> <span data-i18n="no">No</span></label>
+<label><input type="radio" name="vacunas" value="Sí" checked> Sí</label>
+<label><input type="radio" name="vacunas" value="No"> No</label>
 </div>
 </div>
-<div class="field full"><label data-i18n="lblComentarios">Comentarios importantes</label><textarea id="comentarios" placeholder="Alergias, condiciones médicas, temperamento, indicaciones especiales…" data-i18n-ph="comentariosPh"></textarea></div>
+<div class="field full"><label>Comentarios importantes</label><textarea id="comentarios" placeholder="Alergias, condiciones médicas, temperamento, indicaciones especiales…"></textarea></div>
 </div>
 </div>
 
 <!-- Adjuntos -->
 <div class="section no-print">
-<h2><em>4</em><span data-i18n="h2Archivos">Archivos importantes (.jpg)</span></h2>
-<p class="hint" data-i18n="hintArchivos">Carné de vacunación, certificado de microchip, récipes veterinarios, etc. — solo imágenes .jpg. Cada archivo se agrega como una página adicional dentro del PDF.</p>
+<h2><em>4</em>Archivos importantes (.jpg)</h2>
+<p class="hint">Carné de vacunación, certificado de microchip, récipes veterinarios, etc. — solo imágenes .jpg. Cada archivo se agrega como una página adicional dentro del PDF.</p>
 <div class="drop" id="drop">
-<div data-i18n="dropText">📎 Arrastra tus archivos .jpg aquí o haz clic para seleccionarlos</div>
+<div>📎 Arrastra tus archivos .jpg aquí o haz clic para seleccionarlos</div>
 <input type="file" id="fileInput" accept=".jpg,.jpeg,image/jpeg" multiple>
 </div>
 <ul class="filelist" id="fileList"></ul>
@@ -397,402 +380,15 @@
 
 <!-- Acciones -->
 <div class="actions no-print">
-<button class="btn btn-primary" id="btnEmail" data-i18n="btnEnviar">ENVIAR</button>
-<button class="btn btn-ghost" id="btnReset" data-i18n="btnLimpiar">↺ Limpiar formulario</button>
+<button class="btn btn-primary" id="btnEmail">ENVIAR</button>
+<button class="btn btn-ghost" id="btnReset">↺ Limpiar formulario</button>
 </div>
 
-<footer data-i18n="footerText">VidaVitalQR · Ficha de emergencia personal · Uso restringido a situaciones de emergencia</footer>
+<footer>VidaVitalQR · Ficha de emergencia personal · Uso restringido a situaciones de emergencia</footer>
 </div>
 
 <script>
 const $ = id => document.getElementById(id);
-
-// ============================================================
-// ---- Sistema de idiomas (mismo esquema que el landing page: se sincroniza
-// automáticamente con el idioma elegido en vidavitalqr.com porque esta ficha
-// se abre en una pestaña nueva del MISMO dominio, y por lo tanto comparte el
-// mismo localStorage. También se puede cambiar manualmente aquí, algo
-// necesario cuando la ficha se abre directo desde el código QR (sin haber
-// pasado antes por el landing page). ----
-// ============================================================
-const TEXTOS_FICHA = {
-  es: {
-    subtitle: 'Ficha de datos de la mascota · uso en emergencias',
-    warnBadge: 'Información confidencial de emergencia',
-    lblEdad: 'Edad', lblRaza: 'Raza', lblContactoEmergencia: 'Contacto emergencia', lblTelefono: 'Teléfono',
-    especiePlaceholder: '— ESPECIE —',
-    photoHint: '📷 Foto<br>Clic para subir',
-    renewH2: '🔄 Renovación de ficha existente',
-    renewIntro: 'Ingresa el código que aparece debajo del código QR de tu ficha actual (ejemplo: <b>VVMASCOTA00000012</b>). Si además ingresas el PIN de acceso (te lo mostramos la primera vez que guardaste la ficha), precargamos automáticamente los datos para que solo edites lo que cambió — si no lo tienes a mano, puedes continuar sin PIN y llenar el formulario de nuevo.',
-    renewCodeLabel: 'Código de tu ficha',
-    renewPinLabel: 'PIN de acceso (opcional)',
-    btnContinuar: 'Continuar',
-    renewPinError: '✘ Folio o PIN incorrectos. Verifica ambos, o continúa dejando el PIN en blanco para llenar el formulario de nuevo.',
-    renewForgotPin: '¿Olvidaste tu PIN? <a href="#" id="recuperarPinToggle" style="color:var(--teal-deep,#1F4448); font-weight:600;">Recupéralo con el nombre y la fecha de nacimiento de tu mascota</a>, o escríbenos por el botón de WhatsApp en vidavitalqr.com indicando tu código de ficha.',
-    recuperarIntro: 'Para verificar que la ficha es de tu mascota, escribe primero el código de la ficha arriba y luego el nombre y la fecha de nacimiento de tu mascota, tal como los escribiste al crearla.',
-    recuperarNombreLabel: 'Nombre de la mascota',
-    recuperarNombrePh: 'Nombre de la mascota',
-    lblFnac: 'Fecha de nacimiento',
-    btnBuscarPin: 'Buscar mi PIN',
-    recuperarError: '✘ No pudimos verificar los datos. Revisa el código de la ficha, el nombre y la fecha de nacimiento de tu mascota.',
-    recuperarVerificado: '✔ Verificamos los datos. ¿Cómo quieres recibir el PIN?',
-    btnVerPin: 'Ver el PIN en pantalla (15 seg.)',
-    btnCorreoPin: 'Enviármelo por correo',
-    renewConfirmedMsg: '✔ Código confirmado. Completa el formulario y envía para actualizar tu ficha.',
-    renewPrecargadoMsg: '✔ Tus datos anteriores ya se cargaron en el formulario — revisa y edita lo que necesites.',
-    h2DatosMascota: 'Datos de la mascota',
-    lblNombreMascota: 'Nombre de la mascota', lblAlias: 'Alias o sobrenombre', edadPh: 'Calculada automáticamente',
-    lblMicrochip: 'Número de microchip', microchipPh: 'Si cuenta con microchip',
-    lblEspecie: 'Especie', optSeleccione: 'Seleccione…', especiePerro: 'Perro', especieGato: 'Gato', especieOtro: 'Otro',
-    lblEsterilizado: '¿Esterilizado/a?', si: 'Sí', no: 'No', quitar: 'Quitar',
-    razaPh: 'Ej. Mestizo, Labrador, Siamés…', btnRazasComunes: 'Razas comunes ▾',
-    perrosHeading: '🐶 Perros', gatosHeading: '🐱 Gatos',
-    h2DatosDueno: 'Datos del dueño o tutor y ubicación', lblPais: 'País', paisPh: 'Ej. Costa Rica',
-    lblCiudad: 'Ciudad / Cantón', optSeleccioneCanton: 'Seleccione un cantón…',
-    lblDistrito: 'Distrito', distritoPh: 'Ej. Carmen', optSeleccioneCantonPrimero: 'Seleccione un cantón primero…',
-    lblSenales: 'Otras señales', senalesPh: 'Referencias de ubicación',
-    hintCorreoObligatorio: 'El correo del contacto 1 es obligatorio: ahí se enviará el código de acceso (folio y PIN) cada vez que se cree o actualice esta ficha, y también un aviso automático cada vez que alguien escanee el código QR. Cualquier información importante relacionada con la ficha se enviará a este correo.',
-    lblContacto1: 'Nombre de contacto 1', lblParentesco: 'Parentesco',
-    lblRelacionMascota: 'Relación con la mascota', relacionPh: 'Dueño, tutor, cuidador…',
-    lblCorreoObligatorio: 'Correo (obligatorio)', lblContacto2: 'Nombre de contacto 2', lblCorreoOpcional: 'Correo (opcional, para el aviso)',
-    h2InfoVeterinaria: 'Información veterinaria', lblVeterinario: 'Veterinario o clínica de confianza', veterinarioPh: 'Nombre y teléfono',
-    lblVacunas: '¿Vacunas al día?',
-    lblComentarios: 'Comentarios importantes',
-    comentariosPh: 'Alergias, condiciones médicas, temperamento, indicaciones especiales…',
-    h2Archivos: 'Archivos importantes (.jpg)',
-    hintArchivos: 'Carné de vacunación, certificado de microchip, récipes veterinarios, etc. — solo imágenes .jpg. Cada archivo se agrega como una página adicional dentro del PDF.',
-    dropText: '📎 Arrastra tus archivos .jpg aquí o haz clic para seleccionarlos',
-    btnEnviar: 'ENVIAR', btnLimpiar: '↺ Limpiar formulario',
-    footerText: 'VidaVitalQR · Ficha de emergencia personal · Uso restringido a situaciones de emergencia',
-    // ---- textos generados dinámicamente por JS ----
-    pvNombreDefault: 'Nombre de la mascota',
-    pendiente: '— pendiente —',
-    alertIngresaCodigo: 'Ingresa el código de tu ficha para continuar.',
-    verificando: 'Verificando…',
-    alertPrimeroCodigo: 'Primero escribe el código de la ficha, arriba.',
-    alertCompletaNombreFnac: 'Completa el nombre y la fecha de nacimiento de tu mascota.',
-    buscando: 'Buscando…',
-    noPudimosEnviarCorreo: 'No pudimos enviar el correo. Intenta con la opción de verlo en pantalla.',
-    enviando: 'Enviando…',
-    verPinCuentaAtras: (pin, seg) => `✔ El PIN es: ${pin} — se ocultará en ${seg} segundo${seg === 1 ? '' : 's'}. Cópialo y haz clic en "Continuar".`,
-    verPinOculto: '✔ Por seguridad ocultamos el PIN. Ya quedó cargado arriba — haz clic en "Continuar", o vuelve a mostrarlo si lo necesitas de nuevo.',
-    pinEnviadoCorreo: (correo) => `✔ Enviamos el PIN al correo ${correo}. Ya quedó cargado arriba — haz clic en "Continuar".`,
-    registrado: 'registrado',
-    soloJpg: (nombres) => 'Solo se permiten archivos .jpg. No se agregaron: ' + nombres,
-    paginaAdicional: 'página adicional en el PDF',
-    archivoAdjunto: (nombre) => `Archivo adjunto: ${nombre}`,
-    errorMainCanvas: 'El navegador no pudo generar la imagen de la ficha (mainCanvas vacío). Prueba en otro navegador o desactiva bloqueadores de anuncios/privacidad y vuelve a intentar.',
-    pinModalTitulo: 'Guarda tu PIN de acceso',
-    pinModalTexto: (folio) => `Con el folio (<b>${folio}</b>) y este PIN podrás entrar más adelante a actualizar la ficha de tu mascota sin llenar el formulario de nuevo.`,
-    pinModalAdvertencia: 'Este PIN es único y es indispensable para poder actualizar la ficha en el futuro — guárdalo en un lugar seguro, ya que nadie más podrá verlo.',
-    pinModalNota: 'Este PIN, igual que el resto de la información de la ficha, se guarda de forma protegida — nunca queda visible en ninguna página pública del sitio.',
-    pinModalBtn: 'Ya lo guardé, continuar',
-    alertEmailInvalido: 'El correo del contacto 1 es obligatorio y debe tener un formato válido (por ejemplo, correo@ejemplo.com). Ahí se enviará el código de acceso de esta ficha.',
-    generandoPdf: '⏳ Generando PDF…',
-    errorGenerarPdf: (msg) => 'No se pudo generar el PDF. Detalle: ' + msg + '\n\nIntenta de nuevo, o prueba en otro navegador.',
-    guardandoNube: '⏳ Guardando en la nube…',
-    errorServidor: (status, detalle) => `El servidor respondió ${status}. ${detalle}`.trim(),
-    errorGuardarFicha: (msg) => 'No se pudo guardar la ficha. Detalle: ' + msg + '\n\nPor favor intenta de nuevo. Si el problema continúa, contáctanos.',
-    confirmLimpiar: '¿Limpiar todos los campos del formulario?',
-  },
-  en: {
-    subtitle: 'Pet information card · for use in emergencies',
-    warnBadge: 'Confidential emergency information',
-    lblEdad: 'Age', lblRaza: 'Breed', lblContactoEmergencia: 'Emergency contact', lblTelefono: 'Phone',
-    especiePlaceholder: '— SPECIES —',
-    photoHint: '📷 Photo<br>Click to upload',
-    renewH2: '🔄 Renew an existing card',
-    renewIntro: 'Enter the code shown below the QR code on your current card (example: <b>VVMASCOTA00000012</b>). If you also enter the access PIN (shown to you the first time you saved the card), we\'ll automatically preload the data so you only need to edit what changed — if you don\'t have it handy, you can continue without a PIN and fill out the form again.',
-    renewCodeLabel: 'Your card code',
-    renewPinLabel: 'Access PIN (optional)',
-    btnContinuar: 'Continue',
-    renewPinError: '✘ Incorrect code or PIN. Check both, or continue leaving the PIN blank to fill out the form again.',
-    renewForgotPin: 'Forgot the PIN? <a href="#" id="recuperarPinToggle" style="color:var(--teal-deep,#1F4448); font-weight:600;">Recover it with your pet\'s name and date of birth</a>, or write to us via the WhatsApp button on vidavitalqr.com with your card code.',
-    recuperarIntro: 'To verify the card belongs to your pet, first type the card code above, then your pet\'s name and date of birth exactly as entered when you created it.',
-    recuperarNombreLabel: 'Pet\'s name',
-    recuperarNombrePh: 'Pet\'s name',
-    lblFnac: 'Date of birth',
-    btnBuscarPin: 'Look up my PIN',
-    recuperarError: '✘ We couldn\'t verify the details. Check the card code, and your pet\'s name and date of birth.',
-    recuperarVerificado: '✔ Details verified. How would you like to receive the PIN?',
-    btnVerPin: 'Show the PIN on screen (15 sec.)',
-    btnCorreoPin: 'Send it to my email',
-    renewConfirmedMsg: '✔ Code confirmed. Complete the form and submit to update your card.',
-    renewPrecargadoMsg: '✔ Your previous data has been loaded into the form — review and edit what you need.',
-    h2DatosMascota: 'Pet information',
-    lblNombreMascota: 'Pet\'s name', lblAlias: 'Nickname', edadPh: 'Calculated automatically',
-    lblMicrochip: 'Microchip number', microchipPh: 'If it has a microchip',
-    lblEspecie: 'Species', optSeleccione: 'Select…', especiePerro: 'Dog', especieGato: 'Cat', especieOtro: 'Other',
-    lblEsterilizado: 'Spayed/neutered?', si: 'Yes', no: 'No', quitar: 'Remove',
-    razaPh: 'E.g. Mixed breed, Labrador, Siamese…', btnRazasComunes: 'Common breeds ▾',
-    perrosHeading: '🐶 Dogs', gatosHeading: '🐱 Cats',
-    h2DatosDueno: 'Owner information and location', lblPais: 'Country', paisPh: 'E.g. Costa Rica',
-    lblCiudad: 'City / County', optSeleccioneCanton: 'Select a county…',
-    lblDistrito: 'District', distritoPh: 'E.g. Carmen', optSeleccioneCantonPrimero: 'Select a county first…',
-    lblSenales: 'Other landmarks', senalesPh: 'Location references',
-    hintCorreoObligatorio: 'Contact 1\'s email is required: the access code (folio and PIN) will be sent there every time this card is created or updated, along with an automatic alert every time someone scans the QR code. Any important information related to the card will be sent to this email.',
-    lblContacto1: 'Contact 1 name', lblParentesco: 'Relationship',
-    lblRelacionMascota: 'Relationship to the pet', relacionPh: 'Owner, guardian, caregiver…',
-    lblCorreoObligatorio: 'Email (required)', lblContacto2: 'Contact 2 name', lblCorreoOpcional: 'Email (optional, for the alert)',
-    h2InfoVeterinaria: 'Veterinary information', lblVeterinario: 'Trusted vet or clinic', veterinarioPh: 'Name and phone',
-    lblVacunas: 'Vaccinations up to date?',
-    lblComentarios: 'Important notes',
-    comentariosPh: 'Allergies, medical conditions, temperament, special instructions…',
-    h2Archivos: 'Important files (.jpg)',
-    hintArchivos: 'Vaccination card, microchip certificate, vet prescriptions, etc. — .jpg images only. Each file is added as an extra page in the PDF.',
-    dropText: '📎 Drag your .jpg files here or click to select them',
-    btnEnviar: 'SUBMIT', btnLimpiar: '↺ Clear form',
-    footerText: 'VidaVitalQR · Personal emergency card · For emergency use only',
-    pvNombreDefault: 'Pet\'s name',
-    pendiente: '— pending —',
-    alertIngresaCodigo: 'Enter your card code to continue.',
-    verificando: 'Verifying…',
-    alertPrimeroCodigo: 'First type the card code, above.',
-    alertCompletaNombreFnac: 'Complete your pet\'s name and date of birth.',
-    buscando: 'Searching…',
-    noPudimosEnviarCorreo: 'We couldn\'t send the email. Try the option to view it on screen.',
-    enviando: 'Sending…',
-    verPinCuentaAtras: (pin, seg) => `✔ The PIN is: ${pin} — it will be hidden in ${seg} second${seg === 1 ? '' : 's'}. Copy it and click "Continue".`,
-    verPinOculto: '✔ For security we hid the PIN. It\'s already loaded above — click "Continue", or show it again if you need it.',
-    pinEnviadoCorreo: (correo) => `✔ We sent the PIN to ${correo}. It's already loaded above — click "Continue".`,
-    registrado: 'on file',
-    soloJpg: (nombres) => 'Only .jpg files are allowed. Not added: ' + nombres,
-    paginaAdicional: 'extra page in the PDF',
-    archivoAdjunto: (nombre) => `Attached file: ${nombre}`,
-    errorMainCanvas: 'Your browser could not generate the card image (empty canvas). Try another browser or disable ad/privacy blockers and try again.',
-    pinModalTitulo: 'Save your access PIN',
-    pinModalTexto: (folio) => `With the folio (<b>${folio}</b>) and this PIN you'll be able to come back later to update your pet's card without filling out the form again.`,
-    pinModalAdvertencia: 'This PIN is unique and required to update the card in the future — keep it somewhere safe, since no one else will be able to see it.',
-    pinModalNota: 'This PIN, like the rest of the card\'s information, is stored securely — it is never shown on any public page of the site.',
-    pinModalBtn: 'I saved it, continue',
-    alertEmailInvalido: 'Contact 1\'s email is required and must be a valid format (e.g. name@example.com). The access code for this card will be sent there.',
-    generandoPdf: '⏳ Generating PDF…',
-    errorGenerarPdf: (msg) => 'The PDF could not be generated. Detail: ' + msg + '\n\nTry again, or use another browser.',
-    guardandoNube: '⏳ Saving to the cloud…',
-    errorServidor: (status, detalle) => `The server responded ${status}. ${detalle}`.trim(),
-    errorGuardarFicha: (msg) => 'The card could not be saved. Detail: ' + msg + '\n\nPlease try again. If the problem continues, contact us.',
-    confirmLimpiar: 'Clear all fields in the form?',
-  },
-  fr: {
-    subtitle: 'Fiche de données de l\'animal · à utiliser en cas d\'urgence',
-    warnBadge: 'Information confidentielle d\'urgence',
-    lblEdad: 'Âge', lblRaza: 'Race', lblContactoEmergencia: 'Contact d\'urgence', lblTelefono: 'Téléphone',
-    especiePlaceholder: '— ESPÈCE —',
-    photoHint: '📷 Photo<br>Cliquez pour téléverser',
-    renewH2: '🔄 Renouvellement d\'une fiche existante',
-    renewIntro: 'Entrez le code affiché sous le code QR de la fiche actuelle (exemple : <b>VVMASCOTA00000012</b>). Si vous entrez aussi le code PIN d\'accès (affiché la première fois que vous avez enregistré la fiche), nous préchargeons automatiquement les données pour que vous n\'ayez qu\'à modifier ce qui a changé — si vous ne l\'avez pas sous la main, vous pouvez continuer sans PIN et remplir le formulaire à nouveau.',
-    renewCodeLabel: 'Code de votre fiche',
-    renewPinLabel: 'Code PIN d\'accès (facultatif)',
-    btnContinuar: 'Continuer',
-    renewPinError: '✘ Code ou PIN incorrect. Vérifiez les deux, ou continuez en laissant le PIN vide pour remplir le formulaire à nouveau.',
-    renewForgotPin: 'PIN oublié ? <a href="#" id="recuperarPinToggle" style="color:var(--teal-deep,#1F4448); font-weight:600;">Récupérez-le avec le nom et la date de naissance de votre animal</a>, ou écrivez-nous via le bouton WhatsApp sur vidavitalqr.com en indiquant le code de votre fiche.',
-    recuperarIntro: 'Pour vérifier que la fiche est celle de votre animal, entrez d\'abord le code de la fiche ci-dessus, puis le nom et la date de naissance de votre animal, tels que saisis lors de la création.',
-    recuperarNombreLabel: 'Nom de l\'animal',
-    recuperarNombrePh: 'Nom de l\'animal',
-    lblFnac: 'Date de naissance',
-    btnBuscarPin: 'Rechercher mon PIN',
-    recuperarError: '✘ Nous n\'avons pas pu vérifier les données. Vérifiez le code de la fiche, le nom et la date de naissance de votre animal.',
-    recuperarVerificado: '✔ Données vérifiées. Comment souhaitez-vous recevoir le PIN ?',
-    btnVerPin: 'Afficher le PIN à l\'écran (15 s)',
-    btnCorreoPin: 'Me l\'envoyer par courriel',
-    renewConfirmedMsg: '✔ Code confirmé. Complétez le formulaire et envoyez-le pour mettre à jour votre fiche.',
-    renewPrecargadoMsg: '✔ Vos données précédentes ont été chargées dans le formulaire — vérifiez et modifiez au besoin.',
-    h2DatosMascota: 'Informations sur l\'animal',
-    lblNombreMascota: 'Nom de l\'animal', lblAlias: 'Surnom', edadPh: 'Calculé automatiquement',
-    lblMicrochip: 'Numéro de puce électronique', microchipPh: 'Si l\'animal a une puce',
-    lblEspecie: 'Espèce', optSeleccione: 'Sélectionnez…', especiePerro: 'Chien', especieGato: 'Chat', especieOtro: 'Autre',
-    lblEsterilizado: 'Stérilisé(e) ?', si: 'Oui', no: 'Non', quitar: 'Retirer',
-    razaPh: 'Ex. Bâtard, Labrador, Siamois…', btnRazasComunes: 'Races courantes ▾',
-    perrosHeading: '🐶 Chiens', gatosHeading: '🐱 Chats',
-    h2DatosDueno: 'Informations sur le propriétaire et localisation', lblPais: 'Pays', paisPh: 'Ex. Costa Rica',
-    lblCiudad: 'Ville / Canton', optSeleccioneCanton: 'Sélectionnez un canton…',
-    lblDistrito: 'District', distritoPh: 'Ex. Carmen', optSeleccioneCantonPrimero: 'Sélectionnez d\'abord un canton…',
-    lblSenales: 'Autres repères', senalesPh: 'Références de localisation',
-    hintCorreoObligatorio: 'L\'e-mail du contact 1 est obligatoire : le code d\'accès (folio et PIN) y sera envoyé à chaque création ou mise à jour de cette fiche, ainsi qu\'une alerte automatique chaque fois que quelqu\'un scanne le code QR. Toute information importante liée à la fiche sera envoyée à cet e-mail.',
-    lblContacto1: 'Nom du contact 1', lblParentesco: 'Lien de parenté',
-    lblRelacionMascota: 'Lien avec l\'animal', relacionPh: 'Propriétaire, tuteur, gardien…',
-    lblCorreoObligatorio: 'E-mail (obligatoire)', lblContacto2: 'Nom du contact 2', lblCorreoOpcional: 'E-mail (facultatif, pour l\'alerte)',
-    h2InfoVeterinaria: 'Informations vétérinaires', lblVeterinario: 'Vétérinaire ou clinique de confiance', veterinarioPh: 'Nom et téléphone',
-    lblVacunas: 'Vaccins à jour ?',
-    lblComentarios: 'Remarques importantes',
-    comentariosPh: 'Allergies, pathologies, tempérament, consignes particulières…',
-    h2Archivos: 'Fichiers importants (.jpg)',
-    hintArchivos: 'Carnet de vaccination, certificat de puce électronique, ordonnances vétérinaires, etc. — images .jpg uniquement. Chaque fichier est ajouté comme page supplémentaire dans le PDF.',
-    dropText: '📎 Glissez vos fichiers .jpg ici ou cliquez pour les sélectionner',
-    btnEnviar: 'ENVOYER', btnLimpiar: '↺ Effacer le formulaire',
-    footerText: 'VidaVitalQR · Fiche d\'urgence personnelle · Usage réservé aux situations d\'urgence',
-    pvNombreDefault: 'Nom de l\'animal',
-    pendiente: '— en attente —',
-    alertIngresaCodigo: 'Entrez le code de votre fiche pour continuer.',
-    verificando: 'Vérification…',
-    alertPrimeroCodigo: 'Entrez d\'abord le code de la fiche, ci-dessus.',
-    alertCompletaNombreFnac: 'Complétez le nom et la date de naissance de votre animal.',
-    buscando: 'Recherche…',
-    noPudimosEnviarCorreo: 'Nous n\'avons pas pu envoyer l\'e-mail. Essayez l\'option d\'affichage à l\'écran.',
-    enviando: 'Envoi…',
-    verPinCuentaAtras: (pin, seg) => `✔ Le PIN est : ${pin} — il sera masqué dans ${seg} seconde${seg === 1 ? '' : 's'}. Copiez-le et cliquez sur « Continuer ».`,
-    verPinOculto: '✔ Par sécurité, nous avons masqué le PIN. Il est déjà chargé ci-dessus — cliquez sur « Continuer », ou affichez-le à nouveau si besoin.',
-    pinEnviadoCorreo: (correo) => `✔ Nous avons envoyé le PIN à ${correo}. Il est déjà chargé ci-dessus — cliquez sur « Continuer ».`,
-    registrado: 'enregistré',
-    soloJpg: (nombres) => 'Seuls les fichiers .jpg sont autorisés. Non ajoutés : ' + nombres,
-    paginaAdicional: 'page supplémentaire dans le PDF',
-    archivoAdjunto: (nombre) => `Fichier joint : ${nombre}`,
-    errorMainCanvas: 'Le navigateur n\'a pas pu générer l\'image de la fiche (canevas vide). Essayez un autre navigateur ou désactivez les bloqueurs de publicité/confidentialité et réessayez.',
-    pinModalTitulo: 'Enregistrez votre PIN d\'accès',
-    pinModalTexto: (folio) => `Avec le folio (<b>${folio}</b>) et ce PIN, vous pourrez revenir plus tard mettre à jour la fiche de votre animal sans remplir le formulaire à nouveau.`,
-    pinModalAdvertencia: 'Ce PIN est unique et indispensable pour mettre à jour la fiche à l\'avenir — conservez-le en lieu sûr, car personne d\'autre ne pourra le voir.',
-    pinModalNota: 'Ce PIN, comme le reste des informations de la fiche, est stocké de façon protégée — il n\'apparaît jamais sur une page publique du site.',
-    pinModalBtn: 'Je l\'ai enregistré, continuer',
-    alertEmailInvalido: 'L\'e-mail du contact 1 est obligatoire et doit être valide (ex. nom@exemple.com). Le code d\'accès de cette fiche y sera envoyé.',
-    generandoPdf: '⏳ Génération du PDF…',
-    errorGenerarPdf: (msg) => 'Impossible de générer le PDF. Détail : ' + msg + '\n\nRéessayez, ou utilisez un autre navigateur.',
-    guardandoNube: '⏳ Enregistrement dans le cloud…',
-    errorServidor: (status, detalle) => `Le serveur a répondu ${status}. ${detalle}`.trim(),
-    errorGuardarFicha: (msg) => 'La fiche n\'a pas pu être enregistrée. Détail : ' + msg + '\n\nVeuillez réessayer. Si le problème persiste, contactez-nous.',
-    confirmLimpiar: 'Effacer tous les champs du formulaire ?',
-  },
-  pt: {
-    subtitle: 'Ficha de dados do animal de estimação · uso em emergências',
-    warnBadge: 'Informação confidencial de emergência',
-    lblEdad: 'Idade', lblRaza: 'Raça', lblContactoEmergencia: 'Contato de emergência', lblTelefono: 'Telefone',
-    especiePlaceholder: '— ESPÉCIE —',
-    photoHint: '📷 Foto<br>Clique para enviar',
-    renewH2: '🔄 Renovação de ficha existente',
-    renewIntro: 'Digite o código que aparece abaixo do código QR da ficha atual (exemplo: <b>VVMASCOTA00000012</b>). Se você também digitar o PIN de acesso (mostrado a primeira vez que salvou a ficha), pré-carregamos os dados automaticamente para que só edite o que mudou — se não tiver em mãos, pode continuar sem PIN e preencher o formulário novamente.',
-    renewCodeLabel: 'Código da sua ficha',
-    renewPinLabel: 'PIN de acesso (opcional)',
-    btnContinuar: 'Continuar',
-    renewPinError: '✘ Código ou PIN incorretos. Verifique ambos, ou continue deixando o PIN em branco para preencher o formulário novamente.',
-    renewForgotPin: 'Esqueceu o PIN? <a href="#" id="recuperarPinToggle" style="color:var(--teal-deep,#1F4448); font-weight:600;">Recupere-o com o nome e a data de nascimento da sua mascota</a>, ou escreva-nos pelo botão do WhatsApp em vidavitalqr.com indicando o código da sua ficha.',
-    recuperarIntro: 'Para verificar que a ficha é da sua mascota, digite primeiro o código da ficha acima e depois o nome e a data de nascimento da sua mascota, exatamente como você digitou ao criá-la.',
-    recuperarNombreLabel: 'Nome da mascota',
-    recuperarNombrePh: 'Nome da mascota',
-    lblFnac: 'Data de nascimento',
-    btnBuscarPin: 'Buscar meu PIN',
-    recuperarError: '✘ Não conseguimos verificar os dados. Revise o código da ficha, o nome e a data de nascimento da sua mascota.',
-    recuperarVerificado: '✔ Verificamos os dados. Como deseja receber o PIN?',
-    btnVerPin: 'Ver o PIN na tela (15 seg.)',
-    btnCorreoPin: 'Enviar por e-mail',
-    renewConfirmedMsg: '✔ Código confirmado. Complete o formulário e envie para atualizar sua ficha.',
-    renewPrecargadoMsg: '✔ Seus dados anteriores já foram carregados no formulário — revise e edite o que precisar.',
-    h2DatosMascota: 'Dados da mascota',
-    lblNombreMascota: 'Nome da mascota', lblAlias: 'Apelido', edadPh: 'Calculada automaticamente',
-    lblMicrochip: 'Número do microchip', microchipPh: 'Se tiver microchip',
-    lblEspecie: 'Espécie', optSeleccione: 'Selecione…', especiePerro: 'Cachorro', especieGato: 'Gato', especieOtro: 'Outro',
-    lblEsterilizado: 'Castrado(a)?', si: 'Sim', no: 'Não', quitar: 'Remover',
-    razaPh: 'Ex. Vira-lata, Labrador, Siamês…', btnRazasComunes: 'Raças comuns ▾',
-    perrosHeading: '🐶 Cachorros', gatosHeading: '🐱 Gatos',
-    h2DatosDueno: 'Dados do dono ou tutor e localização', lblPais: 'País', paisPh: 'Ex. Costa Rica',
-    lblCiudad: 'Cidade / Município', optSeleccioneCanton: 'Selecione um município…',
-    lblDistrito: 'Distrito', distritoPh: 'Ex. Carmen', optSeleccioneCantonPrimero: 'Selecione um município primeiro…',
-    lblSenales: 'Outros sinais', senalesPh: 'Referências de localização',
-    hintCorreoObligatorio: 'O e-mail do contato 1 é obrigatório: nele será enviado o código de acesso (folio e PIN) sempre que esta ficha for criada ou atualizada, além de um aviso automático sempre que alguém escanear o código QR. Qualquer informação importante relacionada à ficha será enviada a esse e-mail.',
-    lblContacto1: 'Nome do contato 1', lblParentesco: 'Parentesco',
-    lblRelacionMascota: 'Relação com a mascota', relacionPh: 'Dono, tutor, cuidador…',
-    lblCorreoObligatorio: 'E-mail (obrigatório)', lblContacto2: 'Nome do contato 2', lblCorreoOpcional: 'E-mail (opcional, para o aviso)',
-    h2InfoVeterinaria: 'Informação veterinária', lblVeterinario: 'Veterinário ou clínica de confiança', veterinarioPh: 'Nome e telefone',
-    lblVacunas: 'Vacinas em dia?',
-    lblComentarios: 'Comentários importantes',
-    comentariosPh: 'Alergias, condições médicas, temperamento, indicações especiais…',
-    h2Archivos: 'Arquivos importantes (.jpg)',
-    hintArchivos: 'Carteirinha de vacinação, certificado de microchip, receitas veterinárias, etc. — apenas imagens .jpg. Cada arquivo é adicionado como uma página extra no PDF.',
-    dropText: '📎 Arraste seus arquivos .jpg aqui ou clique para selecioná-los',
-    btnEnviar: 'ENVIAR', btnLimpiar: '↺ Limpar formulário',
-    footerText: 'VidaVitalQR · Ficha de emergência pessoal · Uso restrito a situações de emergência',
-    pvNombreDefault: 'Nome da mascota',
-    pendiente: '— pendente —',
-    alertIngresaCodigo: 'Digite o código da sua ficha para continuar.',
-    verificando: 'Verificando…',
-    alertPrimeroCodigo: 'Primeiro digite o código da ficha, acima.',
-    alertCompletaNombreFnac: 'Complete o nome e a data de nascimento da sua mascota.',
-    buscando: 'Buscando…',
-    noPudimosEnviarCorreo: 'Não conseguimos enviar o e-mail. Tente a opção de ver na tela.',
-    enviando: 'Enviando…',
-    verPinCuentaAtras: (pin, seg) => `✔ O PIN é: ${pin} — será ocultado em ${seg} segundo${seg === 1 ? '' : 's'}. Copie-o e clique em "Continuar".`,
-    verPinOculto: '✔ Por segurança ocultamos o PIN. Já está carregado acima — clique em "Continuar", ou mostre-o novamente se precisar.',
-    pinEnviadoCorreo: (correo) => `✔ Enviamos o PIN para o e-mail ${correo}. Já está carregado acima — clique em "Continuar".`,
-    registrado: 'registrado',
-    soloJpg: (nombres) => 'Só são permitidos arquivos .jpg. Não foram adicionados: ' + nombres,
-    paginaAdicional: 'página extra no PDF',
-    archivoAdjunto: (nombre) => `Arquivo anexado: ${nombre}`,
-    errorMainCanvas: 'O navegador não conseguiu gerar a imagem da ficha (canvas vazio). Tente outro navegador ou desative bloqueadores de anúncios/privacidade e tente novamente.',
-    pinModalTitulo: 'Guarde seu PIN de acesso',
-    pinModalTexto: (folio) => `Com o folio (<b>${folio}</b>) e este PIN você poderá entrar depois para atualizar a ficha da sua mascota sem preencher o formulário novamente.`,
-    pinModalAdvertencia: 'Este PIN é único e indispensável para atualizar a ficha no futuro — guarde-o em local seguro, pois mais ninguém poderá vê-lo.',
-    pinModalNota: 'Este PIN, assim como o restante das informações da ficha, é guardado de forma protegida — nunca fica visível em nenhuma página pública do site.',
-    pinModalBtn: 'Já guardei, continuar',
-    alertEmailInvalido: 'O e-mail do contato 1 é obrigatório e deve ter um formato válido (por exemplo, nome@exemplo.com). O código de acesso desta ficha será enviado para lá.',
-    generandoPdf: '⏳ Gerando PDF…',
-    errorGenerarPdf: (msg) => 'Não foi possível gerar o PDF. Detalhe: ' + msg + '\n\nTente novamente, ou use outro navegador.',
-    guardandoNube: '⏳ Salvando na nuvem…',
-    errorServidor: (status, detalle) => `O servidor respondeu ${status}. ${detalle}`.trim(),
-    errorGuardarFicha: (msg) => 'Não foi possível salvar a ficha. Detalhe: ' + msg + '\n\nPor favor, tente novamente. Se o problema continuar, entre em contato.',
-    confirmLimpiar: 'Limpar todos os campos do formulário?',
-  },
-};
-
-let LANG_FICHA = 'es';
-function T(){ return TEXTOS_FICHA[LANG_FICHA] || TEXTOS_FICHA.es; }
-
-function aplicarIdiomaFicha(lang){
-  const dic = TEXTOS_FICHA[lang] ? lang : 'es';
-  LANG_FICHA = dic;
-  const t = TEXTOS_FICHA[dic];
-  document.documentElement.lang = dic;
-  document.querySelectorAll('[data-i18n]').forEach(el => {
-    const key = el.getAttribute('data-i18n');
-    if (t[key] !== undefined) el.textContent = t[key];
-  });
-  document.querySelectorAll('[data-i18n-html]').forEach(el => {
-    const key = el.getAttribute('data-i18n-html');
-    if (t[key] !== undefined) el.innerHTML = t[key];
-  });
-  document.querySelectorAll('[data-i18n-ph]').forEach(el => {
-    const key = el.getAttribute('data-i18n-ph');
-    if (t[key] !== undefined) el.placeholder = t[key];
-  });
-  document.querySelectorAll('[data-i18n-title]').forEach(el => {
-    const key = el.getAttribute('data-i18n-title');
-    if (t[key] !== undefined) el.title = t[key];
-  });
-  document.querySelectorAll('.langbar button').forEach(b => {
-    b.classList.toggle('activo', b.dataset.lang === dic);
-  });
-  try{ localStorage.setItem('vidavitalqr_lang', dic); }catch(e){}
-  // el título de la pestaña también se traduce
-  try{
-    document.title = dic === 'en' ? 'VidaVitalQR Pets · Emergency Card'
-      : dic === 'fr' ? 'VidaVitalQR Animaux · Fiche d\'urgence'
-      : dic === 'pt' ? 'VidaVitalQR Mascotas · Ficha de Emergência'
-      : 'VidaVitalQR Mascotas · Ficha de Emergencia';
-  }catch(e){}
-  if (typeof updatePreview === 'function') updatePreview();
-  // si la renovación está pendiente de código, refleja el texto "pendiente" ya traducido
-  const counterEl = $('counterNum');
-  if (counterEl && counterEl.dataset.pendiente === '1') counterEl.textContent = t.pendiente;
-}
-
-document.getElementById('langbar').addEventListener('click', (e) => {
-  const btn = e.target.closest('button[data-lang]');
-  if (!btn) return;
-  aplicarIdiomaFicha(btn.dataset.lang);
-});
-
-(function(){
-  let preferido = null;
-  try{ preferido = localStorage.getItem('vidavitalqr_lang'); }catch(e){}
-  if (!preferido) {
-    try{
-      const urlLang = new URLSearchParams(window.location.search).get('lang');
-      if (urlLang && TEXTOS_FICHA[urlLang]) preferido = urlLang;
-    }catch(e){}
-  }
-  if (!preferido) {
-    const nav = (navigator.language || 'es').slice(0,2).toLowerCase();
-    if (TEXTOS_FICHA[nav]) preferido = nav;
-  }
-  aplicarIdiomaFicha(preferido || 'es');
-})();
 
 // ---- página de pago de VidaVitalQR a la que se regresa tras enviar la ficha ----
 const PAYMENT_URL = 'https://vidavitalqr.com/';
@@ -891,15 +487,14 @@ $('photoRemove').addEventListener('click', e => {
   if (esRenovacion) {
     // No se incrementa el contador global: el folio lo aporta el propio cliente,
     // reutilizando el código que ya tiene, para que el QR existente no cambie.
-    $('counterNum').textContent = T().pendiente;
-    $('counterNum').dataset.pendiente = '1';
+    $('counterNum').textContent = '— pendiente —';
     $('renewalGate').style.display = 'block';
     $('btnEmail').disabled = true;
 
     $('renewalConfirmBtn').addEventListener('click', async () => {
       const codigo = $('renewalCodeInput').value.trim().toUpperCase();
       const pin = $('renewalPinInput').value.trim().toUpperCase();
-      if (!codigo) { alert(T().alertIngresaCodigo); return; }
+      if (!codigo) { alert('Ingresa el código de tu ficha para continuar.'); return; }
 
       $('renewalPinError').style.display = 'none';
       const btn = $('renewalConfirmBtn');
@@ -907,12 +502,12 @@ $('photoRemove').addEventListener('click', e => {
 
       if (pin) {
         btn.disabled = true;
-        btn.textContent = T().verificando;
+        btn.textContent = 'Verificando…';
         try{
           const resp = await fetch('/.netlify/functions/login-ficha', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({ folio: codigo, pin }),
+            body: JSON.stringify({ folio: codigo, pin, tipo: 'Mascota' }),
           });
           if (!resp.ok) {
             $('renewalPinError').style.display = 'block';
@@ -932,7 +527,6 @@ $('photoRemove').addEventListener('click', e => {
       }
 
       $('counterNum').textContent = codigo;
-      $('counterNum').dataset.pendiente = '';
       $('renewalConfirmedMsg').style.display = 'block';
       $('renewalCodeInput').disabled = true;
       $('renewalPinInput').disabled = true;
@@ -967,19 +561,19 @@ $('photoRemove').addEventListener('click', e => {
       detenerCuentaAtras();
       pinRecuperado = null;
 
-      if (!folio) { alert(T().alertPrimeroCodigo); return; }
-      if (!nombreCompleto || !fnac) { alert(T().alertCompletaNombreFnac); return; }
+      if (!folio) { alert('Primero escribe el código de la ficha, arriba.'); return; }
+      if (!nombreCompleto || !fnac) { alert('Completa el nombre y la fecha de nacimiento de tu mascota.'); return; }
 
       const btn = $('recuperarPinBtn');
       const textoOriginal = btn.textContent;
       btn.disabled = true;
-      btn.textContent = T().buscando;
+      btn.textContent = 'Buscando…';
 
       try{
         const resp = await fetch('/.netlify/functions/recuperar-ficha', {
           method: 'POST',
           headers: {'Content-Type': 'application/json'},
-          body: JSON.stringify({ folio, nombreCompleto, fnac }),
+          body: JSON.stringify({ folio, nombreCompleto, fnac, tipo: 'Mascota' }),
         });
         if (!resp.ok) {
           $('recuperarPinError').style.display = 'block';
@@ -1008,7 +602,7 @@ $('photoRemove').addEventListener('click', e => {
 
       let segundos = 15;
       const actualizarMensaje = () => {
-        $('recuperarPinOk').textContent = T().verPinCuentaAtras(pinRecuperado, segundos);
+        $('recuperarPinOk').textContent = `✔ El PIN es: ${pinRecuperado} — se ocultará en ${segundos} segundo${segundos === 1 ? '' : 's'}. Cópialo y haz clic en "Continuar".`;
         $('recuperarPinOk').style.display = 'block';
       };
       actualizarMensaje();
@@ -1017,7 +611,7 @@ $('photoRemove').addEventListener('click', e => {
         if (segundos <= 0) {
           detenerCuentaAtras();
           $('renewalPinInput').type = 'password';
-          $('recuperarPinOk').textContent = T().verPinOculto;
+          $('recuperarPinOk').textContent = '✔ Por seguridad ocultamos el PIN. Ya quedó cargado arriba — haz clic en "Continuar", o vuelve a mostrarlo si lo necesitas de nuevo.';
           return;
         }
         actualizarMensaje();
@@ -1034,29 +628,29 @@ $('photoRemove').addEventListener('click', e => {
       const btn = $('recuperarCorreoBtn');
       const textoOriginal = btn.textContent;
       btn.disabled = true;
-      btn.textContent = T().enviando;
+      btn.textContent = 'Enviando…';
       $('recuperarPinError').style.display = 'none';
 
       try{
         const resp = await fetch('/.netlify/functions/recuperar-ficha', {
           method: 'POST',
           headers: {'Content-Type': 'application/json'},
-          body: JSON.stringify({ folio, nombreCompleto, fnac, accion: 'correo' }),
+          body: JSON.stringify({ folio, nombreCompleto, fnac, accion: 'correo', tipo: 'Mascota' }),
         });
         const data = await resp.json().catch(() => ({}));
         if (!resp.ok || !data.ok) {
           $('recuperarPinOk').style.display = 'none';
-          $('recuperarPinError').textContent = data.error || T().noPudimosEnviarCorreo;
+          $('recuperarPinError').textContent = data.error || 'No pudimos enviar el correo. Intenta con la opción de verlo en pantalla.';
           $('recuperarPinError').style.display = 'block';
           return;
         }
         detenerCuentaAtras();
         $('renewalPinInput').type = 'password';
         $('renewalPinInput').value = pinRecuperado;
-        $('recuperarPinOk').textContent = T().pinEnviadoCorreo(data.correo || T().registrado);
+        $('recuperarPinOk').textContent = `✔ Enviamos el PIN al correo ${data.correo || 'registrado'}. Ya quedó cargado arriba — haz clic en "Continuar".`;
         $('recuperarPinOk').style.display = 'block';
       }catch(err){
-        $('recuperarPinError').textContent = T().noPudimosEnviarCorreo;
+        $('recuperarPinError').textContent = 'No pudimos enviar el correo. Intenta con la opción de verlo en pantalla.';
         $('recuperarPinError').style.display = 'block';
       }finally{
         btn.disabled = false;
@@ -1274,16 +868,10 @@ previewFields.forEach(id => $(id).addEventListener('input', updatePreview));
 $('especie').addEventListener('change', updatePreview);
 document.querySelectorAll('input[name="esterilizado"]').forEach(r => r.addEventListener('change', updatePreview));
 
-function especieDisplay(valor){
-  if (valor === 'Perro') return T().especiePerro;
-  if (valor === 'Gato') return T().especieGato;
-  if (valor === 'Otro') return T().especieOtro;
-  return '';
-}
 function updatePreview(){
   const nombreCompleto = [$('nombres').value, $('apellidos').value].filter(Boolean).join(' ');
-  $('pvNombre').textContent = nombreCompleto || T().pvNombreDefault;
-  $('pvBlood').textContent = $('especie').value ? especieDisplay($('especie').value) : T().especiePlaceholder;
+  $('pvNombre').textContent = nombreCompleto || 'Nombre de la mascota';
+  $('pvBlood').textContent = $('especie').value ? $('especie').value : '— ESPECIE —';
   $('pvEdad').textContent = $('edad').value || '—';
   $('pvDoc').textContent = $('raza').value || '—';
   $('pvContacto').textContent = $('contacto1').value || '—';
@@ -1312,7 +900,7 @@ async function addFiles(list){
     if(isJpg(f)) nuevos.push(f); else rejected.push(f.name);
   });
   if(rejected.length){
-    alert(T().soloJpg(rejected.join(', ')));
+    alert('Solo se permiten archivos .jpg. No se agregaron: ' + rejected.join(', '));
   }
   for (const f of nuevos) {
     const dataUrlOriginal = await new Promise((resolve, reject) => {
@@ -1333,10 +921,10 @@ function renderFiles(){
   attachments.forEach((a,i) => {
     const li = document.createElement('li');
     const sizeInfo = a.size ? `(${(a.size/1024).toFixed(0)} KB) · ` : '';
-    li.innerHTML = `<span>📄 ${a.name} <span style="color:var(--slate)">${sizeInfo}${T().paginaAdicional}</span></span>`;
+    li.innerHTML = `<span>📄 ${a.name} <span style="color:var(--slate)">${sizeInfo}página adicional en el PDF</span></span>`;
     const btn = document.createElement('button');
     btn.textContent = '✕';
-    btn.title = T().quitar;
+    btn.title = 'Quitar';
     btn.addEventListener('click', () => { attachments.splice(i,1); renderFiles(); buildPrintAttachments(); });
     li.appendChild(btn);
     ul.appendChild(li);
@@ -1353,7 +941,7 @@ function buildPrintAttachments(){
     page.className = 'print-attachment-page';
     const title = document.createElement('div');
     title.className = 'print-attachment-title';
-    title.textContent = T().archivoAdjunto(a.name);
+    title.textContent = `Archivo adjunto: ${a.name}`;
     page.appendChild(title);
     const img = document.createElement('img');
     img.src = a.dataUrl;
@@ -1365,7 +953,7 @@ function buildPrintAttachments(){
 // ---- generar el PDF real (diseño de la ficha + páginas de fotos .jpg) ----
 async function generatePdfBlob(){
   const { jsPDF } = window.jspdf;
-  const noPrintEls = Array.from(document.querySelectorAll('.no-print')).filter(el => el.id !== 'openCounter');
+  const noPrintEls = Array.from(document.querySelectorAll('.no-print'));
   const prevDisplays = noPrintEls.map(el => el.style.display);
   noPrintEls.forEach(el => { el.style.display = 'none'; });
 
@@ -1376,7 +964,7 @@ async function generatePdfBlob(){
   });
 
   if (!mainCanvas || !mainCanvas.width || !mainCanvas.height) {
-    throw new Error(T().errorMainCanvas);
+    throw new Error('El navegador no pudo generar la imagen de la ficha (mainCanvas vacío). Prueba en otro navegador o desactiva bloqueadores de anuncios/privacidad y vuelve a intentar.');
   }
 
   // ---- Tamaño de página carta (Letter, 8.5"x11") en puntos, con márgenes ----
@@ -1460,19 +1048,23 @@ function goToPayment(folio){
 
 // ---- muestra en pantalla el PIN de acceso recién generado, y espera a que el usuario lo
 // confirme antes de continuar (así se asegura de que lo vio y lo guardó) ----
-function mostrarPinModal(pin, folio){
+function mostrarPinModal(pin, folio, qrUrl){
   return new Promise((resolve) => {
     const overlay = document.createElement('div');
     overlay.style.cssText = 'position:fixed;inset:0;background:rgba(18,40,43,0.72);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px;';
     overlay.innerHTML = `
       <div style="background:#fff;border-radius:16px;max-width:420px;width:100%;padding:28px 26px;text-align:center;font-family:inherit;">
         <div style="font-size:2rem;">🔑</div>
-        <h3 style="margin:10px 0 6px;">${T().pinModalTitulo}</h3>
-        <p style="margin:0 0 10px;color:#444;font-size:0.95rem;">${T().pinModalTexto(folio)}</p>
-        <p style="margin:0 0 16px;color:#8A3A16;font-size:0.9rem;font-weight:600;">${T().pinModalAdvertencia}</p>
+        <h3 style="margin:10px 0 6px;">Guarda tu PIN de acceso</h3>
+        <p style="margin:0 0 10px;color:#444;font-size:0.95rem;">Con el folio (<b>${folio}</b>) y este PIN podrás entrar más adelante a actualizar la ficha de tu mascota sin llenar el formulario de nuevo.</p>
+        <p style="margin:0 0 16px;color:#8A3A16;font-size:0.9rem;font-weight:600;">Este PIN es único y es indispensable para poder actualizar la ficha en el futuro — guárdalo en un lugar seguro, ya que nadie más podrá verlo.</p>
         <div style="font-family:'Courier New',monospace;font-size:1.8rem;font-weight:700;letter-spacing:4px;background:#F7F4EE;border:2px dashed #C1552F;border-radius:10px;padding:14px;margin-bottom:16px;">${pin}</div>
-        <p style="margin:0 0 16px;color:#666;font-size:0.82rem;">${T().pinModalNota}</p>
-        <button type="button" id="pinModalCerrar" style="background:#1F4448;color:#fff;border:none;border-radius:8px;padding:12px 20px;font-weight:700;cursor:pointer;width:100%;">${T().pinModalBtn}</button>
+        ${qrUrl ? `
+        <p style="margin:0 0 8px;color:#444;font-size:0.9rem;">Este es el código QR de tu mascota — también lo enviamos por correo al contacto de emergencia registrado:</p>
+        <img src="${qrUrl}" alt="Código QR de la ficha ${folio}" style="width:160px;height:auto;margin:0 auto 16px;display:block;border:1px solid #E1DACB;border-radius:8px;">
+        ` : ''}
+        <p style="margin:0 0 16px;color:#666;font-size:0.82rem;">Este PIN, igual que el resto de la información de la ficha, se guarda de forma protegida — nunca queda visible en ninguna página pública del sitio.</p>
+        <button type="button" id="pinModalCerrar" style="background:#1F4448;color:#fff;border:none;border-radius:8px;padding:12px 20px;font-weight:700;cursor:pointer;width:100%;">Ya lo guardé, continuar</button>
       </div>`;
     document.body.appendChild(overlay);
     overlay.querySelector('#pinModalCerrar').addEventListener('click', () => {
@@ -1545,7 +1137,7 @@ function emailValido(str){
 
 $('btnEmail').addEventListener('click', async () => {
   if (!emailValido($('emailcontacto1').value)) {
-    alert(T().alertEmailInvalido);
+    alert('El correo del contacto 1 es obligatorio y debe tener un formato válido (por ejemplo, correo@ejemplo.com). Ahí se enviará el código de acceso de esta ficha.');
     $('emailcontacto1').focus();
     return;
   }
@@ -1553,7 +1145,7 @@ $('btnEmail').addEventListener('click', async () => {
   const btn = $('btnEmail');
   const originalText = btn.textContent;
   btn.disabled = true;
-  btn.textContent = T().generandoPdf;
+  btn.textContent = '⏳ Generando PDF…';
 
   const folio = $('counterNum').textContent.trim() || 'VidaVitalQR';
   const filename = `${folio}.pdf`;
@@ -1563,14 +1155,14 @@ $('btnEmail').addEventListener('click', async () => {
     pdfBlob = await generatePdfBlob();
   }catch(err){
     console.error('Error generando el PDF:', err);
-    alert(T().errorGenerarPdf(err && err.message ? err.message : err));
+    alert('No se pudo generar el PDF. Detalle: ' + (err && err.message ? err.message : err) + '\n\nIntenta de nuevo, o prueba en otro navegador.');
     btn.disabled = false;
     btn.textContent = originalText;
     return;
   }
 
   try{
-    btn.textContent = T().guardandoNube;
+    btn.textContent = '⏳ Guardando en la nube…';
     const pdfBase64 = await blobToBase64(pdfBlob);
     const nombreCompleto = [$('nombres').value, $('apellidos').value].filter(Boolean).join(' ') || 'Sin nombre';
     const fotoBase64 = ($('photoImg').style.display !== 'none' && $('photoImg').src.startsWith('data:')) ? $('photoImg').src : null;
@@ -1619,20 +1211,21 @@ $('btnEmail').addEventListener('click', async () => {
     if(!resp.ok){
       let detalle = '';
       try{ detalle = await resp.text(); }catch(e){}
-      throw new Error(T().errorServidor(resp.status, detalle));
+      throw new Error(`El servidor respondió ${resp.status}. ${detalle}`.trim());
     }
 
     let pinNuevo = null;
-    try{ const respJson = await resp.json(); pinNuevo = respJson && respJson.pin; }catch(e){}
+    let qrUrlGenerado = null;
+    try{ const respJson = await resp.json(); pinNuevo = respJson && respJson.pin; qrUrlGenerado = respJson && respJson.qrUrl; }catch(e){}
 
     if (pinNuevo) {
-      await mostrarPinModal(pinNuevo, folio);
+      await mostrarPinModal(pinNuevo, folio, qrUrlGenerado);
     }
 
     goToPayment(folio);
   }catch(err){
     console.error('Error guardando la ficha en la nube:', err);
-    alert(T().errorGuardarFicha(err && err.message ? err.message : err));
+    alert('No se pudo guardar la ficha. Detalle: ' + (err && err.message ? err.message : err) + '\n\nPor favor intenta de nuevo. Si el problema continúa, contáctanos.');
   }finally{
     btn.disabled = false;
     btn.textContent = originalText;
@@ -1654,7 +1247,7 @@ function limpiarFormularioFicha(){
 }
 
 $('btnReset').addEventListener('click', () => {
-  if(!confirm(T().confirmLimpiar)) return;
+  if(!confirm('¿Limpiar todos los campos del formulario?')) return;
   limpiarFormularioFicha();
 });
 
