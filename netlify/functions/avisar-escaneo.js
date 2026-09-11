@@ -89,14 +89,20 @@ async function avisarContactos(datos, ubicacionTexto) {
   if (contactosConCorreo.length === 0) return;
 
   const esTipoMascota = datos.tipo === 'Mascota';
+  const esTipoObjeto = datos.tipo === 'Objeto';
   const asunto = esTipoMascota
     ? `⚠️ Alguien escaneó el código QR de ${datos.nombreCompleto || 'su mascota'}`
+    : esTipoObjeto
+    ? `⚠️ Alguien escaneó el código QR de ${datos.nombreCompleto || 'su objeto'}`
     : `⚠️ Alguien escaneó el código QR de emergencia de ${datos.nombreCompleto || 'un usuario'}`;
 
+  const descTipo = esTipoMascota ? 'la mascota' : (esTipoObjeto ? 'el objeto' : 'la ficha de emergencia de');
   const cuerpo = [
-    `El código QR de ${esTipoMascota ? 'la mascota' : 'la ficha de emergencia de'} "${datos.nombreCompleto || 'Sin nombre'}" (folio ${datos.folio}) fue escaneado el ${fechaHoraCR()} (hora de Costa Rica).`,
+    `El código QR de ${descTipo} "${datos.nombreCompleto || 'Sin nombre'}" (folio ${datos.folio}) fue escaneado el ${fechaHoraCR()} (hora de Costa Rica).`,
     '',
-    'Esto puede significar que alguien está tratando de contactarlo(a) por una emergencia, o que la mascota fue encontrada.',
+    esTipoObjeto
+      ? 'Esto puede significar que el objeto fue encontrado por alguien.'
+      : 'Esto puede significar que alguien está tratando de contactarlo(a) por una emergencia, o que la mascota fue encontrada.',
     '',
     ubicacionTexto || '',
     datos.pdfUrl ? `Ficha completa: ${datos.pdfUrl}` : '',
@@ -150,10 +156,10 @@ exports.handler = async (event) => {
 
   // ---- vuelve a leer la ficha completa de S3 a partir del folio — nunca se confía en datos de
   // contacto ni PDF que pudieran venir del navegador, solo en el folio para ubicarla ----
-  const carpetaPreferida = folio.startsWith('VVMASCOTA') ? 'mascotas' : (folio.startsWith('VVITALQR') ? 'personas' : null);
+  const carpetaPreferida = folio.startsWith('VVMASCOTA') ? 'mascotas' : (folio.startsWith('VVOBJETO') ? 'objetos' : (folio.startsWith('VVITALQR') ? 'personas' : null));
   const rutasPosibles = carpetaPreferida
     ? [`${carpetaPreferida}/datos/${folio}.json`, `datos/${folio}.json`]
-    : [`datos/${folio}.json`, `personas/datos/${folio}.json`, `mascotas/datos/${folio}.json`];
+    : [`datos/${folio}.json`, `personas/datos/${folio}.json`, `mascotas/datos/${folio}.json`, `objetos/datos/${folio}.json`];
 
   let datos;
   try {
