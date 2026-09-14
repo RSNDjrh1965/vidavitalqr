@@ -249,22 +249,23 @@
 </div>
 </div>
 
-<!-- Aviso de renovación: solo se muestra si se llega con ?renovar=1 en la URL -->
+<!-- Aviso de renovación/actualización: solo se muestra si se llega con ?renovar=1 o ?actualizar=1 en la URL -->
 <div class="section no-print" id="renewalGate" style="display:none; border:2px solid var(--red,#c0392b); background:#fff6f0;">
-<h2 style="margin-top:0;" data-i18n="renewH2">🔄 Renovación de ficha existente</h2>
-<p style="margin:0 0 14px;" data-i18n-html="renewIntro">Ingresa el código que aparece debajo del código QR de tu ficha actual (ejemplo: <b>VVMASCOTA00000012</b>). Si además ingresas el PIN de acceso (te lo mostramos la primera vez que guardaste la ficha), precargamos automáticamente los datos para que solo edites lo que cambió — si no lo tienes a mano, puedes continuar sin PIN y llenar el formulario de nuevo.</p>
+<h2 style="margin-top:0;" id="renewalGateTitle" data-i18n="renewH2">🔄 Renovación de ficha existente</h2>
+<p style="margin:0 0 14px;" id="renewalGateIntro" data-i18n-html="renewIntro">Ingresa el código que aparece debajo del código QR de tu ficha actual (ejemplo: <b>VVMASCOTA00000012</b>). Si además ingresas el PIN de acceso (te lo mostramos la primera vez que guardaste la ficha), precargamos automáticamente los datos para que solo edites lo que cambió — si no lo tienes a mano, puedes continuar sin PIN y llenar el formulario de nuevo.</p>
 <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:flex-end;">
 <div class="field" style="flex:1; min-width:220px; margin:0;">
 <label data-i18n="renewCodeLabel">Código de tu ficha</label>
 <input type="text" id="renewalCodeInput" placeholder="VVMASCOTA00000012" style="text-transform:uppercase;">
 </div>
 <div class="field" style="flex:1; min-width:160px; margin:0;">
-<label data-i18n="renewPinLabel">PIN de acceso (opcional)</label>
+<label id="renewalPinLabel" data-i18n="renewPinLabel">PIN de acceso (opcional)</label>
 <input type="text" id="renewalPinInput" placeholder="Ej. 3U7D3D" style="text-transform:uppercase;" maxlength="6">
 </div>
 <button type="button" id="renewalConfirmBtn" class="select-btn" style="white-space:nowrap;" data-i18n="btnContinuar">Continuar</button>
 </div>
 <p id="renewalPinError" style="display:none; margin:14px 0 0; color:#c0392b; font-weight:600;" data-i18n="renewPinError">✘ Folio o PIN incorrectos. Verifica ambos, o continúa dejando el PIN en blanco para llenar el formulario de nuevo.</p>
+<p id="renewalVencidoNotice" style="display:none; margin:14px 0 0; padding:12px 14px; background:#fff0ee; border:1px solid #c0392b; border-radius:10px; color:#7a2418; font-weight:600;">⚠ Esta ficha lleva más de 12 meses desde su último pago, así que ya no se puede actualizar gratis. Para editar sus datos primero debe renovar el pago — use el botón "Renovar" en la página principal (vidavitalqr.com) para ponerla al día.</p>
 <p style="margin:10px 0 0; font-size:0.85rem; color:#6b6558;" data-i18n-html="renewForgotPin">¿Olvidaste tu PIN? <a href="#" id="recuperarPinToggle" style="color:var(--teal-deep,#1F4448); font-weight:600;">Recupéralo con el nombre y la fecha de nacimiento de tu mascota</a>, o escríbenos por el botón de WhatsApp en vidavitalqr.com indicando tu código de ficha.</p>
 <div id="recuperarPinBox" class="no-print" style="display:none; margin-top:14px; padding:14px; background:#fff; border:1px solid var(--line,#DAD3C4); border-radius:10px;">
 <p style="margin:0 0 10px; font-size:0.85rem; color:#6b6558;" data-i18n="recuperarIntro">Para verificar que la ficha es de tu mascota, escribe primero el código de la ficha arriba y luego el nombre y la fecha de nacimiento de tu mascota, tal como los escribiste al crearla.</p>
@@ -892,11 +893,22 @@ $('photoRemove').addEventListener('click', e => {
     }
   }
 
-  // ---- ¿Es una renovación? (llegó con ?renovar=1 en la URL) ----
+  // ---- ¿Es una renovación (?renovar=1) o una actualización de datos (?actualizar=1)? ----
   const params = new URLSearchParams(window.location.search);
-  const esRenovacion = params.get('renovar') === '1';
+  const modoFicha = params.get('actualizar') === '1' ? 'actualizar' : (params.get('renovar') === '1' ? 'renovar' : null);
+  const esRenovacion = modoFicha === 'renovar';
+  const esActualizacion = modoFicha === 'actualizar';
 
-  if (esRenovacion) {
+  // ---- ¿ya pasaron 12 meses desde el último pago (campo "creado")? ----
+  function mesesTranscurridos(fechaIso) {
+    if (!fechaIso) return 0;
+    const inicio = new Date(fechaIso);
+    if (isNaN(inicio.getTime())) return 0;
+    const ms = Date.now() - inicio.getTime();
+    return ms / (1000 * 60 * 60 * 24 * 30.44);
+  }
+
+  if (modoFicha) {
     // No se incrementa el contador global: el folio lo aporta el propio cliente,
     // reutilizando el código que ya tiene, para que el QR existente no cambie.
     $('counterNum').textContent = T().pendiente;
@@ -904,12 +916,20 @@ $('photoRemove').addEventListener('click', e => {
     $('renewalGate').style.display = 'block';
     $('btnEmail').disabled = true;
 
+    if (esActualizacion) {
+      $('renewalGateTitle').textContent = '✏️ Actualización de ficha existente';
+      $('renewalGateIntro').innerHTML = 'Ingresa el código de la ficha actual y el PIN de acceso (te lo mostramos la primera vez que la guardaste) para poder editar los datos. El PIN es obligatorio aquí, porque necesitamos verificar que la membresía anual siga vigente antes de dejarte actualizar gratis.';
+      $('renewalPinLabel').textContent = 'PIN de acceso (obligatorio)';
+    }
+
     $('renewalConfirmBtn').addEventListener('click', async () => {
       const codigo = $('renewalCodeInput').value.trim().toUpperCase();
       const pin = $('renewalPinInput').value.trim().toUpperCase();
       if (!codigo) { alert(T().alertIngresaCodigo); return; }
+      if (esActualizacion && !pin) { alert('Para actualizar los datos también necesitas ingresar el PIN de acceso.'); return; }
 
       $('renewalPinError').style.display = 'none';
+      $('renewalVencidoNotice').style.display = 'none';
       const btn = $('renewalConfirmBtn');
       const textoOriginal = btn.textContent;
 
@@ -929,6 +949,14 @@ $('photoRemove').addEventListener('click', e => {
             return;
           }
           const data = await resp.json();
+
+          if (esActualizacion && mesesTranscurridos(data.creado) >= 12) {
+            $('renewalVencidoNotice').style.display = 'block';
+            btn.disabled = false;
+            btn.textContent = textoOriginal;
+            return;
+          }
+
           precargarDatosFicha(data.datosFormulario);
           $('renewalPrecargadoMsg').style.display = 'block';
         }catch(err){
@@ -1625,7 +1653,7 @@ $('btnEmail').addEventListener('click', async () => {
     const resp = await fetch('/.netlify/functions/send-ficha', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({ folio, filename, pdfBase64, nombreCompleto, tipo: 'Mascota', fotoBase64, contactos, datosVisor, datosFormulario })
+      body: JSON.stringify({ folio, filename, pdfBase64, nombreCompleto, tipo: 'Mascota', fotoBase64, contactos, datosVisor, datosFormulario, esRenovacionPago: esRenovacion })
     });
 
     if(!resp.ok){
