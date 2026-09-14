@@ -96,7 +96,11 @@ exports.handler = async (event) => {
     return {
       statusCode: 200,
       headers,
-      body: JSON.stringify({ ok: true, folio, datosFormulario: registro.datosFormulario || {} }),
+      // "creado" es la fecha de inicio de vigencia de la membresía anual (se preserva entre
+      // actualizaciones y solo se reinicia cuando se paga una renovación) — la usa el frontend
+      // para saber si ya pasaron los 12 meses y bloquear la actualización gratuita hasta que se
+      // renueve el pago.
+      body: JSON.stringify({ ok: true, folio, datosFormulario: registro.datosFormulario || {}, creado: registro.creado || null }),
     };
   } catch (err) {
     const noExiste = err.name === 'NoSuchKey' || err.Code === 'NoSuchKey' || err.$metadata?.httpStatusCode === 404;

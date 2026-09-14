@@ -110,7 +110,7 @@ function carpetaTipo(tipo, folio) {
 // — nunca se cambia solo, para no dejar al usuario sin acceso. Si el registro es de una versión
 // anterior que solo guardaba el hash (sin el texto plano), se genera un PIN nuevo esta vez, para
 // que a partir de ahora también quede recuperable.
-async function cargarOCrearLogin(s3, folio, datosFormulario, carpeta) {
+async function cargarOCrearLogin(s3, folio, datosFormulario, carpeta, resetCreado) {
   const key = `${carpeta}/login/${folio}.json`;
   const keyLegacy = `login/${folio}.json`;
   let registro = null;
@@ -143,7 +143,11 @@ async function cargarOCrearLogin(s3, folio, datosFormulario, carpeta) {
     pin,
     pinHash: esNuevo ? hashPin(pin) : registro.pinHash,
     datosFormulario: datosFormulario && typeof datosFormulario === 'object' ? datosFormulario : {},
-    creado: (registro && registro.creado) ? registro.creado : new Date().toISOString(),
+    // "creado" marca el inicio de la vigencia anual (12 meses). Se conserva tal cual en una
+    // actualización normal de datos; solo se reinicia a "ahora" cuando el envío viene marcado
+    // explícitamente como una renovación pagada (resetCreado === true) — así vuelve a contar
+    // los 12 meses desde ese pago.
+    creado: resetCreado ? new Date().toISOString() : ((registro && registro.creado) ? registro.creado : new Date().toISOString()),
     actualizado: new Date().toISOString(),
   };
 
@@ -369,7 +373,7 @@ exports.handler = async (event) => {
     return { statusCode: 400, headers, body: JSON.stringify({ error: 'JSON inválido.' }) };
   }
 
-  const { folio, filename, pdfBase64, nombreCompleto, tipo, fotoBase64, tarjetaBase64, placaEstilo, contactos, datosVisor, datosFormulario } = payload;
+  const { folio, filename, pdfBase64, nombreCompleto, tipo, fotoBase64, tarjetaBase64, placaEstilo, contactos, datosVisor, datosFormulario, esRenovacionPago } = payload;
 
   if (!pdfBase64 || !filename) {
     return {
@@ -395,7 +399,7 @@ exports.handler = async (event) => {
     // vigente en la columna "PIN" de resumen.xlsx en el mismo guardado.
     let pinActual = '';
     if (folio) {
-      const login = await cargarOCrearLogin(s3, folio, datosFormulario, carpeta);
+      const login = await cargarOCrearLogin(s3, folio, datosFormulario, carpeta, esRenovacionPago === true);
       pinActual = login.pin || '';
       if (login.esNuevo) pinNuevo = login.pin;
       // se envía en cada guardado (ficha nueva o actualización), no solo cuando el PIN es nuevo,
