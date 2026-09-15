@@ -1752,6 +1752,7 @@
             <div class="ficha-ref-row" id="fichaRefRow" style="display:none; flex-direction:column; align-items:flex-start; gap:4px;">
               <div id="fichaRefPersonaLine" style="display:none;"><span>Ficha de persona asociada:</span> <strong id="fichaRefId"></strong></div>
               <div id="fichaRefMascotaLine" style="display:none;"><span>Ficha de mascota asociada:</span> <strong id="fichaRefIdMascota"></strong></div>
+              <div id="fichaRefObjetoLine" style="display:none;"><span>Ficha de objeto asociada:</span> <strong id="fichaRefIdObjeto"></strong></div>
             </div>
 
             <div id="cxStep">
@@ -1761,6 +1762,10 @@
               </div>
 
               <form id="cxForm">
+                <div class="field" id="cxRealEmailField" style="display:none;">
+                  <label for="cxRealEmail">Correo electrónico (para el recibo)</label>
+                  <input type="email" id="cxRealEmail" placeholder="correo@ejemplo.com">
+                </div>
                 <div class="pay-fields" id="cxFieldsCard">
                   <div class="field">
                     <label for="cxName">Nombre en la tarjeta</label>
@@ -1794,7 +1799,8 @@
                 <p class="select-note" id="cxEmptyNote" style="display:none;">Aún no ha seleccionado nada. Use "Agregar a mi pago" en la renovación o en una presentación física para verlo aquí.</p>
 
                 <button type="submit" class="checkout-pay-btn" id="cxPayBtn">Pagar $7.00 (demo)</button>
-                <div class="checkout-demo-note">Mockup de checkout &mdash; demostración únicamente. No se procesa ningún cobro real ni se envía ningún correo real.</div>
+                <div class="checkout-demo-note" id="cxDemoNote">Mockup de checkout &mdash; demostración únicamente. No se procesa ningún cobro real ni se envía ningún correo real.</div>
+                <div class="checkout-demo-note" id="cxRealError" style="display:none; color:#b42318;"></div>
               </form>
             </div>
 
@@ -1934,6 +1940,16 @@
 
 <script>
 (function(){
+  // ---- folios de las fichas asociadas (persona/mascota/objeto), usados para el pago real de
+  //      renovación con ONVO Pay. Declarados aquí, en el ámbito global de este script, porque se
+  //      usan en renderOrder()/iniciarPagoReal() (fuera del IIFE syncFichaRef donde se calculan) —
+  //      el mismo patrón de bug que "esRenovacion is not defined": una variable que solo se declara
+  //      dentro de un IIFE interno no existe fuera de él. syncFichaRef() más abajo solo les asigna
+  //      valor, no las vuelve a declarar. ----
+  var personaFolio = '';
+  var mascotaFolio = '';
+  var objetoFolio = '';
+
   // ---- checkout demo: selección de productos y resumen dinámico ----
   var ITEMS = {
     renewal:          { label: 'Renovación anual VidaVitalQR — Persona', price: 7.00 },
@@ -2004,14 +2020,15 @@
     if (estilo) { window.VVQR_PLACA_ESTILO = estilo; }
   }
 
-  // ---- referencia de fichas asociadas (persona y/o mascota): llegan por ?fichaId= y/o ?fichaIdMascota=,
-  //      y se recuerdan en sessionStorage para que, si se completan las dos fichas por separado,
-  //      ambas queden visibles juntas en el recuadro de pago ----
+  // ---- referencia de fichas asociadas (persona, mascota y/o objeto): llegan por ?fichaId=,
+  //      ?fichaIdMascota= y/o ?fichaIdObjeto=, y se recuerdan en sessionStorage para que, si se
+  //      completan varias fichas por separado, todas queden visibles juntas en el recuadro de pago ----
   (function syncFichaRef(){
     var params;
     try { params = new URLSearchParams(window.location.search); } catch (e) { return; }
     var fichaId = params.get('fichaId');
     var fichaIdMascota = params.get('fichaIdMascota');
+    var fichaIdObjeto = params.get('fichaIdObjeto');
 
     function remember(key, value){
       try {
@@ -2020,16 +2037,19 @@
       } catch (e) { return value || ''; }
     }
 
-    var personaFolio = remember('vvqr_ficha_persona', fichaId);
-    var mascotaFolio = remember('vvqr_ficha_mascota', fichaIdMascota);
+    personaFolio = remember('vvqr_ficha_persona', fichaId);
+    mascotaFolio = remember('vvqr_ficha_mascota', fichaIdMascota);
+    objetoFolio = remember('vvqr_ficha_objeto', fichaIdObjeto);
 
-    if (!personaFolio && !mascotaFolio) return;
+    if (!personaFolio && !mascotaFolio && !objetoFolio) return;
 
     var refRow = document.getElementById('fichaRefRow');
     var personaLine = document.getElementById('fichaRefPersonaLine');
     var mascotaLine = document.getElementById('fichaRefMascotaLine');
+    var objetoLine = document.getElementById('fichaRefObjetoLine');
     var refId = document.getElementById('fichaRefId');
     var refIdMascota = document.getElementById('fichaRefIdMascota');
+    var refIdObjeto = document.getElementById('fichaRefIdObjeto');
 
     if (refRow) refRow.style.display = '';
     if (personaFolio && personaLine && refId) {
@@ -2040,13 +2060,45 @@
       refIdMascota.textContent = mascotaFolio;
       mascotaLine.style.display = '';
     }
+    if (objetoFolio && objetoLine && refIdObjeto) {
+      refIdObjeto.textContent = objetoFolio;
+      objetoLine.style.display = '';
+    }
 
-    if (fichaId || fichaIdMascota) {
+    if (fichaId || fichaIdMascota || fichaIdObjeto) {
       var payBox = document.getElementById('pago-seguro');
       if (payBox) {
         window.setTimeout(function(){
           payBox.scrollIntoView({ behavior: 'smooth', block: 'start' });
         }, 300);
+      }
+    }
+  })();
+
+  // ---- resultado del pago real al volver de ONVO Pay (?pago=exitoso|cancelado&folio=...) ----
+  (function mostrarResultadoPago(){
+    var params;
+    try { params = new URLSearchParams(window.location.search); } catch (e) { return; }
+    var pago = params.get('pago');
+    if (!pago) return;
+
+    window.setTimeout(function(){
+      var payBox = document.getElementById('pago-seguro');
+      if (payBox) payBox.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 300);
+
+    if (pago === 'exitoso') {
+      var cxStepEl = document.getElementById('cxStep');
+      var cxSuccessEl = document.getElementById('cxSuccess');
+      var cxSuccessDetailEl = document.getElementById('cxSuccessDetail');
+      if (cxStepEl) cxStepEl.style.display = 'none';
+      if (cxSuccessEl) cxSuccessEl.style.display = '';
+      if (cxSuccessDetailEl) cxSuccessDetailEl.innerHTML = 'ONVO Pay confirmó su pago. En unos minutos quedará reflejado en su ficha.';
+    } else if (pago === 'cancelado') {
+      var errBox = document.getElementById('cxRealError');
+      if (errBox) {
+        errBox.textContent = 'El pago fue cancelado. Puede intentarlo de nuevo cuando quiera.';
+        errBox.style.display = '';
       }
     }
   })();
@@ -2108,7 +2160,51 @@
     cxOrder.innerHTML = html;
 
     cxAmount.textContent = fmt(total);
-    cxPayBtn.textContent = 'Pagar ' + fmt(total) + ' (demo)';
+
+    // ---- pago real con ONVO Pay: solo cuando lo único seleccionado es UNA renovación anual
+    //      (persona, mascota u objeto) y ya tenemos el folio de esa ficha. Cualquier otra
+    //      combinación (productos físicos, o varias renovaciones a la vez) sigue usando el
+    //      mockup de checkout de siempre, sin cambios. ----
+    var soloUnaRenovacion = (keys.length === 1 && RENEWAL_ITEMS.indexOf(keys[0]) !== -1);
+    var tipoRenov = soloUnaRenovacion ? (ITEM_TIPO[keys[0]] || '') : '';
+    var folioRenov = tipoRenov ? folioParaTipo(tipoRenov) : '';
+    var modoReal = !!folioRenov;
+
+    cxForm.dataset.modoReal = modoReal ? '1' : '';
+    cxForm.dataset.tipoRenov = tipoRenov;
+    cxForm.dataset.folioRenov = folioRenov;
+
+    var elMethodTabs = document.querySelector('.method-tabs');
+    var elFieldsCard = document.getElementById('cxFieldsCard');
+    var elFieldsSinpe = document.getElementById('cxFieldsSinpe');
+    var elRealEmailField = document.getElementById('cxRealEmailField');
+    var elDemoNote = document.getElementById('cxDemoNote');
+    if (elMethodTabs) elMethodTabs.style.display = modoReal ? 'none' : '';
+    if (elFieldsCard) {
+      elFieldsCard.style.display = modoReal ? 'none' : '';
+      elFieldsCard.querySelectorAll('[required]').forEach(function(el){ el.disabled = modoReal; });
+    }
+    if (elFieldsSinpe) {
+      // en modo real la ocultamos de forma explícita; en modo demo, dejamos que setMethod()
+      // (según la pestaña Tarjeta/SINPE activa) siga controlando su visibilidad, como siempre.
+      if (modoReal) {
+        elFieldsSinpe.style.display = 'none';
+        elFieldsSinpe.querySelectorAll('[required]').forEach(function(el){ el.disabled = true; });
+      } else {
+        elFieldsSinpe.style.display = '';
+      }
+    }
+    if (elRealEmailField) elRealEmailField.style.display = modoReal ? '' : 'none';
+    if (elDemoNote) elDemoNote.style.display = modoReal ? 'none' : '';
+
+    cxPayBtn.textContent = modoReal ? ('Pagar ' + fmt(total) + ' con ONVO Pay') : ('Pagar ' + fmt(total) + ' (demo)');
+  }
+
+  function folioParaTipo(tipo){
+    if (tipo === 'persona') return personaFolio;
+    if (tipo === 'mascota') return mascotaFolio;
+    if (tipo === 'objeto') return objetoFolio;
+    return '';
   }
 
   selectBtns.forEach(function(btn){
@@ -2202,6 +2298,11 @@
     var keys = Object.keys(ITEMS).filter(function(k){ return selected[k]; });
     if (keys.length === 0) { return; }
 
+    if (cxForm.dataset.modoReal === '1') {
+      iniciarPagoReal();
+      return;
+    }
+
     var labels = keys.map(function(k){ return ITEMS[k].label; }).join(', ');
     var subtotal = keys.reduce(function(sum, k){ return sum + ITEMS[k].price; }, 0);
     var total = subtotal * (1 + IVA_RATE);
@@ -2209,6 +2310,56 @@
     cxStep.style.display = 'none';
     cxSuccess.style.display = '';
   });
+
+  // ---- pago real de renovación con ONVO Pay (modo prueba): crea la sesión de checkout en el
+  //      backend y redirige al cliente a la página de pago alojada por ONVO. ----
+  function iniciarPagoReal(){
+    var tipo = cxForm.dataset.tipoRenov;
+    var folio = cxForm.dataset.folioRenov;
+    var emailInput = document.getElementById('cxRealEmail');
+    var errorBox = document.getElementById('cxRealError');
+    var email = (emailInput && emailInput.value || '').trim();
+
+    if (errorBox) { errorBox.style.display = 'none'; errorBox.textContent = ''; }
+
+    if (!tipo || !folio) {
+      if (errorBox) { errorBox.textContent = 'No se encontró el folio de la ficha. Vuelva a abrirla desde "Renovar" antes de pagar.'; errorBox.style.display = ''; }
+      return;
+    }
+    if (!email) {
+      if (errorBox) { errorBox.textContent = 'Ingrese su correo electrónico para continuar.'; errorBox.style.display = ''; }
+      if (emailInput) emailInput.focus();
+      return;
+    }
+
+    var textoOriginal = cxPayBtn.textContent;
+    cxPayBtn.disabled = true;
+    cxPayBtn.textContent = 'Conectando con ONVO Pay…';
+
+    fetch('/.netlify/functions/crear-pago', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ tipo: tipo, folio: folio, email: email })
+    })
+      .then(function(resp){
+        return resp.json().catch(function(){ return null; }).then(function(json){ return { ok: resp.ok, json: json }; });
+      })
+      .then(function(result){
+        if (!result.ok || !result.json || !result.json.url) {
+          throw new Error((result.json && result.json.error) || 'No se pudo iniciar el pago.');
+        }
+        window.location.href = result.json.url;
+      })
+      .catch(function(err){
+        cxPayBtn.disabled = false;
+        cxPayBtn.textContent = textoOriginal;
+        if (errorBox) {
+          errorBox.textContent = 'No se pudo iniciar el pago con ONVO Pay. Intente de nuevo en unos segundos.';
+          errorBox.style.display = '';
+        }
+        console.error('Error al iniciar pago con ONVO Pay:', err);
+      });
+  }
 
   // ---- botón "Ver detalles legales" (privacidad) ----
   var privacyBtn = document.getElementById('privacyToggleBtn');
