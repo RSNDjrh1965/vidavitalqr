@@ -356,6 +356,12 @@ const $ = id => document.getElementById(id);
 // ---- página de pago de VidaVitalQR a la que se regresa tras enviar la ficha ----
 const PAYMENT_URL = 'https://vidavitalqr.com/';
 
+// ---- ¿Es una renovación pagada (?renovar=1)? Declarada aquí, en el ámbito global del script,
+//      porque se usa al enviar el formulario (fuera del IIFE del contador/renovación donde
+//      antes vivía solo esta variable — eso causaba "esRenovacion is not defined" al hacer
+//      clic en "Enviar"). El IIFE de más abajo solo la actualiza, no la vuelve a declarar. ----
+let esRenovacion = false;
+
 // ---- comprime/redimensiona una imagen (dataURL) antes de guardarla o enviarla, para que las
 // fotos tomadas con el celular (que pueden pesar varios MB) no hagan que el envío al servidor
 // sea rechazado por exceder el límite de tamaño permitido ----
@@ -431,7 +437,7 @@ $('photoRemove').addEventListener('click', e => {
   // ---- ¿Es una renovación (?renovar=1) o una actualización de datos (?actualizar=1)? ----
   const params = new URLSearchParams(window.location.search);
   const modoFicha = params.get('actualizar') === '1' ? 'actualizar' : (params.get('renovar') === '1' ? 'renovar' : null);
-  const esRenovacion = modoFicha === 'renovar';
+  esRenovacion = modoFicha === 'renovar';
   const esActualizacion = modoFicha === 'actualizar';
 
   // ---- ¿ya pasaron 12 meses desde el último pago (campo "creado")? ----

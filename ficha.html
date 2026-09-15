@@ -426,6 +426,12 @@ const PAYMENT_URL = 'https://vidavitalqr.com/';
 //      causaba "placaEstilo is not defined" al hacer clic en "Enviar"). ----
 const placaEstilo = new URLSearchParams(window.location.search).get('placaEstilo') || '';
 
+// ---- ¿Es una renovación pagada (?renovar=1)? Declarada aquí, en el ámbito global del script,
+//      porque se usa al enviar el formulario (fuera del IIFE del contador/renovación donde
+//      antes vivía solo esta variable — eso causaba "esRenovacion is not defined" al hacer
+//      clic en "Enviar"). El IIFE de más abajo solo la actualiza, no la vuelve a declarar. ----
+let esRenovacion = false;
+
 // ---- edad automática ----
 $('fnac').addEventListener('input', () => {
   const v = $('fnac').value;
@@ -516,7 +522,7 @@ $('photoRemove').addEventListener('click', e => {
   // ---- ¿Es una renovación (?renovar=1) o una actualización de datos (?actualizar=1)? ----
   const params = new URLSearchParams(window.location.search);
   const modoFicha = params.get('actualizar') === '1' ? 'actualizar' : (params.get('renovar') === '1' ? 'renovar' : null);
-  const esRenovacion = modoFicha === 'renovar';
+  esRenovacion = modoFicha === 'renovar';
   const esActualizacion = modoFicha === 'actualizar';
   // (placaEstilo ahora se lee en el ámbito global del script, más arriba, para que también
   // esté disponible al enviar el formulario — ver la nota junto a su declaración.)

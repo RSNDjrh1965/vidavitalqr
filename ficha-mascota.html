@@ -408,6 +408,12 @@
 <script>
 const $ = id => document.getElementById(id);
 
+// ---- ¿Es una renovación pagada (?renovar=1)? Declarada aquí, en el ámbito global del script,
+//      porque se usa al enviar el formulario (fuera del IIFE del contador/renovación donde
+//      antes vivía solo esta variable — eso causaba "esRenovacion is not defined" al hacer
+//      clic en "Enviar"). El IIFE de más abajo solo la actualiza, no la vuelve a declarar. ----
+let esRenovacion = false;
+
 // ============================================================
 // ---- Sistema de idiomas (mismo esquema que el landing page: se sincroniza
 // automáticamente con el idioma elegido en vidavitalqr.com porque esta ficha
@@ -896,7 +902,7 @@ $('photoRemove').addEventListener('click', e => {
   // ---- ¿Es una renovación (?renovar=1) o una actualización de datos (?actualizar=1)? ----
   const params = new URLSearchParams(window.location.search);
   const modoFicha = params.get('actualizar') === '1' ? 'actualizar' : (params.get('renovar') === '1' ? 'renovar' : null);
-  const esRenovacion = modoFicha === 'renovar';
+  esRenovacion = modoFicha === 'renovar';
   const esActualizacion = modoFicha === 'actualizar';
 
   // ---- ¿ya pasaron 12 meses desde el último pago (campo "creado")? ----
