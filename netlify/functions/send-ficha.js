@@ -173,16 +173,23 @@ async function cargarOCrearLogin(s3, folio, datosFormulario, carpeta, resetCread
 // Nota: este correo lleva solo el folio y el PIN — el código QR nunca se envía por correo, solo
 // se muestra en pantalla al momento de generar o renovar la ficha (a petición explícita del
 // usuario, 2026-09-11).
+// Devuelve { intentados, fallidos: [{email, status, detalle}] } para que quien la llama pueda
+// registrar/avisar si Resend rechazó el envío a algún contacto (antes esto se perdía en
+// silencio: un fetch() que responde con un error HTTP —por ejemplo 403 "dominio no
+// verificado" o "solo se puede enviar a tu propio correo mientras el dominio no esté
+// verificado"— NO hace que la promesa de fetch() se rechace, así que el .catch() de antes
+// nunca se disparaba y el problema quedaba invisible, tanto para quien revisa los logs de
+// Netlify como en el correo de aviso al administrador).
 async function enviarCodigoPorCorreo(contactos, { folio, pin, nombreCompleto, tipo }) {
   const apiKey = process.env.RESEND_API_KEY;
-  if (!apiKey || !folio || !pin) return;
+  if (!apiKey || !folio || !pin) return { intentados: 0, fallidos: [] };
 
   const correos = Array.from(new Set(
     (Array.isArray(contactos) ? contactos : [])
       .map((c) => (c && c.email ? String(c.email).trim() : ''))
       .filter(Boolean)
   ));
-  if (correos.length === 0) return;
+  if (correos.length === 0) return { intentados: 0, fallidos: [] };
 
   const deQuien = nombreCompleto ? ` de "${nombreCompleto}"` : '';
   const asunto = `Código de acceso a la ficha VidaVitalQR${deQuien} — ${folio}`;
@@ -200,17 +207,30 @@ async function enviarCodigoPorCorreo(contactos, { folio, pin, nombreCompleto, ti
     'Este es un correo automático de VidaVitalQR.',
   ].join('\n');
 
+  const fallidos = [];
+
   const envios = correos.map((email) =>
     fetch('https://api.resend.com/emails', {
       method: 'POST',
       headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({ from: REMITENTE, to: [email], subject: asunto, text: cuerpo }),
-    }).catch((err) => {
-      console.error('No se pudo enviar el código a', email, err);
     })
+      .then(async (resp) => {
+        if (!resp.ok) {
+          let detalle = '';
+          try { detalle = JSON.stringify(await resp.json()); } catch (e) { try { detalle = await resp.text(); } catch (e2) {} }
+          console.error('Resend rechazó el código de acceso para', email, '— status', resp.status, detalle);
+          fallidos.push({ email, status: resp.status, detalle });
+        }
+      })
+      .catch((err) => {
+        console.error('No se pudo enviar el código a', email, err);
+        fallidos.push({ email, status: null, detalle: String(err && err.message ? err.message : err) });
+      })
   );
 
   await Promise.allSettled(envios);
+  return { intentados: correos.length, fallidos };
 }
 
 async function subirABuckets(s3, region, { folio, filename, pdfBase64, fotoBase64, tarjetaBase64, placaEstilo, nombreCompleto, tipo, contactos, datosVisor }) {
@@ -388,6 +408,7 @@ exports.handler = async (event) => {
   let pdfUrl = '', fotoUrl = '', qrUrl = '', qrSvg = '', tarjetaUrl = '';
   let s3Error = null;
   let pinNuevo = null;
+  let codigoCorreoFallidos = [];
   const carpeta = carpetaTipo(tipo, folio);
   try {
     const region = process.env.S3_REGION || 'us-east-1';
@@ -405,7 +426,10 @@ exports.handler = async (event) => {
       // se envía en cada guardado (ficha nueva o actualización), no solo cuando el PIN es nuevo,
       // para que los contactos de emergencia siempre tengan a la mano el folio y el PIN vigentes
       // (el código QR no se envía por correo — solo se muestra en pantalla)
-      await enviarCodigoPorCorreo(contactos, { folio, pin: pinActual, nombreCompleto, tipo });
+      const resultadoCodigo = await enviarCodigoPorCorreo(contactos, { folio, pin: pinActual, nombreCompleto, tipo });
+      if (resultadoCodigo && resultadoCodigo.fallidos && resultadoCodigo.fallidos.length) {
+        codigoCorreoFallidos = resultadoCodigo.fallidos;
+      }
     }
 
     // resumen.xlsx separado por tipo (personas/resumen.xlsx y mascotas/resumen.xlsx), para
@@ -447,6 +471,13 @@ exports.handler = async (event) => {
   if (tarjetaUrl) lineasExtra.push(`Tarjeta Identificador QR: ${tarjetaUrl}`);
   if (placaEstilo) lineasExtra.push(`Estilo de placa elegido: ${etiquetaPlacaEstilo(placaEstilo)}`);
   if (s3Error) lineasExtra.push(`(Aviso: no se pudo subir a S3 / actualizar el resumen — ${s3Error})`);
+  if (codigoCorreoFallidos.length) {
+    lineasExtra.push('(Aviso: el correo con el folio y el PIN NO se pudo enviar a los siguientes contactos:');
+    codigoCorreoFallidos.forEach((f) => {
+      lineasExtra.push(`  - ${f.email}: ${f.status ? 'HTTP ' + f.status + ' — ' : ''}${f.detalle || 'sin detalle'}`);
+    });
+    lineasExtra.push('Si el detalle menciona el dominio o "domain is not verified", hay que verificar el dominio vidavitalqr.com en la cuenta de Resend.)');
+  }
 
   const cuerpoTexto = [
     folio
