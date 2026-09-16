@@ -266,6 +266,7 @@
 </div>
 <p id="renewalPinError" style="display:none; margin:14px 0 0; color:#c0392b; font-weight:600;" data-i18n="renewPinError">✘ Folio o PIN incorrectos. Verifica ambos, o continúa dejando el PIN en blanco para llenar el formulario de nuevo.</p>
 <p id="renewalVencidoNotice" style="display:none; margin:14px 0 0; padding:12px 14px; background:#fff0ee; border:1px solid #c0392b; border-radius:10px; color:#7a2418; font-weight:600;">⚠ Esta ficha lleva más de 12 meses desde su último pago, así que ya no se puede actualizar gratis. Para editar sus datos primero debe renovar el pago — use el botón "Renovar" en la página principal (vidavitalqr.com) para ponerla al día.</p>
+<p id="renewalFechaInicio" style="display:none; margin:8px 0 0; font-size:0.9rem; color:#3a352b;">📅 Fecha de inicio de vigencia de esta ficha: <strong id="renewalFechaInicioValor"></strong></p>
 <p style="margin:10px 0 0; font-size:0.85rem; color:#6b6558;" data-i18n-html="renewForgotPin">¿Olvidaste tu PIN? <a href="#" id="recuperarPinToggle" style="color:var(--teal-deep,#1F4448); font-weight:600;">Recupéralo con el nombre y la fecha de nacimiento de tu mascota</a>, o escríbenos por el botón de WhatsApp en vidavitalqr.com indicando tu código de ficha.</p>
 <div id="recuperarPinBox" class="no-print" style="display:none; margin-top:14px; padding:14px; background:#fff; border:1px solid var(--line,#DAD3C4); border-radius:10px;">
 <p style="margin:0 0 10px; font-size:0.85rem; color:#6b6558;" data-i18n="recuperarIntro">Para verificar que la ficha es de tu mascota, escribe primero el código de la ficha arriba y luego el nombre y la fecha de nacimiento de tu mascota, tal como los escribiste al crearla.</p>
@@ -914,6 +915,21 @@ $('photoRemove').addEventListener('click', e => {
     return ms / (1000 * 60 * 60 * 24 * 30.44);
   }
 
+  function formatearFecha(fechaIso) {
+    const d = new Date(fechaIso);
+    if (isNaN(d.getTime())) return '';
+    return d.toLocaleDateString('es-CR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+  }
+
+  // ---- muestra la fecha de inicio de vigencia de la ficha (campo "creado"), siempre que la
+  // tengamos, tanto si la ficha sigue vigente como si ya venció — para que la persona pueda
+  // verificar por sí misma por qué se le permite o no actualizar gratis ----
+  function mostrarFechaInicio(fechaIso) {
+    if (!fechaIso) { $('renewalFechaInicio').style.display = 'none'; return; }
+    $('renewalFechaInicioValor').textContent = formatearFecha(fechaIso);
+    $('renewalFechaInicio').style.display = 'block';
+  }
+
   if (modoFicha) {
     // No se incrementa el contador global: el folio lo aporta el propio cliente,
     // reutilizando el código que ya tiene, para que el QR existente no cambie.
@@ -936,6 +952,7 @@ $('photoRemove').addEventListener('click', e => {
 
       $('renewalPinError').style.display = 'none';
       $('renewalVencidoNotice').style.display = 'none';
+      $('renewalFechaInicio').style.display = 'none';
       const btn = $('renewalConfirmBtn');
       const textoOriginal = btn.textContent;
 
@@ -956,7 +973,12 @@ $('photoRemove').addEventListener('click', e => {
           }
           const data = await resp.json();
 
+          mostrarFechaInicio(data.creado);
+
           if (esActualizacion && mesesTranscurridos(data.creado) >= 12) {
+            if (data.creado) {
+              $('renewalVencidoNotice').innerHTML = '⚠ Esta ficha inició su vigencia el <strong>' + formatearFecha(data.creado) + '</strong> y ya han pasado más de 12 meses desde entonces, así que ya no se puede actualizar gratis. Para editar sus datos primero debe renovar el pago — use el botón "Renovar" en la página principal (vidavitalqr.com) para ponerla al día.';
+            }
             $('renewalVencidoNotice').style.display = 'block';
             btn.disabled = false;
             btn.textContent = textoOriginal;

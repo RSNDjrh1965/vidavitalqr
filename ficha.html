@@ -279,6 +279,7 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
 </div>
 <p id="renewalConfirmedMsg" style="display:none; margin:14px 0 0; color:#1a7a3c; font-weight:600;">✔ Código confirmado. Completa el formulario y envía para actualizar tu ficha.</p>
 <p id="renewalPrecargadoMsg" style="display:none; margin:6px 0 0; color:#1a7a3c; font-weight:600;">✔ Tus datos anteriores ya se cargaron en el formulario — revisa y edita lo que necesites.</p>
+<p id="renewalFechaInicio" style="display:none; margin:8px 0 0; font-size:0.9rem; color:#3a352b;">📅 Fecha de inicio de vigencia de esta ficha: <strong id="renewalFechaInicioValor"></strong></p>
 </div>
 
 <!-- Datos personales -->
@@ -536,6 +537,21 @@ $('photoRemove').addEventListener('click', e => {
     return ms / (1000 * 60 * 60 * 24 * 30.44);
   }
 
+  function formatearFecha(fechaIso) {
+    const d = new Date(fechaIso);
+    if (isNaN(d.getTime())) return '';
+    return d.toLocaleDateString('es-CR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+  }
+
+  // ---- muestra la fecha de inicio de vigencia de la ficha (campo "creado"), siempre que la
+  // tengamos, tanto si la ficha sigue vigente como si ya venció — para que la persona pueda
+  // verificar por sí misma por qué se le permite o no actualizar gratis ----
+  function mostrarFechaInicio(fechaIso) {
+    if (!fechaIso) { $('renewalFechaInicio').style.display = 'none'; return; }
+    $('renewalFechaInicioValor').textContent = formatearFecha(fechaIso);
+    $('renewalFechaInicio').style.display = 'block';
+  }
+
   if (modoFicha) {
     // No se incrementa el contador global: el folio lo aporta el propio cliente,
     // reutilizando el código que ya tiene, para que el QR existente no cambie.
@@ -557,6 +573,7 @@ $('photoRemove').addEventListener('click', e => {
 
       $('renewalPinError').style.display = 'none';
       $('renewalVencidoNotice').style.display = 'none';
+      $('renewalFechaInicio').style.display = 'none';
       const btn = $('renewalConfirmBtn');
       const textoOriginal = btn.textContent;
 
@@ -577,9 +594,16 @@ $('photoRemove').addEventListener('click', e => {
           }
           const data = await resp.json();
 
+          // ---- se muestra la fecha de inicio de vigencia siempre que la tengamos (vigente o
+          // vencida), para que la persona vea con sus propios ojos desde cuándo cuenta el año ----
+          mostrarFechaInicio(data.creado);
+
           // ---- solo para "actualizar" (gratis): si ya pasaron 12 meses desde el último pago,
           // se bloquea la edición y se pide renovar primero ----
           if (esActualizacion && mesesTranscurridos(data.creado) >= 12) {
+            if (data.creado) {
+              $('renewalVencidoNotice').innerHTML = '⚠ Esta ficha inició su vigencia el <strong>' + formatearFecha(data.creado) + '</strong> y ya han pasado más de 12 meses desde entonces, así que ya no se puede actualizar gratis. Para editar sus datos primero debe renovar el pago — use el botón "Renovar" en la página principal (vidavitalqr.com) para ponerla al día.';
+            }
             $('renewalVencidoNotice').style.display = 'block';
             btn.disabled = false;
             btn.textContent = textoOriginal;
