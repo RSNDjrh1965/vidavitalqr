@@ -83,42 +83,61 @@ exports.handler = async (event) => {
   }
 
   const meta = session.metadata || {};
-  const folio = meta.folio || '(sin folio)';
-  const tipoFicha = meta.tipo || '(sin tipo)';
   const modo = session.mode || 'desconocido';
 
-  console.log('onvo-webhook: pago de renovación CONFIRMADO — folio', folio, '(', tipoFicha, ') — sesión', sessionId, '— modo', modo);
+  // ---- metadata.items es un JSON con [{item, folio, tipo}, ...] armado por crear-pago.js;
+  // si por algún motivo no viene (por ejemplo, sesiones creadas antes de este cambio), se cae
+  // de vuelta a los campos "folio"/"tipo" sueltos que usaba la primera fase ----
+  let items = [];
+  try {
+    if (meta.items) items = JSON.parse(meta.items);
+  } catch (e) { /* metadata inválida, se ignora */ }
+  if (!items.length && (meta.folio || meta.tipo)) {
+    items = [{ item: 'renewal', folio: meta.folio || '', tipo: meta.tipo || '' }];
+  }
+  const folios = meta.folios || items.filter((it) => it.folio).map((it) => it.folio).join(',');
+
+  console.log('onvo-webhook: pago CONFIRMADO —', items.length, 'producto(s), folios:', folios || '(ninguno)', '— sesión', sessionId, '— modo', modo);
 
   // ---- 3) Avisar por correo al administrador (mismo destinatario que ya recibe los demás avisos) ----
-  await avisarAdministrador({ folio, tipoFicha, sessionId, modo });
+  await avisarAdministrador({ items, folios, sessionId, modo });
 
-  // TODO (próxima fase, una vez confirmado que esto funciona en pruebas): marcar la ficha
-  // correspondiente como renovada/pagada en S3 (reiniciar su fecha "creado", igual que hace
-  // send-ficha.js cuando se envía con esRenovacionPago), y activar el bloqueo del visor público
-  // para fichas no pagadas (ver.js) — ambos pendientes según el punto 17 de la bitácora.
+  // TODO (próxima fase, una vez confirmado que esto funciona en pruebas): marcar cada ficha
+  // (según folio/tipo en "items") como renovada/pagada en S3 (reiniciar su fecha "creado", igual
+  // que hace send-ficha.js cuando se envía con esRenovacionPago), y activar el bloqueo del visor
+  // público para fichas no pagadas (ver.js) — ambos pendientes según el punto 17 de la bitácora.
+  // Los productos físicos/digitales sin folio (placa, pulsera, cadena, Identificador QR, código
+  // QR solo digital) no requieren esa marca — su ficha se crea y envía por separado desde el
+  // formulario de ficha correspondiente.
 
   return { statusCode: 200, body: 'ok' };
 };
 
-async function avisarAdministrador({ folio, tipoFicha, sessionId, modo }) {
+async function avisarAdministrador({ items, folios, sessionId, modo }) {
   const apiKey = process.env.RESEND_API_KEY;
   if (!apiKey) {
     console.error('onvo-webhook: falta RESEND_API_KEY — no se pudo avisar por correo del pago confirmado.');
     return;
   }
 
-  const asunto = 'Pago de renovación confirmado — folio ' + folio + (modo === 'test' ? ' (MODO PRUEBA)' : '');
+  const listaItems = items.length
+    ? items.map((it) => '  - ' + (it.item || '?') + (it.folio ? ' (folio: ' + it.folio + ')' : '')).join('\n')
+    : '  (sin detalle de productos)';
+
+  const asunto = 'Pago confirmado — ' + items.length + ' producto(s)' + (modo === 'test' ? ' (MODO PRUEBA)' : '');
   const cuerpo = [
-    'ONVO Pay confirmó el pago de una renovación anual.',
+    'ONVO Pay confirmó un pago de VidaVitalQR.',
     '',
-    'Folio: ' + folio,
-    'Tipo de ficha: ' + tipoFicha,
+    'Productos:',
+    listaItems,
+    '',
+    'Folios asociados: ' + (folios || '(ninguno)'),
     'Sesión de ONVO Pay: ' + sessionId,
     'Modo: ' + modo + (modo === 'test' ? ' (pago de prueba, sin dinero real)' : ''),
     '',
-    'Nota: esta es la primera fase de la integración — este aviso confirma que el pago llegó',
-    'correctamente, pero todavía no marca la ficha como renovada de forma automática en el',
-    'sistema ni desbloquea nada en el visor público. Eso se agrega en la siguiente fase.',
+    'Nota: este aviso confirma que el pago llegó correctamente, pero todavía no marca ninguna',
+    'ficha como renovada de forma automática en el sistema ni desbloquea nada en el visor',
+    'público. Eso se agrega en la siguiente fase.',
   ].join('\n');
 
   try {

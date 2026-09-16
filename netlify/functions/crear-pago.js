@@ -1,10 +1,13 @@
 // ---- crear-pago.js ----
-// Crea una Checkout Session alojada por ONVO Pay para el pago de la renovación anual de una
-// ficha (persona / mascota / objeto) y devuelve la URL a la que hay que redirigir al cliente.
+// Crea una Checkout Session alojada por ONVO Pay para el pago de uno o varios productos
+// VidaVitalQR (renovaciones anuales y/o presentaciones físicas/digitales: placa, pulsera,
+// cadena, Identificador QR, código QR solo digital) y devuelve la URL a la que hay que
+// redirigir al cliente.
 //
-// Primera fase de la integración real con ONVO Pay (2026-09-15): solo cubre renovaciones
-// anuales. Los productos físicos (placas, pulsera, cadena, Identificador QR) siguen usando el
-// mockup de checkout de index.html sin cambios, por ahora.
+// Segunda fase de la integración real con ONVO Pay (2026-09-15): se extiende el pago real de
+// "solo renovaciones" a TODOS los productos del recuadro de pago de index.html. El listado de
+// productos y precios de abajo (PRECIOS) debe mantenerse igual al objeto ITEMS del <script> de
+// index.html — si se cambia un precio en un lado, hay que cambiarlo también en el otro.
 //
 // Requiere la variable de entorno ONVO_SECRET_KEY configurada en Netlify (Project configuration
 // → Environment variables) — la llave secreta de ONVO Pay nunca debe escribirse en este archivo
@@ -12,14 +15,24 @@
 
 const ONVO_API_BASE = 'https://api.onvopay.com/v1';
 
-const RENOVACION = {
-  persona: { label: 'Renovación anual VidaVitalQR — Persona' },
-  mascota: { label: 'Renovación anual VidaVitalQR — Mascota' },
-  objeto: { label: 'Renovación anual VidaVitalQR — Objeto' },
+// ---- catálogo de productos: se recalcula el precio aquí SIEMPRE con estos valores, nunca con
+// lo que mande el navegador, para que nadie pueda manipular el monto a pagar desde el cliente ----
+const PRECIOS = {
+  renewal:          { label: 'Renovación anual VidaVitalQR — Persona', price: 7.00, tipo: 'persona', renovacion: true },
+  renewal_mascota:  { label: 'Renovación anual VidaVitalQR — Mascota', price: 7.00, tipo: 'mascota', renovacion: true },
+  renewal_objeto:   { label: 'Renovación anual VidaVitalQR — Objeto',  price: 7.00, tipo: 'objeto',  renovacion: true },
+  qr_only_personal: { label: 'Código QR (solo digital) — Personal',    price: 7.00, tipo: 'persona', renovacion: false },
+  qr_only_objeto:   { label: 'Código QR (solo digital) — Objeto',      price: 7.00, tipo: 'objeto',  renovacion: false },
+  plate_personal:   { label: 'Placa con código QR — Personal',         price: 13.00, tipo: 'persona', renovacion: false },
+  plate_mascota:    { label: 'Placa con código QR — Mascota',          price: 13.00, tipo: 'mascota', renovacion: false },
+  plate_objeto:     { label: 'Placa con código QR — Objeto',           price: 13.00, tipo: 'objeto',  renovacion: false },
+  bracelet:         { label: 'Pulsera con placa QR',                   price: 16.00, tipo: 'persona', renovacion: false },
+  chain:            { label: 'Cadena con incrustación religiosa',      price: 19.00, tipo: 'persona', renovacion: false },
+  idcard:           { label: 'Identificador QR',                      price: 12.00, tipo: 'persona', renovacion: false },
 };
 
-const PRECIO_RENOVACION_USD = 7.0; // antes de IVA, igual al mockup de index.html
 const IVA_RATE = 0.13;
+const MAX_ITEMS_POR_PEDIDO = 20; // límite defensivo, muy por encima de lo que ofrece la página
 
 function sitioBase() {
   // Netlify define automáticamente la variable de entorno URL con el dominio del sitio
@@ -45,28 +58,56 @@ exports.handler = async (event) => {
     return { statusCode: 400, body: JSON.stringify({ error: 'Datos inválidos.' }) };
   }
 
-  const tipo = String(data.tipo || '').trim();
-  const folio = String(data.folio || '').trim();
   const email = String(data.email || '').trim();
   const nombre = String(data.nombre || '').trim();
+  const itemsRecibidos = Array.isArray(data.items) ? data.items : null;
 
-  if (!tipoRenovacionValido(tipo)) {
-    return { statusCode: 400, body: JSON.stringify({ error: 'Tipo de renovación no reconocido.' }) };
-  }
-  if (!folio) {
-    return { statusCode: 400, body: JSON.stringify({ error: 'Falta el folio de la ficha.' }) };
-  }
   if (!email || email.indexOf('@') === -1) {
     return { statusCode: 400, body: JSON.stringify({ error: 'Correo electrónico inválido.' }) };
   }
+  if (!itemsRecibidos || itemsRecibidos.length === 0) {
+    return { statusCode: 400, body: JSON.stringify({ error: 'El carrito está vacío.' }) };
+  }
+  if (itemsRecibidos.length > MAX_ITEMS_POR_PEDIDO) {
+    return { statusCode: 400, body: JSON.stringify({ error: 'Demasiados productos en un solo pedido.' }) };
+  }
 
-  const subtotal = PRECIO_RENOVACION_USD;
+  // ---- validar cada producto contra el catálogo (PRECIOS) y, si es una renovación, exigir el
+  // folio de la ficha que se está renovando — nunca se confía en el precio ni la etiqueta que
+  // venga del navegador, solo en el identificador del producto ----
+  const items = [];
+  for (let i = 0; i < itemsRecibidos.length; i++) {
+    const entrada = itemsRecibidos[i] || {};
+    const itemId = String(entrada.item || '').trim();
+    const catalogo = PRECIOS[itemId];
+    if (!catalogo) {
+      return { statusCode: 400, body: JSON.stringify({ error: 'Producto no reconocido: ' + itemId }) };
+    }
+    let folio = '';
+    if (catalogo.renovacion) {
+      folio = String(entrada.folio || '').trim();
+      if (!folio) {
+        return { statusCode: 400, body: JSON.stringify({ error: 'Falta el folio de la ficha para: ' + catalogo.label }) };
+      }
+    }
+    items.push({ itemId, folio, label: catalogo.label, price: catalogo.price, tipo: catalogo.tipo, renovacion: catalogo.renovacion });
+  }
+
+  const subtotal = items.reduce((sum, it) => sum + it.price, 0);
   const iva = subtotal * IVA_RATE;
   const totalCentavos = Math.round((subtotal + iva) * 100); // USD: la unidad más pequeña es el centavo
 
+  // ---- una sola línea de pago con el total ya calculado (subtotal + IVA una sola vez), para que
+  // el monto cobrado por ONVO coincida exactamente con el que se le mostró al cliente en la
+  // página — el desglose de qué se compró va en la descripción y en metadata, no en líneas
+  // separadas (evita diferencias de centavos por redondeo si se combinan varios productos) ----
+  const descripcion = items.map((it) => it.label).join(' + ');
+  const folios = items.filter((it) => it.folio).map((it) => it.folio);
+
   const base = sitioBase();
-  const successUrl = base + '/index.html?pago=exitoso&folio=' + encodeURIComponent(folio);
-  const cancelUrl = base + '/index.html?pago=cancelado&folio=' + encodeURIComponent(folio);
+  const folioQuery = folios.length ? '&folio=' + encodeURIComponent(folios.join(',')) : '';
+  const successUrl = base + '/index.html?pago=exitoso' + folioQuery;
+  const cancelUrl = base + '/index.html?pago=cancelado' + folioQuery;
 
   const bodyReq = {
     customerName: nombre || 'Cliente VidaVitalQR',
@@ -79,14 +120,14 @@ exports.handler = async (event) => {
         quantity: 1,
         unitAmount: totalCentavos,
         currency: 'USD',
-        description: RENOVACION[tipo].label + ' (incluye IVA 13%)',
+        description: descripcion + ' (incluye IVA 13%)',
         priceType: 'one_time',
       },
     ],
     metadata: {
-      folio,
-      tipo,
-      origen: 'vidavitalqr-renovacion',
+      items: JSON.stringify(items.map((it) => ({ item: it.itemId, folio: it.folio, tipo: it.tipo }))),
+      folios: folios.join(','),
+      origen: 'vidavitalqr-carrito',
     },
   };
 
@@ -111,7 +152,7 @@ exports.handler = async (event) => {
       };
     }
 
-    console.log('crear-pago: sesión de checkout creada para folio', folio, '(tipo', tipo + ') —', json.id);
+    console.log('crear-pago: sesión de checkout creada —', items.length, 'producto(s), folios:', folios.join(',') || '(ninguno)', '—', json.id);
 
     return {
       statusCode: 200,
@@ -123,7 +164,3 @@ exports.handler = async (event) => {
     return { statusCode: 502, body: JSON.stringify({ error: 'No se pudo contactar a ONVO Pay.' }) };
   }
 };
-
-function tipoRenovacionValido(tipo) {
-  return Object.prototype.hasOwnProperty.call(RENOVACION, tipo);
-}
