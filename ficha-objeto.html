@@ -904,7 +904,10 @@ function buildPrintAttachments(){
 // ---- generar el PDF real (diseño de la ficha + páginas de fotos .jpg) ----
 async function generatePdfBlob(){
   const { jsPDF } = window.jspdf;
-  const noPrintEls = Array.from(document.querySelectorAll('.no-print'));
+  // ---- el folio (dentro de #openCounter, debajo de la foto en la tarjeta de vista previa) debe
+  // seguir visible en el PDF generado, así que se excluye de los elementos ".no-print" que se
+  // ocultan aquí -- mismo criterio ya aplicado en ficha-mascota.html. ----
+  const noPrintEls = Array.from(document.querySelectorAll('.no-print')).filter(el => el.id !== 'openCounter');
   const prevDisplays = noPrintEls.map(el => el.style.display);
   noPrintEls.forEach(el => { el.style.display = 'none'; });
 
