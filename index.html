@@ -2012,7 +2012,13 @@
     if (modo === 'actualizar') { destino += '?actualizar=1'; }
     else if (modo) { destino += '?renovar=1'; }
     if (extraQuery) { destino += (destino.indexOf('?') === -1 ? '?' : '&') + extraQuery; }
-    window.open(destino, '_blank', 'noopener');
+    // ---- Importante: NO se usa 'noopener' aquí (a propósito, a diferencia de un enlace externo
+    // normal). Esta ficha es del propio sitio (mismo origen), y al terminar de guardarse le avisa
+    // de vuelta a esta pestaña, vía window.opener.postMessage (ver el listener de "message" más
+    // abajo), para marcar el producto correspondiente y llevar al cliente directo al recuadro de
+    // pago ya completado, sin abrir una segunda copia vacía del sitio. Si se agregara 'noopener'
+    // aquí, esa comunicación quedaría bloqueada por el navegador. ----
+    window.open(destino, '_blank');
   }
   function openFicha(modo, extraQuery){ abrirFicha(FICHA_URL, modo, extraQuery); }
   function openFichaMascota(modo){ abrirFicha(FICHA_MASCOTA_URL, modo); }
@@ -2040,26 +2046,13 @@
   }
 
   // ---- referencia de fichas asociadas (persona, mascota y/o objeto): llegan por ?fichaId=,
-  //      ?fichaIdMascota= y/o ?fichaIdObjeto=, y se recuerdan en sessionStorage para que, si se
-  //      completan varias fichas por separado, todas queden visibles juntas en el recuadro de pago ----
-  (function syncFichaRef(){
-    var params;
-    try { params = new URLSearchParams(window.location.search); } catch (e) { return; }
-    var fichaId = params.get('fichaId');
-    var fichaIdMascota = params.get('fichaIdMascota');
-    var fichaIdObjeto = params.get('fichaIdObjeto');
-
-    function remember(key, value){
-      try {
-        if (value) { sessionStorage.setItem(key, value); return value; }
-        return sessionStorage.getItem(key) || '';
-      } catch (e) { return value || ''; }
-    }
-
-    personaFolio = remember('vvqr_ficha_persona', fichaId);
-    mascotaFolio = remember('vvqr_ficha_mascota', fichaIdMascota);
-    objetoFolio = remember('vvqr_ficha_objeto', fichaIdObjeto);
-
+  //      ?fichaIdMascota= y/o ?fichaIdObjeto= (respaldo, cuando no hubo pestaña que avisar — ver
+  //      más abajo), o por el aviso directo de una pestaña de ficha vía window.opener.postMessage
+  //      (camino normal). Se recuerdan en sessionStorage para que, si se completan varias fichas
+  //      por separado, todas queden visibles juntas en el recuadro de pago. Refactorizado en
+  //      funciones reutilizables (actualizarFichaRefUI / recordarFichaFolio) para que tanto la
+  //      carga inicial de la página como el aviso por postMessage compartan la misma lógica. ----
+  function actualizarFichaRefUI(){
     if (!personaFolio && !mascotaFolio && !objetoFolio) return;
 
     var refRow = document.getElementById('fichaRefRow');
@@ -2083,6 +2076,37 @@
       refIdObjeto.textContent = objetoFolio;
       objetoLine.style.display = '';
     }
+  }
+
+  function recordarFichaFolio(tipo, folio){
+    if (!folio) return;
+    var key = tipo === 'mascota' ? 'vvqr_ficha_mascota' : (tipo === 'objeto' ? 'vvqr_ficha_objeto' : 'vvqr_ficha_persona');
+    try { sessionStorage.setItem(key, folio); } catch (e) { /* ignorar si sessionStorage no está disponible */ }
+    if (tipo === 'mascota') { mascotaFolio = folio; }
+    else if (tipo === 'objeto') { objetoFolio = folio; }
+    else { personaFolio = folio; }
+    actualizarFichaRefUI();
+  }
+
+  (function syncFichaRef(){
+    var params;
+    try { params = new URLSearchParams(window.location.search); } catch (e) { return; }
+    var fichaId = params.get('fichaId');
+    var fichaIdMascota = params.get('fichaIdMascota');
+    var fichaIdObjeto = params.get('fichaIdObjeto');
+
+    function remember(key, value){
+      try {
+        if (value) { sessionStorage.setItem(key, value); return value; }
+        return sessionStorage.getItem(key) || '';
+      } catch (e) { return value || ''; }
+    }
+
+    personaFolio = remember('vvqr_ficha_persona', fichaId);
+    mascotaFolio = remember('vvqr_ficha_mascota', fichaIdMascota);
+    objetoFolio = remember('vvqr_ficha_objeto', fichaIdObjeto);
+
+    actualizarFichaRefUI();
 
     if (fichaId || fichaIdMascota || fichaIdObjeto) {
       var payBox = document.getElementById('pago-seguro');
@@ -2093,6 +2117,20 @@
       }
     }
   })();
+
+  // ---- aviso directo desde una pestaña de ficha (persona/mascota/objeto) recién completada,
+  //      abierta desde esta misma página con "Agregar a mi pago"/"Renovar"/"Actualizar" — ver
+  //      avisarOpenerYCerrar() en ficha.html/ficha-mascota.html/ficha-objeto.html. En vez de que
+  //      esa pestaña navegue a una segunda copia vacía de este sitio, nos manda el folio (y se
+  //      cierra sola); aquí solo recordamos el folio y llevamos al cliente directo al recuadro de
+  //      pago, que ya tenía el producto seleccionado en verde desde el primer clic. ----
+  window.addEventListener('message', function(ev){
+    if (!ev || !ev.data || ev.data.vvqrFichaCompletada !== true) return;
+    recordarFichaFolio(ev.data.tipo, ev.data.folio);
+    renderOrder();
+    try { window.focus(); } catch (e) {}
+    irAlRecuadroDePago();
+  });
 
   // ---- resultado del pago real al volver de ONVO Pay (?pago=exitoso|cancelado&folio=...) ----
   (function mostrarResultadoPago(){

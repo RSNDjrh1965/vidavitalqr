@@ -415,6 +415,12 @@ const $ = id => document.getElementById(id);
 //      clic en "Enviar"). El IIFE de más abajo solo la actualiza, no la vuelve a declarar. ----
 let esRenovacion = false;
 
+// ---- ¿Es una actualización de datos gratuita (?actualizar=1)? Declarada aquí, en el ámbito
+//      global del script, por el mismo motivo que esRenovacion arriba: se necesita también al
+//      terminar de enviar el formulario, para decidir si se debe mostrar el mensaje de "ficha
+//      actualizada" en vez de llevar al cliente al mockup de pago. ----
+let esActualizacion = false;
+
 // ============================================================
 // ---- Sistema de idiomas (mismo esquema que el landing page: se sincroniza
 // automáticamente con el idioma elegido en vidavitalqr.com porque esta ficha
@@ -904,7 +910,7 @@ $('photoRemove').addEventListener('click', e => {
   const params = new URLSearchParams(window.location.search);
   const modoFicha = params.get('actualizar') === '1' ? 'actualizar' : (params.get('renovar') === '1' ? 'renovar' : null);
   esRenovacion = modoFicha === 'renovar';
-  const esActualizacion = modoFicha === 'actualizar';
+  esActualizacion = modoFicha === 'actualizar';
 
   // ---- ¿ya pasaron 12 meses desde el último pago (campo "creado")? ----
   function mesesTranscurridos(fechaIso) {
@@ -1510,7 +1516,9 @@ async function generatePdfBlob(){
   return pdf.output('blob');
 }
 
-// ---- ir a la sección de pago seguro de VidaVitalQR, pasando el número de la ficha ----
+// ---- ir a la sección de pago seguro de VidaVitalQR, pasando el número de la ficha (respaldo,
+// solo se usa cuando esta ficha no se abrió como pestaña nueva desde el landing — ver
+// avisarOpenerYCerrar() más abajo, que es el camino normal) ----
 function goToPayment(folio){
   try{
     var url = new URL(PAYMENT_URL);
@@ -1520,6 +1528,44 @@ function goToPayment(folio){
   }catch(err){
     window.location.href = PAYMENT_URL + '?fichaIdMascota=' + encodeURIComponent(folio) + '#pago-seguro';
   }
+}
+
+// ---- al terminar de guardar una ficha nueva o renovada (NO en modo "Actualizar"), en vez de
+// navegar esta misma pestaña a una segunda copia del landing (que aparecía vacía, sin el
+// producto ya seleccionado en la pestaña original), le avisamos directamente a la pestaña que
+// abrió esta ficha —si existe— para que marque el producto correspondiente como pagado/con folio
+// y lleve al cliente al recuadro de pago ya completado, y cerramos esta pestaña. Si no hay una
+// pestaña que avisar, se usa como respaldo el redireccionamiento de siempre (goToPayment). ----
+function avisarOpenerYCerrar(tipo, folio){
+  if (window.opener && !window.opener.closed) {
+    try{
+      window.opener.postMessage({ vvqrFichaCompletada: true, tipo: tipo, folio: folio }, '*');
+      window.opener.focus();
+      window.close();
+      return true;
+    }catch(err){ /* si algo falla, seguimos con el respaldo de abajo */ }
+  }
+  return false;
+}
+
+// ---- modo "Actualizar": es una edición gratuita de datos, no una compra — nunca debe llevar al
+// cliente al mockup de pago. Solo se le confirma que sus datos quedaron guardados. ----
+function mostrarActualizacionExitosa(){
+  const overlay = document.createElement('div');
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(18,40,43,0.72);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px;';
+  overlay.innerHTML = `
+    <div style="background:#fff;border-radius:16px;max-width:420px;width:100%;padding:28px 26px;text-align:center;font-family:inherit;">
+      <div style="font-size:2.2rem;">✅</div>
+      <h3 style="margin:10px 0 6px;">Su ficha ha sido actualizada</h3>
+      <p style="margin:0 0 18px;color:#444;font-size:0.95rem;">Sus datos se guardaron correctamente. No es necesario hacer ningún pago — puede cerrar esta pestaña.</p>
+      <button type="button" id="btnCerrarActualizado" class="select-btn" style="width:100%;">Cerrar esta pestaña</button>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+  document.getElementById('btnCerrarActualizado').addEventListener('click', () => {
+    if (window.opener && !window.opener.closed) { window.close(); }
+    else { overlay.remove(); }
+  });
 }
 
 // ---- muestra en pantalla el PIN de acceso recién generado, y espera a que el usuario lo
@@ -1698,7 +1744,11 @@ $('btnEmail').addEventListener('click', async () => {
       await mostrarPinModal(pinNuevo, folio, qrUrlGenerado);
     }
 
-    goToPayment(folio);
+    if (esActualizacion) {
+      mostrarActualizacionExitosa();
+    } else if (!avisarOpenerYCerrar('mascota', folio)) {
+      goToPayment(folio);
+    }
   }catch(err){
     console.error('Error guardando la ficha en la nube:', err);
     alert(T().errorGuardarFicha(err && err.message ? err.message : err));
