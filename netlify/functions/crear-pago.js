@@ -34,6 +34,11 @@ const PRECIOS = {
 const IVA_RATE = 0.13;
 const MAX_ITEMS_POR_PEDIDO = 20; // límite defensivo, muy por encima de lo que ofrece la página
 
+// ---- estilos válidos de "Placa con código QR — Personal" (numerados 1-4 en el landing, ver
+// bitácora punto 39) -- cualquier otro valor recibido del navegador se ignora, para que el aviso
+// de pago al administrador siempre muestre un estilo real o ninguno, nunca texto inventado ----
+const ESTILOS_PLACA_VALIDOS = ['clasica', 'llavero', 'ranuras', 'dije'];
+
 function sitioBase() {
   // Netlify define automáticamente la variable de entorno URL con el dominio del sitio
   // publicado; se deja vidavitalqr.com como respaldo por si no estuviera disponible.
@@ -90,7 +95,15 @@ exports.handler = async (event) => {
         return { statusCode: 400, body: JSON.stringify({ error: 'Falta el folio de la ficha para: ' + catalogo.label }) };
       }
     }
-    items.push({ itemId, folio, label: catalogo.label, price: catalogo.price, tipo: catalogo.tipo, renovacion: catalogo.renovacion });
+    // ---- estilo de placa elegido (solo aplica a "plate_personal" -- ver bitácora punto 39):
+    // se acepta únicamente si es uno de los 4 valores reales, para que el aviso de pago al
+    // administrador siempre reporte cuál de las 4 placas hay que fabricar ----
+    let placaEstilo = '';
+    if (itemId === 'plate_personal') {
+      const estiloRecibido = String(entrada.placaEstilo || '').trim();
+      if (ESTILOS_PLACA_VALIDOS.indexOf(estiloRecibido) !== -1) { placaEstilo = estiloRecibido; }
+    }
+    items.push({ itemId, folio, placaEstilo, label: catalogo.label, price: catalogo.price, tipo: catalogo.tipo, renovacion: catalogo.renovacion });
   }
 
   const subtotal = items.reduce((sum, it) => sum + it.price, 0);
@@ -125,7 +138,7 @@ exports.handler = async (event) => {
       },
     ],
     metadata: {
-      items: JSON.stringify(items.map((it) => ({ item: it.itemId, folio: it.folio, tipo: it.tipo }))),
+      items: JSON.stringify(items.map((it) => ({ item: it.itemId, folio: it.folio, tipo: it.tipo, placaEstilo: it.placaEstilo || undefined }))),
       folios: folios.join(','),
       origen: 'vidavitalqr-carrito',
     },

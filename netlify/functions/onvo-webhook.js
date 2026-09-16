@@ -23,6 +23,42 @@ const REMITENTE = 'VidaVitalQR <ficha@vidavitalqr.com>';
 
 const EVENTOS_DE_PAGO = ['checkout-session.succeeded', 'payment-intent.succeeded'];
 
+// ---- etiquetas legibles de cada producto del catálogo (deben coincidir con PRECIOS en
+// crear-pago.js) -- se usan para que el aviso de pago al administrador muestre el nombre real del
+// producto en vez del identificador interno (ej. "plate_personal") ----
+const ETIQUETAS_ITEM = {
+  renewal:          'Renovación anual VidaVitalQR — Persona',
+  renewal_mascota:  'Renovación anual VidaVitalQR — Mascota',
+  renewal_objeto:   'Renovación anual VidaVitalQR — Objeto',
+  qr_only_personal: 'Código QR (solo digital) — Personal',
+  qr_only_objeto:   'Código QR (solo digital) — Objeto',
+  plate_personal:   'Placa con código QR — Personal',
+  plate_mascota:    'Placa con código QR — Mascota',
+  plate_objeto:     'Placa con código QR — Objeto',
+  bracelet:         'Pulsera con placa QR',
+  chain:            'Cadena con incrustación religiosa',
+  idcard:           'Identificador QR',
+};
+
+// ---- número (1-4, izquierda a derecha en el landing) y medidas de cada estilo de placa -- mismo
+// criterio que etiquetaPlacaEstilo() en send-ficha.js, ver bitácora punto 39 ----
+const ETIQUETAS_PLACA_ESTILO = {
+  clasica: 'Placa 1 — Clásica (rectangular), 40 x 20 mm',
+  llavero: 'Placa 2 — Llavero (con orificio), 40 x 22 mm',
+  ranuras: 'Placa 3 — Con ranuras laterales, 45 x 25 mm',
+  dije:    'Placa 4 — Dije / colgante (con argolla), 40 x 40 mm',
+};
+
+// ---- arma la descripción de un producto comprado para el correo de aviso al administrador: el
+// nombre real del producto y, si es "plate_personal" con estilo elegido, cuál de las 4 placas ----
+function descripcionItem(it) {
+  const nombre = ETIQUETAS_ITEM[it.item] || it.item || '?';
+  if (it.item === 'plate_personal' && it.placaEstilo && ETIQUETAS_PLACA_ESTILO[it.placaEstilo]) {
+    return nombre + ' (' + ETIQUETAS_PLACA_ESTILO[it.placaEstilo] + ')';
+  }
+  return nombre;
+}
+
 exports.handler = async (event) => {
   if (event.httpMethod !== 'POST') {
     return { statusCode: 405, body: 'Método no permitido.' };
@@ -88,9 +124,10 @@ exports.handler = async (event) => {
   const meta = session.metadata || {};
   const modo = session.mode || 'desconocido';
 
-  // ---- metadata.items es un JSON con [{item, folio, tipo}, ...] armado por crear-pago.js;
-  // si por algún motivo no viene (por ejemplo, sesiones creadas antes de este cambio), se cae
-  // de vuelta a los campos "folio"/"tipo" sueltos que usaba la primera fase ----
+  // ---- metadata.items es un JSON con [{item, folio, tipo, placaEstilo?}, ...] armado por
+  // crear-pago.js (placaEstilo solo viene en "plate_personal" -- ver bitácora punto 39); si por
+  // algún motivo no viene (por ejemplo, sesiones creadas antes de este cambio), se cae de vuelta
+  // a los campos "folio"/"tipo" sueltos que usaba la primera fase ----
   let items = [];
   try {
     if (meta.items) items = JSON.parse(meta.items);
@@ -124,7 +161,7 @@ async function avisarAdministrador({ items, folios, sessionId, modo }) {
   }
 
   const listaItems = items.length
-    ? items.map((it) => '  - ' + (it.item || '?') + (it.folio ? ' (folio: ' + it.folio + ')' : '')).join('\n')
+    ? items.map((it) => '  - ' + descripcionItem(it) + (it.folio ? ' (folio: ' + it.folio + ')' : '')).join('\n')
     : '  (sin detalle de productos)';
 
   const asunto = 'Pago confirmado — ' + items.length + ' producto(s)' + (modo === 'test' ? ' (MODO PRUEBA)' : '');
@@ -148,7 +185,7 @@ async function avisarAdministrador({ items, folios, sessionId, modo }) {
   const escaparHtml = (s) => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   const listaItemsHtml = items.length
     ? '<ul style="margin:0;padding-left:20px;">' + items.map((it) =>
-        '<li style="margin-bottom:6px;"><strong style="color:#0a7d3c;font-size:15px;">' + escaparHtml(it.item || '?') + '</strong>' +
+        '<li style="margin-bottom:6px;"><strong style="color:#0a7d3c;font-size:15px;">' + escaparHtml(descripcionItem(it)) + '</strong>' +
         (it.folio ? ' &nbsp;<span style="color:#555;">(folio: ' + escaparHtml(it.folio) + ')</span>' : '') +
         '</li>'
       ).join('') + '</ul>'
