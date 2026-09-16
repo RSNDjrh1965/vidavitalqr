@@ -15,7 +15,10 @@
 // Ninguna de las dos debe escribirse en este archivo ni en ningún otro que se suba al repositorio.
 
 const ONVO_API_BASE = 'https://api.onvopay.com/v1';
-const DESTINATARIO = 'vidavitalqr@zohomail.com';
+// ---- reporte de pagos confirmados: este aviso llega solo al administrador (nunca se muestra ni
+// se pide en el mockup de checkout), igual que la confirmación que ONVO Pay le envía al comprador
+// a través de "customerEmail" (ver crear-pago.js) ----
+const DESTINATARIO = 'roljamher@hotmail.com';
 const REMITENTE = 'VidaVitalQR <ficha@vidavitalqr.com>';
 
 const EVENTOS_DE_PAGO = ['checkout-session.succeeded', 'payment-intent.succeeded'];
@@ -140,11 +143,35 @@ async function avisarAdministrador({ items, folios, sessionId, modo }) {
     'público. Eso se agrega en la siguiente fase.',
   ].join('\n');
 
+  // ---- versión HTML del aviso: resalta visualmente qué se compró (punto 4), para que quede claro
+  // de un vistazo sin tener que leer todo el correo ----
+  const escaparHtml = (s) => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  const listaItemsHtml = items.length
+    ? '<ul style="margin:0;padding-left:20px;">' + items.map((it) =>
+        '<li style="margin-bottom:6px;"><strong style="color:#0a7d3c;font-size:15px;">' + escaparHtml(it.item || '?') + '</strong>' +
+        (it.folio ? ' &nbsp;<span style="color:#555;">(folio: ' + escaparHtml(it.folio) + ')</span>' : '') +
+        '</li>'
+      ).join('') + '</ul>'
+    : '<p style="color:#555;">(sin detalle de productos)</p>';
+  const cuerpoHtml = [
+    '<div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;color:#222;line-height:1.5;">',
+    '<p>ONVO Pay confirmó un pago de VidaVitalQR.</p>',
+    '<div style="background:#f2f9f4;border:1px solid #cfe9d8;border-radius:8px;padding:14px 16px;margin:14px 0;">',
+    '<p style="margin:0 0 8px 0;font-weight:bold;">Producto(s) comprado(s):</p>',
+    listaItemsHtml,
+    '</div>',
+    '<p><strong>Folios asociados:</strong> ' + escaparHtml(folios || '(ninguno)') + '<br>',
+    '<strong>Sesión de ONVO Pay:</strong> ' + escaparHtml(sessionId) + '<br>',
+    '<strong>Modo:</strong> ' + escaparHtml(modo) + (modo === 'test' ? ' (pago de prueba, sin dinero real)' : '') + '</p>',
+    '<p style="color:#777;font-size:12px;margin-top:18px;">Nota: este aviso confirma que el pago llegó correctamente, pero todavía no marca ninguna ficha como renovada de forma automática en el sistema ni desbloquea nada en el visor público. Eso se agrega en la siguiente fase.</p>',
+    '</div>',
+  ].join('');
+
   try {
     const resp = await fetch('https://api.resend.com/emails', {
       method: 'POST',
       headers: { Authorization: 'Bearer ' + apiKey, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ from: REMITENTE, to: [DESTINATARIO], subject: asunto, text: cuerpo }),
+      body: JSON.stringify({ from: REMITENTE, to: [DESTINATARIO], subject: asunto, text: cuerpo, html: cuerpoHtml }),
     });
     if (!resp.ok) {
       let detalle = '';

@@ -337,12 +337,15 @@ async function subirABuckets(s3, region, { folio, filename, pdfBase64, fotoBase6
 // ---- Nombre legible del estilo de "Placa con código QR" elegido en la página principal ----
 // (código -> lo que se ve en el correo / resumen). Si llega un código que no se reconoce,
 // se muestra tal cual llegó en vez de perder la información.
+// ---- número (1-4, tal como se numeran en el landing, izquierda a derecha) y medidas de cada
+// estilo de placa, para que el correo de aviso al administrador deje claro cuál de las 4 exactas
+// eligió el comprador, sin tener que adivinarlo por el nombre del estilo ----
 function etiquetaPlacaEstilo(codigo) {
   const nombres = {
-    clasica: 'Clásica (rectangular)',
-    llavero: 'Llavero (con orificio)',
-    ranuras: 'Con ranuras laterales',
-    dije: 'Dije / colgante (con argolla)',
+    clasica: 'Placa 1 — Clásica (rectangular), 40 x 20 mm',
+    llavero: 'Placa 2 — Llavero (con orificio), 40 x 22 mm',
+    ranuras: 'Placa 3 — Con ranuras laterales, 45 x 25 mm',
+    dije: 'Placa 4 — Dije / colgante (con argolla), 40 x 40 mm',
   };
   return nombres[codigo] || codigo;
 }
