@@ -2074,6 +2074,12 @@
     el.classList.add('active');
     var estilo = el.getAttribute('data-style');
     if (estilo) { window.VVQR_PLACA_ESTILO = estilo; }
+    // ---- si la placa personal ya está en el carrito, se refresca el recuadro de pago para que
+    // el nuevo estilo elegido quede reflejado de inmediato en itemsReal (lo que finalmente llega
+    // al aviso de pago del administrador -- ver bitácora punto 39) ----
+    if (typeof selected !== 'undefined' && selected.plate_personal && typeof renderOrder === 'function') {
+      renderOrder();
+    }
   }
   // ---- se expone en window porque este botón se invoca desde un atributo onclick="" en el HTML
   // (ámbito global), y la función está declarada dentro de este IIFE -- sin esto, el clic nunca
@@ -2304,7 +2310,13 @@
 
     var itemsReal = keys.map(function(k){
       var esRenov = RENEWAL_ITEMS.indexOf(k) !== -1;
-      return { item: k, folio: esRenov ? folioParaTipo(ITEM_TIPO[k]) : '' };
+      var entrada = { item: k, folio: esRenov ? folioParaTipo(ITEM_TIPO[k]) : '' };
+      // ---- se adjunta cuál de las 4 placas eligió el comprador (1-4, ver bitácora punto 39),
+      // para que el aviso de pago real al administrador ya no diga solo "plate_personal" sino
+      // cuál exactamente hay que fabricar -- se lee en cada renderOrder() para que quede
+      // actualizado aunque el comprador cambie de placa después de agregarla al carrito ----
+      if (k === 'plate_personal') { entrada.placaEstilo = window.VVQR_PLACA_ESTILO || 'clasica'; }
+      return entrada;
     });
 
     cxForm.dataset.modoReal = modoReal ? '1' : '';
