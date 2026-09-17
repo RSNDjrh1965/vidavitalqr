@@ -1001,7 +1001,7 @@ async function addFiles(list){
       reader.onerror = reject;
       reader.readAsDataURL(f);
     });
-    const dataUrl = await comprimirImagenDataUrl(dataUrlOriginal, 1800, 0.85);
+    const dataUrl = await comprimirImagenDataUrl(dataUrlOriginal, 1100, 0.6);
     attachments.push({ name: f.name, size: f.size, dataUrl });
   }
   renderFiles();
@@ -1478,6 +1478,25 @@ $('btnEmail').addEventListener('click', async () => {
       medicamentos,
       archivosImportantes,
     };
+
+    // ---- verificación de peso antes de enviar: el servidor (Netlify/AWS) rechaza cualquier
+    // solicitud que supere ~6MB con el error "413" — un mensaje críptico que no explica la causa
+    // real (demasiadas fotos/archivos adjuntos pesados). Se calcula aquí el peso aproximado de
+    // todo lo que se va a enviar (PDF + foto + tarjeta + archivos adjuntos) y, si ya se acerca al
+    // límite, se avisa con un mensaje claro ANTES de intentar el envío, en vez de dejar que el
+    // servidor lo rechace sin explicación. ----
+    const pesoAprox = (pdfBase64 ? pdfBase64.length : 0)
+      + (fotoBase64 ? fotoBase64.length : 0)
+      + (tarjetaBase64 ? tarjetaBase64.length : 0)
+      + archivosImportantes.reduce((suma, a) => suma + (a.dataUrl ? a.dataUrl.length : 0), 0);
+    const LIMITE_PESO_ENVIO = 5500000; // caracteres de texto base64 (~5.5MB), con margen bajo el límite real del servidor
+    if (pesoAprox > LIMITE_PESO_ENVIO) {
+      alert('Esta ficha es demasiado pesada para enviarse (por las fotos y/o los archivos adjuntos). Por favor quite alguno de los archivos adjuntos en "Archivos importantes", o use fotografías más livianas, y vuelva a intentarlo.');
+      btn.disabled = false;
+      btn.textContent = originalText;
+      if (procBadge) procBadge.classList.remove('visible');
+      return;
+    }
 
     const resp = await fetch('/.netlify/functions/send-ficha', {
       method: 'POST',
