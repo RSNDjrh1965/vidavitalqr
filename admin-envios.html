@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>VidaVitalQR — Etiquetas de envío (panel privado)</title>
+<meta name="robots" content="noindex, nofollow">
+<style>
+  :root{
+    --navy:#0F2A3D; --navy-light:#1B4863; --paper:#F7F5F0; --card:#FFFFFF;
+    --red:#C1272D; --teal:#2E7D6B; --slate:#5B6774; --line:#DDD8CC; --amber:#E2A63B;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{ background:var(--paper); font-family:'Source Sans Pro',Arial,sans-serif; color:var(--navy); padding:32px 16px 80px; }
+  .wrap{ max-width:640px; margin:0 auto; }
+  h1{ font-family:'Libre Franklin',Arial,sans-serif; font-size:1.4rem; margin-bottom:6px; }
+  p.sub{ color:var(--slate); margin-top:0; }
+  .card{ background:var(--card); border:1px solid var(--line); border-radius:12px; padding:24px; margin-top:20px; }
+  label{ display:block; font-size:0.85rem; font-weight:600; color:var(--navy-light); margin-bottom:5px; }
+  input{ width:100%; font-size:0.95rem; padding:10px 12px; border:1.4px solid var(--line); border-radius:8px; margin-bottom:14px; font-family:inherit; }
+  button{ font-family:'Libre Franklin',Arial,sans-serif; font-weight:600; font-size:0.92rem; padding:11px 20px; border-radius:8px; border:none; cursor:pointer; background:var(--teal); color:#fff; }
+  button:disabled{ opacity:0.5; cursor:not-allowed; }
+  #msg{ font-size:0.85rem; margin-top:10px; }
+  #msg.error{ color:var(--red); }
+  #msg.ok{ color:var(--teal); }
+
+  /* ---- etiqueta de envío, tamaño tarjeta de crédito estándar (85.6mm x 54mm) ---- */
+  #etiquetaWrap{ display:none; margin-top:24px; }
+  .etiqueta{
+    width:85.6mm; height:54mm; box-sizing:border-box;
+    border:1.2mm dashed #999; border-radius:3mm; padding:4mm 5mm;
+    font-family:Arial,Helvetica,sans-serif; color:#1a1a1a;
+    display:flex; flex-direction:column; justify-content:space-between; background:#fff;
+    margin:0 auto;
+  }
+  .etiqueta .top-row{ display:flex; justify-content:space-between; align-items:baseline; }
+  .etiqueta .brand{ display:flex; align-items:center; gap:2mm; font-size:8.5pt; font-weight:700; color:#0f5132; }
+  .etiqueta .brand .dot{ width:2.2mm; height:2.2mm; border-radius:50%; background:#0f5132; display:inline-block; }
+  .etiqueta .folio{ font-size:7pt; color:#666; font-weight:600; }
+  .etiqueta .nombre{ font-size:12pt; font-weight:700; margin-top:1mm; color:#111; }
+  .etiqueta .direccion{ font-size:9.5pt; line-height:1.35; margin-top:1mm; color:#222; }
+  .etiqueta .telefono{ font-size:9.5pt; font-weight:700; margin-top:1.5mm; color:#111; }
+  .etiqueta .footer-note{ font-size:6.3pt; color:#888; margin-top:1mm; }
+
+  @media print{
+    body *{ visibility:hidden; }
+    #etiquetaWrap, #etiquetaWrap *{ visibility:visible; }
+    #etiquetaWrap{ display:block; position:absolute; top:0; left:0; margin:0; }
+    @page{ size:85.6mm 54mm; margin:0; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Etiquetas de envío</h1>
+  <p class="sub">Panel privado — consulte la dirección de envío guardada por folio e imprima la etiqueta tamaño tarjeta de crédito.</p>
+
+  <div class="card">
+    <label for="pwInput">Contraseña de administración</label>
+    <input type="password" id="pwInput" autocomplete="current-password">
+    <label for="folioInput">Folio de la ficha</label>
+    <input type="text" id="folioInput" placeholder="Ej. VVITALQR-000123">
+    <button id="buscarBtn">Buscar dirección de envío</button>
+    <div id="msg"></div>
+  </div>
+
+  <div id="etiquetaWrap">
+    <div class="card" style="background:transparent; border:none; padding:0;">
+      <div class="etiqueta" id="etiqueta">
+        <div>
+          <div class="top-row">
+            <div class="brand"><span class="dot"></span>VidaVitalQR — Envío</div>
+            <div class="folio" id="etFolio"></div>
+          </div>
+          <div class="nombre" id="etNombre"></div>
+          <div class="direccion" id="etDireccion"></div>
+        </div>
+        <div>
+          <div class="telefono" id="etTelefono"></div>
+          <div class="footer-note">Dirección de envío registrada por el titular de esta ficha — VidaVitalQR</div>
+        </div>
+      </div>
+    </div>
+    <div style="text-align:center; margin-top:16px;">
+      <button id="imprimirBtn">Imprimir etiqueta</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+  var pwInput = document.getElementById('pwInput');
+  var folioInput = document.getElementById('folioInput');
+  var buscarBtn = document.getElementById('buscarBtn');
+  var msg = document.getElementById('msg');
+  var etiquetaWrap = document.getElementById('etiquetaWrap');
+  var imprimirBtn = document.getElementById('imprimirBtn');
+
+  function tipoDeFolio(folio){
+    var f = (folio || '').toUpperCase();
+    if (f.indexOf('VVMASCOTA') === 0) return 'mascota';
+    if (f.indexOf('VVOBJETO') === 0) return 'objeto';
+    return 'persona';
+  }
+
+  buscarBtn.addEventListener('click', function(){
+    var pw = pwInput.value;
+    var folio = folioInput.value.trim();
+    msg.className = '';
+    msg.textContent = '';
+    etiquetaWrap.style.display = 'none';
+
+    if (!pw) { msg.className = 'error'; msg.textContent = 'Ingrese la contraseña.'; return; }
+    if (!folio) { msg.className = 'error'; msg.textContent = 'Ingrese el folio.'; folioInput.focus(); return; }
+
+    buscarBtn.disabled = true;
+    buscarBtn.textContent = 'Buscando…';
+
+    fetch('/.netlify/functions/obtener-envio', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ password: pw, folio: folio, tipo: tipoDeFolio(folio) })
+    })
+      .then(function(resp){ return resp.json().then(function(json){ return { ok: resp.ok, json: json }; }); })
+      .then(function(result){
+        if (!result.ok) throw new Error((result.json && result.json.error) || 'No se pudo consultar la dirección.');
+        var datos = result.json;
+        document.getElementById('etFolio').textContent = 'Folio ' + (datos.folio || folio);
+        document.getElementById('etNombre').textContent = datos.nombreEnvio || '';
+        document.getElementById('etDireccion').innerHTML =
+          'Provincia: ' + (datos.provincia || '') + ' &middot; Cantón: ' + (datos.canton || '') + ' &middot; Distrito: ' + (datos.distrito || '') +
+          (datos.senas ? '<br>Otras señas: ' + datos.senas : '');
+        document.getElementById('etTelefono').textContent = 'Tel: ' + (datos.telefono || '');
+        etiquetaWrap.style.display = '';
+        msg.className = 'ok';
+        msg.textContent = 'Dirección encontrada.';
+      })
+      .catch(function(err){
+        msg.className = 'error';
+        msg.textContent = err.message || 'No se pudo consultar la dirección.';
+      })
+      .finally(function(){
+        buscarBtn.disabled = false;
+        buscarBtn.textContent = 'Buscar dirección de envío';
+      });
+  });
+
+  imprimirBtn.addEventListener('click', function(){ window.print(); });
+})();
+</script>
+</body>
+</html>

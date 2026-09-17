@@ -168,6 +168,32 @@
 
   /* ---------- Actions ---------- */
   .actions{display:flex;gap:14px;flex-wrap:wrap;margin-top:8px;}
+  /* ---- aviso discreto "En proceso" mientras se genera el PDF / se guarda la ficha (ver
+     bitácora de observaciones 2026-09-17) — no invasivo, solo visible junto a los botones ---- */
+  .proc-badge{
+    display:none;
+    align-items:center;
+    gap:8px;
+    margin-top:10px;
+    padding:8px 14px;
+    border-radius:999px;
+    background:#f2f0e8;
+    border:1px solid #ddd8cc;
+    color:#5b6774;
+    font-size:0.88rem;
+    font-weight:600;
+    width:fit-content;
+  }
+  .proc-badge.visible{ display:flex; }
+  .proc-badge .proc-spinner{
+    width:14px; height:14px;
+    border-radius:50%;
+    border:2px solid #c9c3b3;
+    border-top-color:#5b6774;
+    animation:proc-spin 0.8s linear infinite;
+    flex:none;
+  }
+  @keyframes proc-spin{ to{ transform:rotate(360deg); } }
   .btn{
     border:none;border-radius:9px;padding:14px 22px;font-size:14.5px;font-weight:700;cursor:pointer;
     display:flex;align-items:center;gap:9px;letter-spacing:.2px;
@@ -402,6 +428,7 @@
 <button class="btn btn-primary" id="btnEmail" data-i18n="btnEnviar">ENVIAR</button>
 <button class="btn btn-ghost" id="btnReset" data-i18n="btnLimpiar">↺ Limpiar formulario</button>
 </div>
+<div class="proc-badge no-print" id="procBadge"><span class="proc-spinner"></span><span id="procBadgeTexto" data-i18n="procBadgeTexto">En proceso…</span></div>
 
 <footer data-i18n="footerText">VidaVitalQR · Ficha de emergencia personal · Uso restringido a situaciones de emergencia</footer>
 </div>
@@ -476,7 +503,7 @@ const TEXTOS_FICHA = {
     h2Archivos: 'Archivos importantes (.jpg)',
     hintArchivos: 'Carné de vacunación, certificado de microchip, récipes veterinarios, etc. — solo imágenes .jpg. Cada archivo se agrega como una página adicional dentro del PDF.',
     dropText: '📎 Arrastra tus archivos .jpg aquí o haz clic para seleccionarlos',
-    btnEnviar: 'ENVIAR', btnLimpiar: '↺ Limpiar formulario',
+    btnEnviar: 'ENVIAR', btnLimpiar: '↺ Limpiar formulario', procBadgeTexto: 'En proceso…',
     footerText: 'VidaVitalQR · Ficha de emergencia personal · Uso restringido a situaciones de emergencia',
     // ---- textos generados dinámicamente por JS ----
     pvNombreDefault: 'Nombre de la mascota',
@@ -557,7 +584,7 @@ const TEXTOS_FICHA = {
     h2Archivos: 'Important files (.jpg)',
     hintArchivos: 'Vaccination card, microchip certificate, vet prescriptions, etc. — .jpg images only. Each file is added as an extra page in the PDF.',
     dropText: '📎 Drag your .jpg files here or click to select them',
-    btnEnviar: 'SUBMIT', btnLimpiar: '↺ Clear form',
+    btnEnviar: 'SUBMIT', btnLimpiar: '↺ Clear form', procBadgeTexto: 'Processing…',
     footerText: 'VidaVitalQR · Personal emergency card · For emergency use only',
     pvNombreDefault: 'Pet\'s name',
     pendiente: '— pending —',
@@ -637,7 +664,7 @@ const TEXTOS_FICHA = {
     h2Archivos: 'Fichiers importants (.jpg)',
     hintArchivos: 'Carnet de vaccination, certificat de puce électronique, ordonnances vétérinaires, etc. — images .jpg uniquement. Chaque fichier est ajouté comme page supplémentaire dans le PDF.',
     dropText: '📎 Glissez vos fichiers .jpg ici ou cliquez pour les sélectionner',
-    btnEnviar: 'ENVOYER', btnLimpiar: '↺ Effacer le formulaire',
+    btnEnviar: 'ENVOYER', btnLimpiar: '↺ Effacer le formulaire', procBadgeTexto: 'Traitement en cours…',
     footerText: 'VidaVitalQR · Fiche d\'urgence personnelle · Usage réservé aux situations d\'urgence',
     pvNombreDefault: 'Nom de l\'animal',
     pendiente: '— en attente —',
@@ -717,7 +744,7 @@ const TEXTOS_FICHA = {
     h2Archivos: 'Arquivos importantes (.jpg)',
     hintArchivos: 'Carteirinha de vacinação, certificado de microchip, receitas veterinárias, etc. — apenas imagens .jpg. Cada arquivo é adicionado como uma página extra no PDF.',
     dropText: '📎 Arraste seus arquivos .jpg aqui ou clique para selecioná-los',
-    btnEnviar: 'ENVIAR', btnLimpiar: '↺ Limpar formulário',
+    btnEnviar: 'ENVIAR', btnLimpiar: '↺ Limpar formulário', procBadgeTexto: 'Em processamento…',
     footerText: 'VidaVitalQR · Ficha de emergência pessoal · Uso restrito a situações de emergência',
     pvNombreDefault: 'Nome da mascota',
     pendiente: '— pendente —',
@@ -1666,8 +1693,10 @@ $('btnEmail').addEventListener('click', async () => {
 
   const btn = $('btnEmail');
   const originalText = btn.textContent;
+  const procBadge = $('procBadge');
   btn.disabled = true;
   btn.textContent = T().generandoPdf;
+  if (procBadge) procBadge.classList.add('visible');
 
   const folio = $('counterNum').textContent.trim() || 'VidaVitalQR';
   const filename = `${folio}.pdf`;
@@ -1680,6 +1709,7 @@ $('btnEmail').addEventListener('click', async () => {
     alert(T().errorGenerarPdf(err && err.message ? err.message : err));
     btn.disabled = false;
     btn.textContent = originalText;
+    if (procBadge) procBadge.classList.remove('visible');
     return;
   }
 
@@ -1755,6 +1785,7 @@ $('btnEmail').addEventListener('click', async () => {
   }finally{
     btn.disabled = false;
     btn.textContent = originalText;
+    if (procBadge) procBadge.classList.remove('visible');
   }
 });
 
