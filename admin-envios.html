@@ -132,7 +132,7 @@
           'Provincia: ' + (datos.provincia || '') + ' &middot; Cantón: ' + (datos.canton || '') + ' &middot; Distrito: ' + (datos.distrito || '') +
           (datos.senas ? '<br>Otras señas: ' + datos.senas : '');
         document.getElementById('etTelefono').textContent = 'Tel: ' + (datos.telefono || '');
-        etiquetaWrap.style.display = '';
+        etiquetaWrap.style.display = 'block';
         msg.className = 'ok';
         msg.textContent = 'Dirección encontrada.';
       })
