@@ -80,6 +80,27 @@ function enlaceMapa(lat, lng) {
   return `https://www.google.com/maps?q=${lat},${lng}`;
 }
 
+// ---- versión "acortada" del enlace al PDF que se muestra en el correo, para no exponer la URL
+// completa del bucket de S3 (dominio + carpeta interna) — el enlace real (href) sigue siendo el
+// completo, esto solo cambia lo que se ve escrito. Ej: https://vidavitalqr............/VVITALQR00000091.pdf
+function urlAcortada(url) {
+  try {
+    const u = new URL(url);
+    const archivo = u.pathname.split('/').filter(Boolean).pop() || '';
+    return `https://vidavitalqr............/${archivo}`;
+  } catch (err) {
+    return url;
+  }
+}
+
+function escaparHtml(texto) {
+  return String(texto == null ? '' : texto)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
 // ---- envía el aviso de escaneo, con la ubicación que se haya podido determinar ----
 async function avisarContactos(datos, ubicacionTexto) {
   const apiKey = process.env.RESEND_API_KEY;
@@ -97,18 +118,42 @@ async function avisarContactos(datos, ubicacionTexto) {
     : `⚠️ Alguien escaneó el código QR de emergencia de ${datos.nombreCompleto || 'un usuario'}`;
 
   const descTipo = esTipoMascota ? 'la mascota' : (esTipoObjeto ? 'el objeto' : 'la ficha de emergencia de');
+  const introTexto = `El código QR de ${descTipo} "${datos.nombreCompleto || 'Sin nombre'}" (folio ${datos.folio}) fue escaneado el ${fechaHoraCR()} (hora de Costa Rica).`;
+  const explicacionTexto = esTipoObjeto
+    ? 'Esto puede significar que el objeto fue encontrado por alguien.'
+    : 'Esto puede significar que alguien está tratando de contactarlo(a) por una emergencia, o que la mascota fue encontrada.';
+  const notaFinalTexto = 'Este es un aviso automático de VidaVitalQR. Si usted mismo(a) escaneó el código para probarlo, puede ignorar este mensaje.';
+
+  // ---- versión en texto plano: se muestra la URL acortada (no queda como enlace clickeable en
+  // texto plano, pero ya no se expone la ruta completa del bucket de S3) ----
   const cuerpo = [
-    `El código QR de ${descTipo} "${datos.nombreCompleto || 'Sin nombre'}" (folio ${datos.folio}) fue escaneado el ${fechaHoraCR()} (hora de Costa Rica).`,
+    introTexto,
     '',
-    esTipoObjeto
-      ? 'Esto puede significar que el objeto fue encontrado por alguien.'
-      : 'Esto puede significar que alguien está tratando de contactarlo(a) por una emergencia, o que la mascota fue encontrada.',
+    explicacionTexto,
     '',
     ubicacionTexto || '',
-    datos.pdfUrl ? `Ficha completa: ${datos.pdfUrl}` : '',
+    datos.pdfUrl ? `Ficha completa: ${urlAcortada(datos.pdfUrl)}` : '',
     '',
-    'Este es un aviso automático de VidaVitalQR. Si usted mismo(a) escaneó el código para probarlo, puede ignorar este mensaje.',
+    notaFinalTexto,
   ].filter(Boolean).join('\n');
+
+  // ---- versión en HTML: el texto visible es la URL acortada, pero el enlace (href) real sigue
+  // siendo la URL completa, así que el correo sigue siendo funcional al hacer clic ----
+  const ubicacionHtml = ubicacionTexto
+    ? `<p>${escaparHtml(ubicacionTexto).replace(/\n/g, '<br>')}</p>`
+    : '';
+  const fichaHtml = datos.pdfUrl
+    ? `<p><strong>Ficha completa:</strong> <a href="${escaparHtml(datos.pdfUrl)}">${escaparHtml(urlAcortada(datos.pdfUrl))}</a></p>`
+    : '';
+  const cuerpoHtml = [
+    '<div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;color:#222;line-height:1.5;">',
+    `<p>${escaparHtml(introTexto)}</p>`,
+    `<p>${escaparHtml(explicacionTexto)}</p>`,
+    ubicacionHtml,
+    fichaHtml,
+    `<p style="color:#777;font-size:12px;margin-top:18px;">${escaparHtml(notaFinalTexto)}</p>`,
+    '</div>',
+  ].filter(Boolean).join('');
 
   const envios = contactosConCorreo.map((c) =>
     fetch('https://api.resend.com/emails', {
@@ -119,6 +164,7 @@ async function avisarContactos(datos, ubicacionTexto) {
         to: [c.email],
         subject: asunto,
         text: `Hola ${c.nombre || ''},\n\n${cuerpo}`,
+        html: `<p>Hola ${escaparHtml(c.nombre || '')},</p>${cuerpoHtml}`,
       }),
     }).catch((err) => {
       console.error('No se pudo avisar a', c.email, err);

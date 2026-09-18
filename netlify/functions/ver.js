@@ -73,6 +73,9 @@ const TEXTOS = {
     avisoSolicitud: 'Se solicita su permiso para enviar a la persona de contacto la ubicación actual de la persona y/o mascota en aprietos.',
     avisoUbicPrecisa: 'Gracias. Se notificó a los contactos de emergencia junto con su ubicación.',
     avisoUbicAprox: 'No se compartió su ubicación exacta. Se notificó a los contactos de emergencia con una ubicación aproximada según su conexión a internet.',
+    ubicPreguntaTexto: '¿Autoriza compartir su ubicación exacta con los contactos de emergencia registrados en esta ficha? Si no autoriza, se les notificará igual, pero con una ubicación solo aproximada.',
+    btnUbicSi: 'Sí, compartir ubicación exacta',
+    btnUbicNo: 'No, usar solo aproximada',
   },
   en: {
     tituloPersona: 'Emergency information',
@@ -99,6 +102,9 @@ const TEXTOS = {
     avisoSolicitud: 'We are requesting your permission to send the contact person the current location of the person and/or pet in distress.',
     avisoUbicPrecisa: 'Thank you. The emergency contacts were notified along with your location.',
     avisoUbicAprox: 'Your exact location was not shared. The emergency contacts were notified with an approximate location based on your internet connection.',
+    ubicPreguntaTexto: 'Do you authorize sharing your exact location with the emergency contacts registered on this record? If you do not authorize it, they will still be notified, but only with an approximate location.',
+    btnUbicSi: 'Yes, share exact location',
+    btnUbicNo: 'No, use approximate only',
   },
   fr: {
     tituloPersona: "Informations d'urgence",
@@ -125,6 +131,9 @@ const TEXTOS = {
     avisoSolicitud: "Nous vous demandons la permission d'envoyer à la personne de contact la localisation actuelle de la personne et/ou de l'animal en détresse.",
     avisoUbicPrecisa: "Merci. Les contacts d'urgence ont été notifiés avec votre localisation.",
     avisoUbicAprox: "Votre localisation exacte n'a pas été partagée. Les contacts d'urgence ont été notifiés avec une localisation approximative basée sur votre connexion internet.",
+    ubicPreguntaTexto: "Autorisez-vous le partage de votre localisation exacte avec les contacts d'urgence enregistrés sur cette fiche ? Si vous ne l'autorisez pas, ils seront tout de même notifiés, mais avec une localisation seulement approximative.",
+    btnUbicSi: 'Oui, partager la localisation exacte',
+    btnUbicNo: 'Non, utiliser seulement l\'approximative',
   },
   pt: {
     tituloPersona: 'Informações de emergência',
@@ -151,6 +160,9 @@ const TEXTOS = {
     avisoSolicitud: 'Solicitamos sua permissão para enviar ao contato a localização atual da pessoa e/ou animal em apuros.',
     avisoUbicPrecisa: 'Obrigado. Os contatos de emergência foram notificados junto com sua localização.',
     avisoUbicAprox: 'Sua localização exata não foi compartilhada. Os contatos de emergência foram notificados com uma localização aproximada baseada na sua conexão à internet.',
+    ubicPreguntaTexto: 'Você autoriza compartilhar sua localização exata com os contatos de emergência registrados nesta ficha? Se não autorizar, eles ainda serão notificados, mas com uma localização apenas aproximada.',
+    btnUbicSi: 'Sim, compartilhar localização exata',
+    btnUbicNo: 'Não, usar apenas a aproximada',
   },
 };
 
@@ -229,6 +241,13 @@ function paginaVisor(datos) {
   .contacto{padding:8px 0;border-top:1px solid var(--line);font-size:0.95rem;}
   .btnPdf{display:block;text-align:center;margin-top:22px;background:var(--signal);color:#fff;text-decoration:none;font-weight:700;padding:14px;border-radius:10px;}
   .avisoFooter{color:var(--muted);font-size:0.8rem;text-align:center;margin-top:16px;}
+  .ubicPrompt{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px;margin-top:16px;text-align:center;}
+  .ubicPrompt p{font-size:0.85rem;color:var(--ink-soft);margin:0 0 12px;}
+  .ubicPrompt .fila{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;}
+  .ubicPrompt button{flex:1;min-width:150px;border-radius:8px;padding:10px 12px;font-size:0.85rem;font-weight:700;cursor:pointer;border:1px solid var(--teal-deep);}
+  .ubicPrompt .btnSi{background:var(--teal-deep);color:#fff;}
+  .ubicPrompt .btnNo{background:var(--card);color:var(--teal-deep);}
+  .oculto{display:none !important;}
 </style>
 </head>
 <body>
@@ -253,7 +272,14 @@ function paginaVisor(datos) {
     </div>
     ${datos.pdfUrl ? `<a class="btnPdf" href="${escapeHtml(datos.pdfUrl)}" target="_blank" rel="noopener" data-i18n="botonPdf"></a>` : ''}
   </div>
-  <p class="avisoFooter" id="avisoUbicacion"></p>
+  <div class="ubicPrompt" id="ubicPrompt">
+    <p data-i18n="ubicPreguntaTexto"></p>
+    <div class="fila">
+      <button type="button" class="btnSi" id="btnUbicSi" data-i18n="btnUbicSi"></button>
+      <button type="button" class="btnNo" id="btnUbicNo" data-i18n="btnUbicNo"></button>
+    </div>
+  </div>
+  <p class="avisoFooter oculto" id="avisoUbicacion"></p>
 </div>
 <script>
   var TEXTOS = ${JSON.stringify(TEXTOS)};
@@ -303,9 +329,13 @@ function paginaVisor(datos) {
   } catch(e){}
   aplicarIdioma(preferido);
 
-  // ---- pide permiso de ubicación (aplica igual para fichas de persona y de mascota) y avisa
-  // en segundo plano a la función que envía el correo, con coordenadas exactas si se concedió
-  // el permiso, o sin ellas si se rechazó (esa función usará la IP como respaldo aproximado) ----
+  // ---- pregunta explícitamente, dentro de la propia página (no solo el permiso nativo del
+  // navegador, que una vez concedido/rechazado una vez ya no vuelve a preguntar en visitas
+  // posteriores), si la persona que escaneó autoriza compartir su ubicación exacta. Solo si
+  // responde "Sí" se le pide el permiso de geolocalización al navegador (que sí muestra su
+  // propio diálogo nativo en ese momento, la primera vez); si responde "No", se avisa de una
+  // vez con ubicación aproximada, sin siquiera intentar obtener coordenadas. Aplica igual para
+  // fichas de persona, mascota y objeto. ----
   function avisarEscaneo(lat, lng, permitido){
     if (!FOLIO) return;
     try {
@@ -318,25 +348,49 @@ function paginaVisor(datos) {
     } catch (e) {}
   }
 
-  if (navigator.geolocation) {
+  function ocultarPromptUbicacion(){
+    var prompt = document.getElementById('ubicPrompt');
+    var aviso = document.getElementById('avisoUbicacion');
+    if (prompt) prompt.classList.add('oculto');
+    if (aviso) aviso.classList.remove('oculto');
+  }
+
+  function pedirUbicacionExacta(){
+    if (!navigator.geolocation) {
+      estadoUbicacion = 'denegada';
+      ocultarPromptUbicacion();
+      actualizarAvisoUbicacion();
+      avisarEscaneo(null, null, false);
+      return;
+    }
     navigator.geolocation.getCurrentPosition(
       function (pos) {
         estadoUbicacion = 'concedida';
+        ocultarPromptUbicacion();
         actualizarAvisoUbicacion();
         avisarEscaneo(pos.coords.latitude, pos.coords.longitude, true);
       },
       function () {
+        // el navegador rechazó el permiso (o no respondió a tiempo) aunque la persona haya
+        // aceptado en nuestra propia pregunta — se avisa igual, con ubicación aproximada.
         estadoUbicacion = 'denegada';
+        ocultarPromptUbicacion();
         actualizarAvisoUbicacion();
         avisarEscaneo(null, null, false);
       },
       { timeout: 6000, maximumAge: 0, enableHighAccuracy: false }
     );
-  } else {
+  }
+
+  var btnUbicSi = document.getElementById('btnUbicSi');
+  var btnUbicNo = document.getElementById('btnUbicNo');
+  if (btnUbicSi) btnUbicSi.addEventListener('click', pedirUbicacionExacta);
+  if (btnUbicNo) btnUbicNo.addEventListener('click', function(){
     estadoUbicacion = 'denegada';
+    ocultarPromptUbicacion();
     actualizarAvisoUbicacion();
     avisarEscaneo(null, null, false);
-  }
+  });
 </script>
 </body>
 </html>`;
