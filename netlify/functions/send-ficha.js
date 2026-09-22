@@ -180,7 +180,45 @@ async function cargarOCrearLogin(s3, folio, datosFormulario, carpeta, resetCread
 // verificado"— NO hace que la promesa de fetch() se rechace, así que el .catch() de antes
 // nunca se disparaba y el problema quedaba invisible, tanto para quien revisa los logs de
 // Netlify como en el correo de aviso al administrador).
-async function enviarCodigoPorCorreo(contactos, { folio, pin, nombreCompleto, tipo }) {
+// ---- textos del correo de código de acceso en los 4 idiomas del sitio (ES/EN/FR/PT) — el
+// idioma se elige por lo que la persona tenía seleccionado en el formulario al momento de
+// enviarlo (ver punto 54 de la bitácora); si no se reconoce, cae a español. ----
+const TEXTOS_CODIGO_CORREO = {
+  es: {
+    asunto: (deQuien, folio) => `Código de acceso a la ficha VidaVitalQR${deQuien} — ${folio}`,
+    intro: (deQuien, folio) => `Este es el código de acceso vigente para la ficha${deQuien} en VidaVitalQR (folio ${folio}):`,
+    folioLbl: 'Folio', pinLbl: 'PIN de acceso',
+    explicacion: 'Este código es necesario para poder actualizar la ficha en el futuro (por ejemplo, para renovarla o corregir algún dato). Guárdalo en un lugar seguro — nunca queda visible en ninguna página pública del sitio.',
+    motivo: 'Recibes este correo porque quedaste registrado(a) como contacto de emergencia de esta ficha. Este mensaje se envía automáticamente cada vez que la ficha se crea o se actualiza, para que siempre tengas a la mano el código más reciente.',
+    firma: 'Este es un correo automático de VidaVitalQR.',
+  },
+  en: {
+    asunto: (deQuien, folio) => `Access code for the VidaVitalQR record${deQuien} — ${folio}`,
+    intro: (deQuien, folio) => `This is the current access code for the record${deQuien} in VidaVitalQR (folio ${folio}):`,
+    folioLbl: 'Folio', pinLbl: 'Access PIN',
+    explicacion: 'This code is needed to update the record in the future (for example, to renew it or fix a detail). Keep it somewhere safe — it never appears on any public page of the site.',
+    motivo: 'You are receiving this email because you are registered as an emergency contact for this record. This message is sent automatically every time the record is created or updated, so you always have the latest code on hand.',
+    firma: 'This is an automated email from VidaVitalQR.',
+  },
+  fr: {
+    asunto: (deQuien, folio) => `Code d'accès à la fiche VidaVitalQR${deQuien} — ${folio}`,
+    intro: (deQuien, folio) => `Voici le code d'accès actuel pour la fiche${deQuien} sur VidaVitalQR (numéro de dossier ${folio}) :`,
+    folioLbl: 'Numéro de dossier', pinLbl: "Code PIN d'accès",
+    explicacion: "Ce code est nécessaire pour pouvoir mettre à jour la fiche à l'avenir (par exemple pour la renouveler ou corriger une donnée). Gardez-le en lieu sûr — il n'apparaît jamais sur aucune page publique du site.",
+    motivo: "Vous recevez cet e-mail car vous êtes enregistré(e) comme contact d'urgence de cette fiche. Ce message est envoyé automatiquement chaque fois que la fiche est créée ou mise à jour, afin que vous ayez toujours le code le plus récent à portée de main.",
+    firma: "Ceci est un e-mail automatique de VidaVitalQR.",
+  },
+  pt: {
+    asunto: (deQuien, folio) => `Código de acesso à ficha VidaVitalQR${deQuien} — ${folio}`,
+    intro: (deQuien, folio) => `Este é o código de acesso vigente para a ficha${deQuien} no VidaVitalQR (folio ${folio}):`,
+    folioLbl: 'Folio', pinLbl: 'PIN de acesso',
+    explicacion: 'Este código é necessário para poder atualizar a ficha no futuro (por exemplo, para renová-la ou corrigir algum dado). Guarde-o em um lugar seguro — ele nunca aparece em nenhuma página pública do site.',
+    motivo: 'Você está recebendo este e-mail porque ficou registrado(a) como contato de emergência desta ficha. Esta mensagem é enviada automaticamente sempre que a ficha é criada ou atualizada, para que você sempre tenha o código mais recente à mão.',
+    firma: 'Este é um e-mail automático do VidaVitalQR.',
+  },
+};
+
+async function enviarCodigoPorCorreo(contactos, { folio, pin, nombreCompleto, tipo, idioma }) {
   const apiKey = process.env.RESEND_API_KEY;
   if (!apiKey || !folio || !pin) return { intentados: 0, fallidos: [] };
 
@@ -191,20 +229,21 @@ async function enviarCodigoPorCorreo(contactos, { folio, pin, nombreCompleto, ti
   ));
   if (correos.length === 0) return { intentados: 0, fallidos: [] };
 
+  const t = TEXTOS_CODIGO_CORREO[idioma] || TEXTOS_CODIGO_CORREO.es;
   const deQuien = nombreCompleto ? ` de "${nombreCompleto}"` : '';
-  const asunto = `Código de acceso a la ficha VidaVitalQR${deQuien} — ${folio}`;
+  const asunto = t.asunto(deQuien, folio);
 
   const cuerpo = [
-    `Este es el código de acceso vigente para la ficha${deQuien} en VidaVitalQR (folio ${folio}):`,
+    t.intro(deQuien, folio),
     '',
-    `Folio: ${folio}`,
-    `PIN de acceso: ${pin}`,
+    `${t.folioLbl}: ${folio}`,
+    `${t.pinLbl}: ${pin}`,
     '',
-    'Este código es necesario para poder actualizar la ficha en el futuro (por ejemplo, para renovarla o corregir algún dato). Guárdalo en un lugar seguro — nunca queda visible en ninguna página pública del sitio.',
+    t.explicacion,
     '',
-    'Recibes este correo porque quedaste registrado(a) como contacto de emergencia de esta ficha. Este mensaje se envía automáticamente cada vez que la ficha se crea o se actualiza, para que siempre tengas a la mano el código más reciente.',
+    t.motivo,
     '',
-    'Este es un correo automático de VidaVitalQR.',
+    t.firma,
   ].join('\n');
 
   const fallidos = [];
@@ -233,7 +272,7 @@ async function enviarCodigoPorCorreo(contactos, { folio, pin, nombreCompleto, ti
   return { intentados: correos.length, fallidos };
 }
 
-async function subirABuckets(s3, region, { folio, filename, pdfBase64, fotoBase64, tarjetaBase64, placaEstilo, nombreCompleto, tipo, contactos, datosVisor }) {
+async function subirABuckets(s3, region, { folio, filename, pdfBase64, fotoBase64, tarjetaBase64, placaEstilo, nombreCompleto, tipo, contactos, datosVisor, idioma }) {
   const region_ = region;
   const carpeta = carpetaTipo(tipo, folio);
 
@@ -314,6 +353,9 @@ async function subirABuckets(s3, region, { folio, filename, pdfBase64, fotoBase6
       placaEstilo: placaEstilo || '',
       contactos: Array.isArray(contactos) ? contactos : [],
       datosVisor: datosVisor && typeof datosVisor === 'object' ? datosVisor : {},
+      // idioma elegido al llenar/renovar la ficha (ES/EN/FR/PT) — lo lee avisar-escaneo.js para
+      // enviar el aviso de escaneo en el mismo idioma que usó quien registró la ficha
+      idioma: idioma || 'es',
       actualizado: new Date().toISOString(),
     }), 'utf-8'),
     ContentType: 'application/json',
@@ -397,6 +439,13 @@ exports.handler = async (event) => {
   }
 
   const { folio, filename, pdfBase64, nombreCompleto, tipo, fotoBase64, tarjetaBase64, placaEstilo, contactos, datosVisor, datosFormulario, esRenovacionPago } = payload;
+  // ---- idioma elegido por quien llenó la ficha (ES/EN/FR/PT) — se guarda junto con la ficha
+  // para que los correos automáticos que lleguen después (código de acceso aquí mismo, y el
+  // aviso de escaneo en avisar-escaneo.js) puedan enviarse en ese mismo idioma. Solo se aceptan
+  // los 4 códigos reales; cualquier otro valor (o su ausencia) cae a español por defecto —
+  // nunca se confía ciegamente en lo que mande el navegador para construir texto del correo. ----
+  const IDIOMAS_VALIDOS = ['es', 'en', 'fr', 'pt'];
+  const idioma = IDIOMAS_VALIDOS.includes(payload.idioma) ? payload.idioma : 'es';
 
   if (!pdfBase64 || !filename) {
     return {
@@ -416,7 +465,7 @@ exports.handler = async (event) => {
   try {
     const region = process.env.S3_REGION || 'us-east-1';
     const s3 = getS3Client();
-    const subido = await subirABuckets(s3, region, { folio, filename, pdfBase64, fotoBase64, tarjetaBase64, placaEstilo, nombreCompleto, tipo, contactos, datosVisor });
+    const subido = await subirABuckets(s3, region, { folio, filename, pdfBase64, fotoBase64, tarjetaBase64, placaEstilo, nombreCompleto, tipo, contactos, datosVisor, idioma });
     pdfUrl = subido.pdfUrl; fotoUrl = subido.fotoUrl; qrUrl = subido.qrUrl; qrSvg = subido.qrSvg; tarjetaUrl = subido.tarjetaUrl;
 
     // El login (y su PIN) se resuelve ANTES de escribir el resumen, para poder incluir el PIN
@@ -429,7 +478,7 @@ exports.handler = async (event) => {
       // se envía en cada guardado (ficha nueva o actualización), no solo cuando el PIN es nuevo,
       // para que los contactos de emergencia siempre tengan a la mano el folio y el PIN vigentes
       // (el código QR no se envía por correo — solo se muestra en pantalla)
-      const resultadoCodigo = await enviarCodigoPorCorreo(contactos, { folio, pin: pinActual, nombreCompleto, tipo });
+      const resultadoCodigo = await enviarCodigoPorCorreo(contactos, { folio, pin: pinActual, nombreCompleto, tipo, idioma });
       if (resultadoCodigo && resultadoCodigo.fallidos && resultadoCodigo.fallidos.length) {
         codigoCorreoFallidos = resultadoCodigo.fallidos;
       }
