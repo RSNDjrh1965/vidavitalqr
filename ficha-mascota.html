@@ -865,10 +865,10 @@ document.getElementById('langbar').addEventListener('click', (e) => {
       if (urlLang && TEXTOS_FICHA[urlLang]) preferido = urlLang;
     }catch(e){}
   }
-  if (!preferido) {
-    const nav = (navigator.language || 'es').slice(0,2).toLowerCase();
-    if (TEXTOS_FICHA[nav]) preferido = nav;
-  }
+  // ---- idioma por defecto: español, siempre — ya no se detecta el idioma del navegador para
+  // elegir el idioma inicial (a petición explícita del usuario, ver index.html). Solo se
+  // respeta un idioma distinto si la persona ya lo eligió antes (localStorage) o si llegó por
+  // un enlace con ?lang= explícito. ----
   aplicarIdiomaFicha(preferido || 'es');
 })();
 

@@ -228,10 +228,9 @@
         var params = new URLSearchParams(window.location.search);
         var deUrl = params.get('lang');
         if (deUrl && TEXTOS_PANEL[deUrl]) inicial = deUrl;
-        else {
-          var nav = (navigator.language || '').slice(0, 2).toLowerCase();
-          if (TEXTOS_PANEL[nav]) inicial = nav;
-        }
+        // ---- idioma por defecto: español, siempre — ya no se detecta el idioma del
+        // navegador para elegir el idioma inicial (a petición explícita del usuario, ver
+        // index.html). ----
       } catch (e) {}
     }
     aplicarIdiomaPanel(inicial);
