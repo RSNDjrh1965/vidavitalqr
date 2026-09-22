@@ -318,14 +318,14 @@ function paginaVisor(datos) {
     b.addEventListener('click', function(){ aplicarIdioma(b.getAttribute('data-lang')); });
   });
 
+  // ---- idioma por defecto: español, siempre — ya no se detecta el idioma del navegador para
+  // elegir el idioma inicial (a petición explícita del usuario, ver index.html). Solo se
+  // respeta un idioma distinto si la persona ya lo eligió antes en este sitio
+  // (localStorage). ----
   var preferido = 'es';
   try {
     var guardado = localStorage.getItem('vidavitalqr_lang');
     if (guardado && TEXTOS[guardado]) preferido = guardado;
-    else {
-      var nav = (navigator.language || 'es').slice(0,2).toLowerCase();
-      if (TEXTOS[nav]) preferido = nav;
-    }
   } catch(e){}
   aplicarIdioma(preferido);
 
