@@ -136,11 +136,15 @@ exports.handler = async (event) => {
     items = [{ item: 'renewal', folio: meta.folio || '', tipo: meta.tipo || '' }];
   }
   const folios = meta.folios || items.filter((it) => it.folio).map((it) => it.folio).join(',');
+  // ---- costo de envío (agregado por crear-pago.js en metadata.envio cuando el carrito incluía
+  // algún producto físico) — se reporta aparte en el correo para que quede claro que ese monto
+  // adicional es el envío y no un producto más ----
+  const envio = meta.envio ? parseFloat(meta.envio) : 0;
 
   console.log('onvo-webhook: pago CONFIRMADO —', items.length, 'producto(s), folios:', folios || '(ninguno)', '— sesión', sessionId, '— modo', modo);
 
   // ---- 3) Avisar por correo al administrador (mismo destinatario que ya recibe los demás avisos) ----
-  await avisarAdministrador({ items, folios, sessionId, modo });
+  await avisarAdministrador({ items, folios, sessionId, modo, envio });
 
   // TODO (próxima fase, una vez confirmado que esto funciona en pruebas): marcar cada ficha
   // (según folio/tipo en "items") como renovada/pagada en S3 (reiniciar su fecha "creado", igual
@@ -153,7 +157,7 @@ exports.handler = async (event) => {
   return { statusCode: 200, body: 'ok' };
 };
 
-async function avisarAdministrador({ items, folios, sessionId, modo }) {
+async function avisarAdministrador({ items, folios, sessionId, modo, envio }) {
   const apiKey = process.env.RESEND_API_KEY;
   if (!apiKey) {
     console.error('onvo-webhook: falta RESEND_API_KEY — no se pudo avisar por correo del pago confirmado.');
@@ -163,13 +167,14 @@ async function avisarAdministrador({ items, folios, sessionId, modo }) {
   const listaItems = items.length
     ? items.map((it) => '  - ' + descripcionItem(it) + (it.folio ? ' (folio: ' + it.folio + ')' : '')).join('\n')
     : '  (sin detalle de productos)';
+  const lineaEnvio = envio > 0 ? '  - Envío: $' + envio.toFixed(2) + '\n' : '';
 
   const asunto = 'Pago confirmado — ' + items.length + ' producto(s)' + (modo === 'test' ? ' (MODO PRUEBA)' : '');
   const cuerpo = [
     'ONVO Pay confirmó un pago de VidaVitalQR.',
     '',
     'Productos:',
-    listaItems,
+    listaItems + (lineaEnvio ? '\n' + lineaEnvio.trimEnd() : ''),
     '',
     'Folios asociados: ' + (folios || '(ninguno)'),
     'Sesión de ONVO Pay: ' + sessionId,
@@ -188,7 +193,7 @@ async function avisarAdministrador({ items, folios, sessionId, modo }) {
         '<li style="margin-bottom:6px;"><strong style="color:#0a7d3c;font-size:15px;">' + escaparHtml(descripcionItem(it)) + '</strong>' +
         (it.folio ? ' &nbsp;<span style="color:#555;">(folio: ' + escaparHtml(it.folio) + ')</span>' : '') +
         '</li>'
-      ).join('') + '</ul>'
+      ).join('') + (envio > 0 ? '<li style="margin-bottom:6px;"><strong style="color:#555;font-size:15px;">Envío</strong> &nbsp;<span style="color:#555;">$' + envio.toFixed(2) + '</span></li>' : '') + '</ul>'
     : '<p style="color:#555;">(sin detalle de productos)</p>';
   const cuerpoHtml = [
     '<div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;color:#222;line-height:1.5;">',

@@ -34,6 +34,15 @@ const PRECIOS = {
 const IVA_RATE = 0.13;
 const MAX_ITEMS_POR_PEDIDO = 20; // límite defensivo, muy por encima de lo que ofrece la página
 
+// ---- costo de envío: cargo único de $8.50 cuando el carrito incluye al menos un producto
+// físico, cubre hasta 5 productos físicos por dirección (van juntos en el mismo paquete) — nunca
+// se cobra un envío aparte por cada producto físico agregado. Debe coincidir siempre con
+// SHIPPING_COST/ITEMS_FISICOS de index.html — si se cambia un lado, hay que cambiar el otro. Se
+// recalcula aquí siempre desde cero, nunca se confía en ningún monto de envío que mande el
+// navegador. ----
+const SHIPPING_COST = 8.50;
+const ITEMS_FISICOS = ['plate_personal', 'plate_mascota', 'plate_objeto', 'bracelet', 'chain', 'idcard'];
+
 // ---- estilos válidos de "Placa con código QR — Personal" (numerados 1-4 en el landing, ver
 // bitácora punto 39) -- cualquier otro valor recibido del navegador se ignora, para que el aviso
 // de pago al administrador siempre muestre un estilo real o ninguno, nunca texto inventado ----
@@ -106,15 +115,21 @@ exports.handler = async (event) => {
     items.push({ itemId, folio, placaEstilo, label: catalogo.label, price: catalogo.price, tipo: catalogo.tipo, renovacion: catalogo.renovacion });
   }
 
-  const subtotal = items.reduce((sum, it) => sum + it.price, 0);
+  // ---- costo de envío: se agrega una sola vez si el pedido incluye algún producto físico,
+  // nunca por separado por cada uno (cubre hasta 5 productos físicos por dirección) ----
+  const incluyeFisico = items.some((it) => ITEMS_FISICOS.indexOf(it.itemId) !== -1);
+  const envio = incluyeFisico ? SHIPPING_COST : 0;
+
+  const subtotalProductos = items.reduce((sum, it) => sum + it.price, 0);
+  const subtotal = subtotalProductos + envio;
   const iva = subtotal * IVA_RATE;
   const totalCentavos = Math.round((subtotal + iva) * 100); // USD: la unidad más pequeña es el centavo
 
-  // ---- una sola línea de pago con el total ya calculado (subtotal + IVA una sola vez), para que
-  // el monto cobrado por ONVO coincida exactamente con el que se le mostró al cliente en la
-  // página — el desglose de qué se compró va en la descripción y en metadata, no en líneas
+  // ---- una sola línea de pago con el total ya calculado (subtotal + envío + IVA una sola vez),
+  // para que el monto cobrado por ONVO coincida exactamente con el que se le mostró al cliente en
+  // la página — el desglose de qué se compró va en la descripción y en metadata, no en líneas
   // separadas (evita diferencias de centavos por redondeo si se combinan varios productos) ----
-  const descripcion = items.map((it) => it.label).join(' + ');
+  const descripcion = items.map((it) => it.label).join(' + ') + (envio > 0 ? ' + Envío' : '');
   const folios = items.filter((it) => it.folio).map((it) => it.folio);
 
   const base = sitioBase();
@@ -140,6 +155,7 @@ exports.handler = async (event) => {
     metadata: {
       items: JSON.stringify(items.map((it) => ({ item: it.itemId, folio: it.folio, tipo: it.tipo, placaEstilo: it.placaEstilo || undefined }))),
       folios: folios.join(','),
+      envio: envio > 0 ? envio.toFixed(2) : '',
       origen: 'vidavitalqr-carrito',
     },
   };
