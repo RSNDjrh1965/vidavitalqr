@@ -194,6 +194,24 @@
     flex:none;
   }
   @keyframes proc-spin{ to{ transform:rotate(360deg); } }
+  /* ---- overlay de pantalla completa "Procesando" (2026-09-21) — ver la nota completa en
+        ficha.html; mismo cambio aplicado aquí, con textos traducidos vía data-i18n. ---- */
+  .overlay-procesando{
+    display:none; position:fixed; inset:0; background:rgba(18,40,43,0.72); z-index:10000;
+    align-items:center; justify-content:center; padding:20px;
+  }
+  .overlay-procesando.visible{ display:flex; }
+  .overlay-procesando .op-card{
+    background:#fff; border-radius:16px; max-width:360px; width:100%; padding:30px 26px; text-align:center;
+    font-family:inherit;
+  }
+  .overlay-procesando .op-spinner{
+    width:38px; height:38px; margin:0 auto 16px; border-radius:50%;
+    border:4px solid #ddd8cc; border-top-color:var(--teal,#2E7D6B);
+    animation:proc-spin 0.8s linear infinite;
+  }
+  .overlay-procesando h3{ margin:0 0 8px; color:var(--navy,#0F2A3D); }
+  .overlay-procesando p{ margin:0; color:#5b6774; font-size:0.92rem; line-height:1.4; }
   .btn{
     border:none;border-radius:9px;padding:14px 22px;font-size:14.5px;font-weight:700;cursor:pointer;
     display:flex;align-items:center;gap:9px;letter-spacing:.2px;
@@ -429,6 +447,13 @@
 <button class="btn btn-ghost" id="btnReset" data-i18n="btnLimpiar">↺ Limpiar formulario</button>
 </div>
 <div class="proc-badge no-print" id="procBadge"><span class="proc-spinner"></span><span id="procBadgeTexto" data-i18n="procBadgeTexto">En proceso…</span></div>
+<div class="overlay-procesando no-print" id="procOverlay">
+  <div class="op-card">
+    <div class="op-spinner"></div>
+    <h3 data-i18n="procOverlayTitulo">Procesando su ficha…</h3>
+    <p data-i18n="procOverlayTexto">Estamos generando el PDF y guardando su información. Esto puede tardar varios segundos — no cierre ni recargue esta página.</p>
+  </div>
+</div>
 
 <footer data-i18n="footerText">VidaVitalQR · Ficha de emergencia personal · Uso restringido a situaciones de emergencia</footer>
 </div>
@@ -504,6 +529,7 @@ const TEXTOS_FICHA = {
     hintArchivos: 'Carné de vacunación, certificado de microchip, récipes veterinarios, etc. — solo imágenes .jpg. Cada archivo se agrega como una página adicional dentro del PDF.',
     dropText: '📎 Arrastra tus archivos .jpg aquí o haz clic para seleccionarlos',
     btnEnviar: 'ENVIAR', btnLimpiar: '↺ Limpiar formulario', procBadgeTexto: 'En proceso…',
+    procOverlayTitulo: 'Procesando su ficha…', procOverlayTexto: 'Estamos generando el PDF y guardando su información. Esto puede tardar varios segundos — no cierre ni recargue esta página.',
     footerText: 'VidaVitalQR · Ficha de emergencia personal · Uso restringido a situaciones de emergencia',
     // ---- textos generados dinámicamente por JS ----
     pvNombreDefault: 'Nombre de la mascota',
@@ -585,6 +611,7 @@ const TEXTOS_FICHA = {
     hintArchivos: 'Vaccination card, microchip certificate, vet prescriptions, etc. — .jpg images only. Each file is added as an extra page in the PDF.',
     dropText: '📎 Drag your .jpg files here or click to select them',
     btnEnviar: 'SUBMIT', btnLimpiar: '↺ Clear form', procBadgeTexto: 'Processing…',
+    procOverlayTitulo: 'Processing your record…', procOverlayTexto: 'We are generating the PDF and saving your information. This may take several seconds — do not close or reload this page.',
     footerText: 'VidaVitalQR · Personal emergency card · For emergency use only',
     pvNombreDefault: 'Pet\'s name',
     pendiente: '— pending —',
@@ -665,6 +692,7 @@ const TEXTOS_FICHA = {
     hintArchivos: 'Carnet de vaccination, certificat de puce électronique, ordonnances vétérinaires, etc. — images .jpg uniquement. Chaque fichier est ajouté comme page supplémentaire dans le PDF.',
     dropText: '📎 Glissez vos fichiers .jpg ici ou cliquez pour les sélectionner',
     btnEnviar: 'ENVOYER', btnLimpiar: '↺ Effacer le formulaire', procBadgeTexto: 'Traitement en cours…',
+    procOverlayTitulo: 'Traitement de votre fiche…', procOverlayTexto: 'Nous générons le PDF et enregistrons vos informations. Cela peut prendre plusieurs secondes — ne fermez pas et ne rechargez pas cette page.',
     footerText: 'VidaVitalQR · Fiche d\'urgence personnelle · Usage réservé aux situations d\'urgence',
     pvNombreDefault: 'Nom de l\'animal',
     pendiente: '— en attente —',
@@ -745,6 +773,7 @@ const TEXTOS_FICHA = {
     hintArchivos: 'Carteirinha de vacinação, certificado de microchip, receitas veterinárias, etc. — apenas imagens .jpg. Cada arquivo é adicionado como uma página extra no PDF.',
     dropText: '📎 Arraste seus arquivos .jpg aqui ou clique para selecioná-los',
     btnEnviar: 'ENVIAR', btnLimpiar: '↺ Limpar formulário', procBadgeTexto: 'Em processamento…',
+    procOverlayTitulo: 'Processando sua ficha…', procOverlayTexto: 'Estamos gerando o PDF e salvando suas informações. Isso pode levar vários segundos — não feche nem recarregue esta página.',
     footerText: 'VidaVitalQR · Ficha de emergência pessoal · Uso restrito a situações de emergência',
     pvNombreDefault: 'Nome da mascota',
     pendiente: '— pendente —',
@@ -1694,9 +1723,11 @@ $('btnEmail').addEventListener('click', async () => {
   const btn = $('btnEmail');
   const originalText = btn.textContent;
   const procBadge = $('procBadge');
+  const procOverlay = $('procOverlay');
   btn.disabled = true;
   btn.textContent = T().generandoPdf;
   if (procBadge) procBadge.classList.add('visible');
+  if (procOverlay) procOverlay.classList.add('visible');
 
   const folio = $('counterNum').textContent.trim() || 'VidaVitalQR';
   const filename = `${folio}.pdf`;
@@ -1710,6 +1741,7 @@ $('btnEmail').addEventListener('click', async () => {
     btn.disabled = false;
     btn.textContent = originalText;
     if (procBadge) procBadge.classList.remove('visible');
+    if (procOverlay) procOverlay.classList.remove('visible');
     return;
   }
 
@@ -1769,13 +1801,14 @@ $('btnEmail').addEventListener('click', async () => {
       btn.disabled = false;
       btn.textContent = originalText;
       if (procBadge) procBadge.classList.remove('visible');
+      if (procOverlay) procOverlay.classList.remove('visible');
       return;
     }
 
     const resp = await fetch('/.netlify/functions/send-ficha', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({ folio, filename, pdfBase64, nombreCompleto, tipo: 'Mascota', fotoBase64, contactos, datosVisor, datosFormulario, esRenovacionPago: esRenovacion })
+      body: JSON.stringify({ folio, filename, pdfBase64, nombreCompleto, tipo: 'Mascota', fotoBase64, contactos, datosVisor, datosFormulario, esRenovacionPago: esRenovacion, idioma: LANG_FICHA })
     });
 
     if(!resp.ok){
@@ -1787,6 +1820,10 @@ $('btnEmail').addEventListener('click', async () => {
     let pinNuevo = null;
     let qrUrlGenerado = null;
     try{ const respJson = await resp.json(); pinNuevo = respJson && respJson.pin; qrUrlGenerado = respJson && respJson.qrUrl; }catch(e){}
+
+    // el envío ya terminó — se quita el overlay de "procesando" antes de mostrar el modal del
+    // PIN (o de cerrar la pestaña), para que no quede tapándolo por encima
+    if (procOverlay) procOverlay.classList.remove('visible');
 
     if (pinNuevo) {
       await mostrarPinModal(pinNuevo, folio, qrUrlGenerado);
@@ -1804,6 +1841,7 @@ $('btnEmail').addEventListener('click', async () => {
     btn.disabled = false;
     btn.textContent = originalText;
     if (procBadge) procBadge.classList.remove('visible');
+    if (procOverlay) procOverlay.classList.remove('visible');
   }
 });
 

@@ -68,29 +68,175 @@
   .testi-fecha{ font-size:0.75rem; color:var(--muted); margin-top:12px; }
   .empty{ color:var(--muted); font-style:italic; }
   [hidden]{ display:none !important; }
+  .langbar{ display:flex; justify-content:flex-end; gap:6px; margin-bottom:14px; }
+  .langbar button{
+    padding:5px 11px;
+    font-size:0.78rem;
+    font-weight:600;
+    border:1px solid var(--line);
+    border-radius:20px;
+    background:var(--card);
+    color:var(--muted);
+    cursor:pointer;
+  }
+  .langbar button.activo{ background:var(--teal-deep); border-color:var(--teal-deep); color:var(--paper); }
 </style>
 </head>
 <body>
 <div class="wrap">
-  <h1>Opiniones pendientes</h1>
-  <p class="sub">Panel privado para revisar y publicar las opiniones que llegan desde el formulario "Comparta su experiencia" de vidavitalqr.com. Aprobar o rechazar aquí no requiere volver a desplegar el sitio.</p>
+  <div class="langbar" id="langbar">
+    <button type="button" data-lang="es">ES</button>
+    <button type="button" data-lang="en">EN</button>
+    <button type="button" data-lang="fr">FR</button>
+    <button type="button" data-lang="pt">PT</button>
+  </div>
+
+  <h1 data-i18n="titulo">Opiniones pendientes</h1>
+  <p class="sub" data-i18n="subtitulo">Panel privado para revisar y publicar las opiniones que llegan desde el formulario "Comparta su experiencia" de vidavitalqr.com. Aprobar o rechazar aquí no requiere volver a desplegar el sitio.</p>
 
   <div class="card" id="loginBox">
-    <label for="pwInput">Contraseña de administración</label>
+    <label for="pwInput" data-i18n="lblPassword">Contraseña de administración</label>
     <input type="password" id="pwInput" autocomplete="current-password">
-    <button class="btn-primary" id="btnEntrar">Ver opiniones pendientes</button>
+    <button class="btn-primary" id="btnEntrar" data-i18n="btnVer">Ver opiniones pendientes</button>
     <p class="msg" id="loginMsg"></p>
   </div>
 
   <div id="listaBox" hidden>
     <div class="toolbar">
-      <button class="btn-primary" id="btnRefrescar">Actualizar lista</button>
+      <button class="btn-primary" id="btnRefrescar" data-i18n="btnActualizar">Actualizar lista</button>
     </div>
     <div id="listaContenido"></div>
   </div>
 </div>
 
 <script>
+  // ---- textos del panel en los 4 idiomas del sitio (ES/EN/FR/PT) — punto 54 de la bitácora.
+  // Este panel es de uso interno (solo lo usa el propio administrador, con contraseña, sin
+  // enlace en el menú), pero el usuario pidió explícitamente que sí tuviera opción de idioma,
+  // a diferencia de admin-envios.html. Las opiniones mismas (nombre, rol, texto que escribió la
+  // persona) NUNCA se traducen — solo el texto de la interfaz de este panel. ----
+  var TEXTOS_PANEL = {
+    es: {
+      titulo: 'Opiniones pendientes',
+      subtitulo: 'Panel privado para revisar y publicar las opiniones que llegan desde el formulario "Comparta su experiencia" de vidavitalqr.com. Aprobar o rechazar aquí no requiere volver a desplegar el sitio.',
+      lblPassword: 'Contraseña de administración',
+      btnVer: 'Ver opiniones pendientes',
+      btnActualizar: 'Actualizar lista',
+      escribaPassword: 'Escriba la contraseña.',
+      passwordIncorrecta: 'Contraseña incorrecta.',
+      cargando: 'Cargando…',
+      errorCargar: 'No se pudo cargar la lista. Intente de nuevo.',
+      vacio: 'No hay opiniones pendientes por ahora.',
+      btnAprobar: 'Aprobar y publicar',
+      btnRechazar: 'Rechazar',
+      publicando: 'Publicando…',
+      rechazando: 'Rechazando…',
+      publicada: 'Publicada en el sitio.',
+      rechazada: 'Rechazada.',
+      errorProcesar: 'No se pudo procesar. Intente de nuevo.',
+    },
+    en: {
+      titulo: 'Pending testimonials',
+      subtitulo: 'Private panel to review and publish the testimonials submitted through the "Share your experience" form on vidavitalqr.com. Approving or rejecting here does not require redeploying the site.',
+      lblPassword: 'Admin password',
+      btnVer: 'View pending testimonials',
+      btnActualizar: 'Refresh list',
+      escribaPassword: 'Enter the password.',
+      passwordIncorrecta: 'Incorrect password.',
+      cargando: 'Loading…',
+      errorCargar: 'Could not load the list. Please try again.',
+      vacio: 'There are no pending testimonials right now.',
+      btnAprobar: 'Approve and publish',
+      btnRechazar: 'Reject',
+      publicando: 'Publishing…',
+      rechazando: 'Rejecting…',
+      publicada: 'Published on the site.',
+      rechazada: 'Rejected.',
+      errorProcesar: 'Could not process this. Please try again.',
+    },
+    fr: {
+      titulo: 'Avis en attente',
+      subtitulo: 'Panneau privé pour vérifier et publier les avis reçus via le formulaire « Partagez votre expérience » de vidavitalqr.com. Approuver ou rejeter ici ne nécessite pas de redéployer le site.',
+      lblPassword: 'Mot de passe administrateur',
+      btnVer: 'Voir les avis en attente',
+      btnActualizar: 'Actualiser la liste',
+      escribaPassword: 'Saisissez le mot de passe.',
+      passwordIncorrecta: 'Mot de passe incorrect.',
+      cargando: 'Chargement…',
+      errorCargar: "Impossible de charger la liste. Veuillez réessayer.",
+      vacio: "Il n'y a pas d'avis en attente pour le moment.",
+      btnAprobar: 'Approuver et publier',
+      btnRechazar: 'Rejeter',
+      publicando: 'Publication…',
+      rechazando: 'Rejet en cours…',
+      publicada: 'Publié sur le site.',
+      rechazada: 'Rejeté.',
+      errorProcesar: 'Le traitement a échoué. Veuillez réessayer.',
+    },
+    pt: {
+      titulo: 'Opiniões pendentes',
+      subtitulo: 'Painel privado para revisar e publicar as opiniões recebidas pelo formulário "Compartilhe sua experiência" do vidavitalqr.com. Aprovar ou rejeitar aqui não requer um novo deploy do site.',
+      lblPassword: 'Senha de administração',
+      btnVer: 'Ver opiniões pendentes',
+      btnActualizar: 'Atualizar lista',
+      escribaPassword: 'Digite a senha.',
+      passwordIncorrecta: 'Senha incorreta.',
+      cargando: 'Carregando…',
+      errorCargar: 'Não foi possível carregar a lista. Tente novamente.',
+      vacio: 'Não há opiniões pendentes no momento.',
+      btnAprobar: 'Aprovar e publicar',
+      btnRechazar: 'Rejeitar',
+      publicando: 'Publicando…',
+      rechazando: 'Rejeitando…',
+      publicada: 'Publicada no site.',
+      rechazada: 'Rejeitada.',
+      errorProcesar: 'Não foi possível processar. Tente novamente.',
+    },
+  };
+  var TITULOS_PESTANA = { es: 'Opiniones pendientes — VidaVitalQR', en: 'Pending testimonials — VidaVitalQR', fr: 'Avis en attente — VidaVitalQR', pt: 'Opiniões pendentes — VidaVitalQR' };
+
+  var LANG_PANEL = 'es';
+  function T(){ return TEXTOS_PANEL[LANG_PANEL] || TEXTOS_PANEL.es; }
+
+  function aplicarIdiomaPanel(lang){
+    if (!TEXTOS_PANEL[lang]) lang = 'es';
+    LANG_PANEL = lang;
+    document.documentElement.lang = lang;
+    document.title = TITULOS_PESTANA[lang] || TITULOS_PESTANA.es;
+    Array.prototype.forEach.call(document.querySelectorAll('[data-i18n]'), function(el){
+      var key = el.getAttribute('data-i18n');
+      if (T()[key] != null) el.textContent = T()[key];
+    });
+    Array.prototype.forEach.call(document.querySelectorAll('#langbar button'), function(b){
+      b.className = (b.getAttribute('data-lang') === lang) ? 'activo' : '';
+    });
+    try { localStorage.setItem('vidavitalqr_lang', lang); } catch (e) {}
+  }
+
+  document.getElementById('langbar').addEventListener('click', function(ev){
+    var btn = ev.target.closest('button[data-lang]');
+    if (!btn) return;
+    aplicarIdiomaPanel(btn.getAttribute('data-lang'));
+  });
+
+  (function initIdiomaPanel(){
+    var guardado = null;
+    try { guardado = localStorage.getItem('vidavitalqr_lang'); } catch (e) {}
+    var inicial = guardado && TEXTOS_PANEL[guardado] ? guardado : 'es';
+    if (!guardado) {
+      try {
+        var params = new URLSearchParams(window.location.search);
+        var deUrl = params.get('lang');
+        if (deUrl && TEXTOS_PANEL[deUrl]) inicial = deUrl;
+        else {
+          var nav = (navigator.language || '').slice(0, 2).toLowerCase();
+          if (TEXTOS_PANEL[nav]) inicial = nav;
+        }
+      } catch (e) {}
+    }
+    aplicarIdiomaPanel(inicial);
+  })();
+
   var pw = '';
   var pwInput = document.getElementById('pwInput');
   var btnEntrar = document.getElementById('btnEntrar');
@@ -109,7 +255,7 @@
   }
 
   function cargarPendientes(){
-    listaContenido.innerHTML = '<p class="empty">Cargando…</p>';
+    listaContenido.innerHTML = '<p class="empty">' + escapeHtml(T().cargando) + '</p>';
     fetch('/.netlify/functions/list-pending-testimonials', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -127,17 +273,21 @@
         if (err && err.message === 'unauthorized') {
           listaBox.hidden = true;
           loginBox.hidden = false;
-          loginMsg.textContent = 'Contraseña incorrecta.';
+          loginMsg.textContent = T().passwordIncorrecta;
           loginMsg.className = 'msg err';
         } else {
-          listaContenido.innerHTML = '<p class="msg err">No se pudo cargar la lista. Intente de nuevo.</p>';
+          listaContenido.innerHTML = '<p class="msg err">' + escapeHtml(T().errorCargar) + '</p>';
         }
       });
   }
 
+  // ---- nota: el nombre, rol, texto y fecha de cada opinión son datos que la propia persona
+  // escribió en el formulario público — nunca se traducen, se muestran tal cual se recibieron
+  // (igual que los nombres propios y demás texto libre en las fichas). Solo los botones y
+  // mensajes de este panel cambian de idioma. ----
   function renderLista(pendientes){
     if (!pendientes.length) {
-      listaContenido.innerHTML = '<p class="empty">No hay opiniones pendientes por ahora.</p>';
+      listaContenido.innerHTML = '<p class="empty">' + escapeHtml(T().vacio) + '</p>';
       return;
     }
     listaContenido.innerHTML = pendientes.map(function(t){
@@ -146,8 +296,8 @@
           '<div class="testi-name">' + escapeHtml(t.nombre) + '</div>' +
           (t.rol ? '<div class="testi-role">' + escapeHtml(t.rol) + '</div>' : '') +
           '<div class="testi-text">' + escapeHtml(t.texto) + '</div>' +
-          '<button class="btn-approve" data-accion="aprobar">Aprobar y publicar</button>' +
-          '<button class="btn-reject" data-accion="rechazar">Rechazar</button>' +
+          '<button class="btn-approve" data-accion="aprobar">' + escapeHtml(T().btnAprobar) + '</button>' +
+          '<button class="btn-reject" data-accion="rechazar">' + escapeHtml(T().btnRechazar) + '</button>' +
           '<div class="testi-fecha">' + escapeHtml(t.fecha) + '</div>' +
           '<p class="msg" data-rol="msg"></p>' +
         '</div>';
@@ -163,7 +313,7 @@
     var msgEl = card.querySelector('[data-rol="msg"]');
 
     Array.prototype.forEach.call(card.querySelectorAll('button'), function(b){ b.disabled = true; });
-    msgEl.textContent = accion === 'aprobar' ? 'Publicando…' : 'Rechazando…';
+    msgEl.textContent = accion === 'aprobar' ? T().publicando : T().rechazando;
     msgEl.className = 'msg';
 
     fetch('/.netlify/functions/moderar-testimonial', {
@@ -174,20 +324,20 @@
       .then(function(resp){ if (!resp.ok) throw new Error('error'); return resp.json(); })
       .then(function(){
         card.style.opacity = '0.5';
-        msgEl.textContent = accion === 'aprobar' ? 'Publicada en el sitio.' : 'Rechazada.';
+        msgEl.textContent = accion === 'aprobar' ? T().publicada : T().rechazada;
         msgEl.className = 'msg ok';
         setTimeout(function(){ card.remove(); }, 900);
       })
       .catch(function(){
         Array.prototype.forEach.call(card.querySelectorAll('button'), function(b){ b.disabled = false; });
-        msgEl.textContent = 'No se pudo procesar. Intente de nuevo.';
+        msgEl.textContent = T().errorProcesar;
         msgEl.className = 'msg err';
       });
   });
 
   btnEntrar.addEventListener('click', function(){
     pw = pwInput.value || '';
-    if (!pw) { loginMsg.textContent = 'Escriba la contraseña.'; loginMsg.className = 'msg err'; return; }
+    if (!pw) { loginMsg.textContent = T().escribaPassword; loginMsg.className = 'msg err'; return; }
     loginMsg.textContent = '';
     loginBox.hidden = true;
     listaBox.hidden = false;

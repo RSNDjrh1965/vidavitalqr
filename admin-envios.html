@@ -57,11 +57,32 @@
   .etiqueta .et-brand{ font-size:8pt; font-weight:700; display:flex; align-items:center; gap:1.5mm; letter-spacing:0.2px; }
   .etiqueta .et-brand .dot{ width:2mm; height:2mm; border-radius:50%; background:#111; display:inline-block; }
   .etiqueta .folio{ font-size:6.5pt; font-weight:600; color:#444; }
-  .etiqueta .et-body{ padding:2mm 4mm 0; }
-  .etiqueta .bloque-inferior{ position:absolute; left:4mm; right:4mm; bottom:2.5mm; }
-  .etiqueta .nombre{ font-size:11pt; font-weight:700; margin-top:0.3mm; color:#111; }
-  .etiqueta .direccion{ font-size:9pt; line-height:1.3; margin-top:1.2mm; color:#222; }
-  .etiqueta .telefono{ font-size:9pt; font-weight:700; color:#111; }
+  .etiqueta .et-body{ padding:1.8mm 4mm 0; }
+  /* ---- corrección 2026-09-21: "bloque-inferior" (las señas y el pie de página) ya NO se
+        fija con position:absolute al fondo de la etiqueta — con letra más grande, un texto
+        largo en "otras señas" podía crecer hacia arriba y encimarse con la línea de
+        provincia/cantón/distrito. Ahora todo el contenido fluye de arriba hacia abajo en
+        orden normal, y overflow:hidden en .etiqueta recorta lo que sobre en vez de
+        superponerlo (ver también .senas más abajo, que limita sus propias líneas). ---- */
+  .etiqueta .bloque-inferior{ padding:0 4mm; margin-top:1mm; }
+  /* ---- letra más grande para la dirección de envío, a pedido del usuario (2026-09-21);
+        ajustada a un tamaño intermedio (era demasiado grande en el primer intento) el
+        mismo día — se reorganizaron los campos según su boceto: nombre y teléfono arriba,
+        luego Provincia/Cantón/Distrito como 3 columnas con su etiqueta arriba y el valor
+        debajo, y "otras señas" como bloque final ---- */
+  .etiqueta .nombre{ font-size:12.5pt; font-weight:700; margin-top:0.2mm; color:#111; line-height:1.15; }
+  .etiqueta .telefono{ font-size:10.5pt; font-weight:700; color:#111; margin-top:0.6mm; }
+  .etiqueta .ubicacion{ display:flex; gap:3mm; margin-top:1.6mm; }
+  .etiqueta .ubicacion .col{ flex:1; min-width:0; }
+  .etiqueta .ubicacion .col .lbl{ font-size:6.3pt; font-weight:700; text-transform:uppercase; letter-spacing:0.3px; color:#666; }
+  .etiqueta .ubicacion .col .val{ font-size:9.5pt; font-weight:700; color:#111; margin-top:0.2mm; line-height:1.15; word-break:break-word; }
+  /* máximo 2 líneas de "otras señas" — si el texto es más largo, se recorta con "…" en vez
+     de arriesgarse a empujar el pie de página fuera de la etiqueta */
+  .etiqueta .senas{
+    font-size:9.5pt; line-height:1.25; color:#111; margin-top:1mm;
+    display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden;
+  }
+  .etiqueta .senas .senas-label{ font-weight:700; }
   .etiqueta .footer-note{ font-size:5.5pt; color:#555; margin-top:0.8mm; border-top:0.3mm solid #999; padding-top:0.8mm; }
   .etiqueta .footer-web{ font-size:5.5pt; color:#555; font-weight:600; margin-top:0.3mm; }
 
@@ -115,10 +136,11 @@
         </div>
         <div class="et-body">
           <div class="nombre" id="etNombre"></div>
-          <div class="direccion" id="etDireccion"></div>
+          <div class="telefono" id="etTelefono"></div>
+          <div class="ubicacion" id="etUbicacion"></div>
         </div>
         <div class="bloque-inferior">
-          <div class="telefono" id="etTelefono"></div>
+          <div class="senas" id="etSenas"></div>
           <div class="footer-note">Dirección de envío registrada por el titular de esta ficha — VidaVitalQR</div>
           <div class="footer-web">www.vidavitalqr.com</div>
         </div>
@@ -178,10 +200,14 @@
         folioActual = datos.folio || folio;
         document.getElementById('etFolio').textContent = 'Folio ' + folioActual;
         document.getElementById('etNombre').textContent = datos.nombreEnvio || '';
-        document.getElementById('etDireccion').innerHTML =
-          'Provincia: ' + (datos.provincia || '') + ' &middot; Cantón: ' + (datos.canton || '') + ' &middot; Distrito: ' + (datos.distrito || '') +
-          (datos.senas ? '<br>Otras señas: ' + datos.senas : '');
         document.getElementById('etTelefono').textContent = 'Tel: ' + (datos.telefono || '');
+        document.getElementById('etUbicacion').innerHTML =
+          '<div class="col"><div class="lbl">Provincia</div><div class="val">' + (datos.provincia || '') + '</div></div>' +
+          '<div class="col"><div class="lbl">Cantón</div><div class="val">' + (datos.canton || '') + '</div></div>' +
+          '<div class="col"><div class="lbl">Distrito</div><div class="val">' + (datos.distrito || '') + '</div></div>';
+        document.getElementById('etSenas').innerHTML = datos.senas
+          ? '<span class="senas-label">Otras señas:</span> ' + datos.senas
+          : '';
         etiquetaWrap.style.display = 'block';
         descargaMsg.textContent = '';
         msg.className = 'ok';
@@ -203,24 +229,39 @@
   //      etiqueta con sus propios estilos — así no queda ningún otro elemento de la página
   //      que el navegador pueda paginar de más (2026-09-18). ----
   imprimirBtn.addEventListener('click', function(){
+    // ---- Rotación 90° para la impresora de etiquetas del usuario (2026-09-18): su impresora
+    //      (MHT-L1081) alimenta el rollo en orientación vertical (2in de ancho x 3in de largo),
+    //      no horizontal — por eso, al enviarle una página de 3in x 2in (horizontal), el diálogo
+    //      de impresión del navegador (sin ninguna opción de "rotar") la recorta en vez de girarla.
+    //      La descarga como PNG sí sale bien porque el software de la impresora de etiquetas la
+    //      ajusta él mismo. Solución: la página que se envía a imprimir ahora tiene el tamaño real
+    //      de la impresora (2in x 3in, vertical) y la etiqueta se dibuja rotada 90° dentro de ella,
+    //      centrada — así, al salir el papel en su orientación vertical nativa, el texto se lee
+    //      correctamente girando el papel (o la impresora lo gira físicamente al imprimir).
     var estilosEtiqueta =
       '*{box-sizing:border-box;margin:0;padding:0;}' +
-      'html,body{background:#fff;}' +
-      '@page{ size:76.2mm 50.8mm; margin:0; }' +
-      '.etiqueta{ width:76.2mm; height:50.8mm; overflow:hidden; border:1.2mm dashed #999; border-radius:3mm; font-family:Arial,Helvetica,sans-serif; color:#1a1a1a; position:relative; background:#fff; }' +
+      'html,body{background:#fff; width:50.8mm; height:76.2mm; overflow:hidden;}' +
+      '@page{ size:50.8mm 76.2mm; margin:0; }' +
+      '.rotWrap{ width:50.8mm; height:76.2mm; position:relative; overflow:hidden; }' +
+      '.etiqueta{ width:76.2mm; height:50.8mm; overflow:hidden; border:1.2mm dashed #999; border-radius:3mm; font-family:Arial,Helvetica,sans-serif; color:#1a1a1a; position:absolute; top:50%; left:50%; transform:translate(-50%,-50%) rotate(90deg); transform-origin:center center; background:#fff; }' +
       '.etiqueta .et-header{ background:#fff; color:#111; padding:2mm 4mm; display:flex; justify-content:space-between; align-items:center; border-bottom:0.4mm solid #111; }' +
       '.etiqueta .et-brand{ font-size:8pt; font-weight:700; display:flex; align-items:center; gap:1.5mm; letter-spacing:0.2px; }' +
       '.etiqueta .et-brand .dot{ width:2mm; height:2mm; border-radius:50%; background:#111; display:inline-block; }' +
       '.etiqueta .folio{ font-size:6.5pt; font-weight:600; color:#444; }' +
-      '.etiqueta .et-body{ padding:2mm 4mm 0; }' +
-      '.etiqueta .bloque-inferior{ position:absolute; left:4mm; right:4mm; bottom:2.5mm; }' +
-      '.etiqueta .nombre{ font-size:11pt; font-weight:700; margin-top:0.3mm; color:#111; }' +
-      '.etiqueta .direccion{ font-size:9pt; line-height:1.3; margin-top:1.2mm; color:#222; }' +
-      '.etiqueta .telefono{ font-size:9pt; font-weight:700; color:#111; }' +
+      '.etiqueta .et-body{ padding:1.8mm 4mm 0; }' +
+      '.etiqueta .bloque-inferior{ padding:0 4mm; margin-top:1mm; }' +
+      '.etiqueta .nombre{ font-size:12.5pt; font-weight:700; margin-top:0.2mm; color:#111; line-height:1.15; }' +
+      '.etiqueta .telefono{ font-size:10.5pt; font-weight:700; color:#111; margin-top:0.6mm; }' +
+      '.etiqueta .ubicacion{ display:flex; gap:3mm; margin-top:1.6mm; }' +
+      '.etiqueta .ubicacion .col{ flex:1; min-width:0; }' +
+      '.etiqueta .ubicacion .col .lbl{ font-size:6.3pt; font-weight:700; text-transform:uppercase; letter-spacing:0.3px; color:#666; }' +
+      '.etiqueta .ubicacion .col .val{ font-size:9.5pt; font-weight:700; color:#111; margin-top:0.2mm; line-height:1.15; word-break:break-word; }' +
+      '.etiqueta .senas{ font-size:9.5pt; line-height:1.25; color:#111; margin-top:1mm; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }' +
+      '.etiqueta .senas .senas-label{ font-weight:700; }' +
       '.etiqueta .footer-note{ font-size:5.5pt; color:#555; margin-top:0.8mm; border-top:0.3mm solid #999; padding-top:0.8mm; }' +
       '.etiqueta .footer-web{ font-size:5.5pt; color:#555; font-weight:600; margin-top:0.3mm; }';
 
-    var ventana = window.open('', '_blank', 'width=420,height=320');
+    var ventana = window.open('', '_blank', 'width=420,height=420');
     if (!ventana) {
       alert('El navegador bloqueó la ventana de impresión. Permita ventanas emergentes para este sitio e intente de nuevo.');
       return;
@@ -229,7 +270,7 @@
     doc.open();
     doc.write(
       '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Etiqueta de envío</title>' +
-      '<style>' + estilosEtiqueta + '</style></head><body>' + etiquetaEl.outerHTML + '</body></html>'
+      '<style>' + estilosEtiqueta + '</style></head><body><div class="rotWrap">' + etiquetaEl.outerHTML + '</div></body></html>'
     );
     doc.close();
 
