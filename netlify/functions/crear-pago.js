@@ -19,16 +19,19 @@
 // navegador) usando el tipo de cambio guardado por netlify/functions/actualizar-tipo-cambio.js
 // (tipo de cambio de venta del BCCR + 2% de margen, redondeado hacia arriba).
 //
-// Decisión confirmada por el usuario (2026-09-23): el monto en CRC se trabaja SIEMPRE en colones
+// Decisión confirmada por el usuario (2026-09-23): el monto en CRC se calcula SIEMPRE en colones
 // enteros, sin decimales — se aproxima hacia arriba al entero más cercano, tanto el tipo de
-// cambio (2% de margen, ver actualizar-tipo-cambio.js) como el total final que se le manda a
-// ONVO Pay (ver totalCRC más abajo). ONVO_CRC_SUBUNIT_MULTIPLIER queda en 1 por defecto para
-// reflejar justamente eso; solo habría que cambiarlo si una prueba real mostrara que ONVO Pay
-// rechaza o interpreta mal un monto entero en CRC.
+// cambio (2% de margen, ver actualizar-tipo-cambio.js) como el total antes de mandarlo a ONVO Pay.
 //
-// Queda protegido por la variable de entorno HABILITAR_PAGO_CRC (debe valer exactamente "true")
-// hasta hacer esa primera transacción de prueba real y confirmar que ONVO Pay procesa bien el
-// pago en colones enteros.
+// **Primera prueba real (2026-09-23):** se probó primero con ONVO_CRC_SUBUNIT_MULTIPLIER=1 (es
+// decir, mandando el total en colones tal cual, sin multiplicar) y ONVO Pay cobró de menos por un
+// factor de 100 (mandamos 3647 y cobró "CRC 36.47" en vez de "CRC 3,647") — confirmando que ONVO
+// Pay, igual que hace con USD (centavos), espera el monto en la subunidad más pequeña también
+// para CRC (céntimos), no en colones enteros. Por eso el valor por defecto de
+// ONVO_CRC_SUBUNIT_MULTIPLIER se dejó en 100 (no en 1) — se puede seguir ajustando por variable de
+// entorno si hiciera falta, pero ya no depende de que alguien recuerde configurarla.
+//
+// Queda protegido por la variable de entorno HABILITAR_PAGO_CRC (debe valer exactamente "true").
 
 const { S3Client, GetObjectCommand } = require('@aws-sdk/client-s3');
 
@@ -195,9 +198,10 @@ exports.handler = async (event) => {
     // ---- decisión confirmada por el usuario: siempre colones ENTEROS, redondeando hacia ARRIBA
     // (nunca hacia el más cercano) -- así nunca se cobra de menos por un redondeo ----
     const totalCRC = Math.ceil(totalUSD * tipoCambioUsado);
-    // ---- multiplicador de subunidad: 1 = colones enteros (la decisión tomada). Solo habría que
-    // cambiarlo si una prueba real mostrara que ONVO Pay rechaza o interpreta mal ese formato. ----
-    const subunitMultiplier = Number(process.env.ONVO_CRC_SUBUNIT_MULTIPLIER || '1');
+    // ---- multiplicador de subunidad: 100 = céntimos (confirmado con una prueba real el
+    // 2026-09-23 — ver la nota al inicio del archivo). El total en colones sigue siendo siempre
+    // un entero (totalCRC); lo que cambia es que ONVO Pay espera ese entero expresado en céntimos. ----
+    const subunitMultiplier = Number(process.env.ONVO_CRC_SUBUNIT_MULTIPLIER || '100');
     unitAmount = Math.ceil(totalCRC * subunitMultiplier);
     currencyOnvo = 'CRC';
   }
