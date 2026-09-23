@@ -12,8 +12,52 @@
 // Requiere la variable de entorno ONVO_SECRET_KEY configurada en Netlify (Project configuration
 // → Environment variables) — la llave secreta de ONVO Pay nunca debe escribirse en este archivo
 // ni en ningún otro que se suba al repositorio.
+//
+// ---- pago en colones (CRC), agregado 2026-09-23 ----
+// El cliente puede pedir pagar en colones (campo "moneda": "CRC" en el body). El monto en CRC se
+// recalcula aquí SIEMPRE desde el total en USD (nunca se confía en ningún monto que mande el
+// navegador) usando el tipo de cambio guardado por netlify/functions/actualizar-tipo-cambio.js
+// (tipo de cambio de venta del BCCR + 2% de margen, redondeado hacia arriba).
+//
+// Decisión confirmada por el usuario (2026-09-23): el monto en CRC se trabaja SIEMPRE en colones
+// enteros, sin decimales — se aproxima hacia arriba al entero más cercano, tanto el tipo de
+// cambio (2% de margen, ver actualizar-tipo-cambio.js) como el total final que se le manda a
+// ONVO Pay (ver totalCRC más abajo). ONVO_CRC_SUBUNIT_MULTIPLIER queda en 1 por defecto para
+// reflejar justamente eso; solo habría que cambiarlo si una prueba real mostrara que ONVO Pay
+// rechaza o interpreta mal un monto entero en CRC.
+//
+// Queda protegido por la variable de entorno HABILITAR_PAGO_CRC (debe valer exactamente "true")
+// hasta hacer esa primera transacción de prueba real y confirmar que ONVO Pay procesa bien el
+// pago en colones enteros.
+
+const { S3Client, GetObjectCommand } = require('@aws-sdk/client-s3');
 
 const ONVO_API_BASE = 'https://api.onvopay.com/v1';
+const BUCKET_RESUMEN = process.env.S3_BUCKET_RESUMEN || 'resumen-vidavitalqr';
+const TIPO_CAMBIO_KEY = 'config/tipo-cambio.json';
+
+async function streamToString(stream) {
+  const chunks = [];
+  for await (const chunk of stream) chunks.push(chunk);
+  return Buffer.concat(chunks).toString('utf-8');
+}
+
+// ---- lee el tipo de cambio (con margen) que guardó actualizar-tipo-cambio.js -- lanza si falta
+// o si el valor guardado no es un número válido, para nunca cobrar con un tipo de cambio en 0 ----
+async function obtenerTipoCambioGuardado() {
+  const region = process.env.S3_REGION || 'us-east-1';
+  const accessKeyId = process.env.S3_ACCESS_KEY_ID;
+  const secretAccessKey = process.env.S3_SECRET_ACCESS_KEY;
+  if (!accessKeyId || !secretAccessKey) {
+    throw new Error('Faltan las credenciales de S3 en Netlify.');
+  }
+  const s3 = new S3Client({ region, credentials: { accessKeyId, secretAccessKey } });
+  const obj = await s3.send(new GetObjectCommand({ Bucket: BUCKET_RESUMEN, Key: TIPO_CAMBIO_KEY }));
+  const json = JSON.parse(await streamToString(obj.Body));
+  const tipoCambio = Number(json.tipoCambio);
+  if (!tipoCambio || tipoCambio <= 0) throw new Error('El tipo de cambio guardado no es válido.');
+  return tipoCambio;
+}
 
 // ---- catálogo de productos: se recalcula el precio aquí SIEMPRE con estos valores, nunca con
 // lo que mande el navegador, para que nadie pueda manipular el monto a pagar desde el cliente ----
@@ -123,7 +167,40 @@ exports.handler = async (event) => {
   const subtotalProductos = items.reduce((sum, it) => sum + it.price, 0);
   const subtotal = subtotalProductos + envio;
   const iva = subtotal * IVA_RATE;
-  const totalCentavos = Math.round((subtotal + iva) * 100); // USD: la unidad más pequeña es el centavo
+  const totalUSD = subtotal + iva;
+
+  // ---- moneda elegida por el cliente: "USD" (por defecto, como siempre) o "CRC" -- cualquier
+  // otro valor recibido se ignora y se cobra en USD ----
+  const monedaRecibida = String(data.moneda || 'USD').trim().toUpperCase();
+  const moneda = monedaRecibida === 'CRC' ? 'CRC' : 'USD';
+
+  if (moneda === 'CRC' && process.env.HABILITAR_PAGO_CRC !== 'true') {
+    return { statusCode: 400, body: JSON.stringify({ error: 'El pago en colones todavía no está habilitado. Pague en dólares mientras tanto.' }) };
+  }
+
+  let currencyOnvo = 'USD';
+  let unitAmount = Math.round(totalUSD * 100); // USD: la unidad más pequeña es el centavo
+  let tipoCambioUsado = null;
+
+  if (moneda === 'CRC') {
+    try {
+      tipoCambioUsado = await obtenerTipoCambioGuardado();
+    } catch (err) {
+      console.error('crear-pago: no se pudo obtener el tipo de cambio para CRC —', err.message);
+      return {
+        statusCode: 503,
+        body: JSON.stringify({ error: 'El pago en colones no está disponible en este momento. Puede pagar en dólares, o intentarlo de nuevo más tarde.' }),
+      };
+    }
+    // ---- decisión confirmada por el usuario: siempre colones ENTEROS, redondeando hacia ARRIBA
+    // (nunca hacia el más cercano) -- así nunca se cobra de menos por un redondeo ----
+    const totalCRC = Math.ceil(totalUSD * tipoCambioUsado);
+    // ---- multiplicador de subunidad: 1 = colones enteros (la decisión tomada). Solo habría que
+    // cambiarlo si una prueba real mostrara que ONVO Pay rechaza o interpreta mal ese formato. ----
+    const subunitMultiplier = Number(process.env.ONVO_CRC_SUBUNIT_MULTIPLIER || '1');
+    unitAmount = Math.ceil(totalCRC * subunitMultiplier);
+    currencyOnvo = 'CRC';
+  }
 
   // ---- una sola línea de pago con el total ya calculado (subtotal + envío + IVA una sola vez),
   // para que el monto cobrado por ONVO coincida exactamente con el que se le mostró al cliente en
@@ -146,14 +223,17 @@ exports.handler = async (event) => {
     lineItems: [
       {
         quantity: 1,
-        unitAmount: totalCentavos,
-        currency: 'USD',
+        unitAmount: unitAmount,
+        currency: currencyOnvo,
         description: descripcion + ' (incluye IVA 13%)',
         priceType: 'one_time',
       },
     ],
     metadata: {
       items: JSON.stringify(items.map((it) => ({ item: it.itemId, folio: it.folio, tipo: it.tipo, placaEstilo: it.placaEstilo || undefined }))),
+      moneda: currencyOnvo,
+      tipoCambioUsado: tipoCambioUsado ? String(tipoCambioUsado) : '',
+      totalUSD: totalUSD.toFixed(2),
       folios: folios.join(','),
       envio: envio > 0 ? envio.toFixed(2) : '',
       origen: 'vidavitalqr-carrito',

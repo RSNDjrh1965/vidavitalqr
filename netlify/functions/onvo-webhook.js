@@ -140,11 +140,17 @@ exports.handler = async (event) => {
   // algún producto físico) — se reporta aparte en el correo para que quede claro que ese monto
   // adicional es el envío y no un producto más ----
   const envio = meta.envio ? parseFloat(meta.envio) : 0;
+  // ---- pago en colones (agregado 2026-09-23, ver crear-pago.js): si el pedido se cobró en CRC,
+  // meta.moneda/tipoCambioUsado/totalUSD lo indican, para que el aviso al administrador muestre
+  // ambos montos y el tipo de cambio real que se usó en ese pedido específico ----
+  const moneda = meta.moneda === 'CRC' ? 'CRC' : 'USD';
+  const tipoCambioUsado = meta.tipoCambioUsado ? parseFloat(meta.tipoCambioUsado) : null;
+  const totalUSDReportado = meta.totalUSD ? parseFloat(meta.totalUSD) : null;
 
-  console.log('onvo-webhook: pago CONFIRMADO —', items.length, 'producto(s), folios:', folios || '(ninguno)', '— sesión', sessionId, '— modo', modo);
+  console.log('onvo-webhook: pago CONFIRMADO —', items.length, 'producto(s), folios:', folios || '(ninguno)', '— sesión', sessionId, '— modo', modo, '— moneda', moneda);
 
   // ---- 3) Avisar por correo al administrador (mismo destinatario que ya recibe los demás avisos) ----
-  await avisarAdministrador({ items, folios, sessionId, modo, envio });
+  await avisarAdministrador({ items, folios, sessionId, modo, envio, moneda, tipoCambioUsado, totalUSDReportado });
 
   // TODO (próxima fase, una vez confirmado que esto funciona en pruebas): marcar cada ficha
   // (según folio/tipo en "items") como renovada/pagada en S3 (reiniciar su fecha "creado", igual
@@ -157,7 +163,7 @@ exports.handler = async (event) => {
   return { statusCode: 200, body: 'ok' };
 };
 
-async function avisarAdministrador({ items, folios, sessionId, modo, envio }) {
+async function avisarAdministrador({ items, folios, sessionId, modo, envio, moneda, tipoCambioUsado, totalUSDReportado }) {
   const apiKey = process.env.RESEND_API_KEY;
   if (!apiKey) {
     console.error('onvo-webhook: falta RESEND_API_KEY — no se pudo avisar por correo del pago confirmado.');
@@ -168,8 +174,13 @@ async function avisarAdministrador({ items, folios, sessionId, modo, envio }) {
     ? items.map((it) => '  - ' + descripcionItem(it) + (it.folio ? ' (folio: ' + it.folio + ')' : '')).join('\n')
     : '  (sin detalle de productos)';
   const lineaEnvio = envio > 0 ? '  - Envío: $' + envio.toFixed(2) + '\n' : '';
+  // ---- línea de moneda: solo se muestra cuando el pedido se cobró en colones, para no cambiar
+  // el aviso de los pagos en dólares (la gran mayoría) ----
+  const lineaMoneda = moneda === 'CRC'
+    ? 'Cobrado en: colones (CRC)' + (totalUSDReportado ? ' — equivalente a $' + totalUSDReportado.toFixed(2) : '') + (tipoCambioUsado ? ' — tipo de cambio usado: ₡' + tipoCambioUsado : '') + '\n'
+    : '';
 
-  const asunto = 'Pago confirmado — ' + items.length + ' producto(s)' + (modo === 'test' ? ' (MODO PRUEBA)' : '');
+  const asunto = 'Pago confirmado — ' + items.length + ' producto(s)' + (moneda === 'CRC' ? ' (₡)' : '') + (modo === 'test' ? ' (MODO PRUEBA)' : '');
   const cuerpo = [
     'ONVO Pay confirmó un pago de VidaVitalQR.',
     '',
@@ -179,6 +190,7 @@ async function avisarAdministrador({ items, folios, sessionId, modo, envio }) {
     'Folios asociados: ' + (folios || '(ninguno)'),
     'Sesión de ONVO Pay: ' + sessionId,
     'Modo: ' + modo + (modo === 'test' ? ' (pago de prueba, sin dinero real)' : ''),
+    lineaMoneda.trimEnd(),
     '',
     'Nota: este aviso confirma que el pago llegó correctamente, pero todavía no marca ninguna',
     'ficha como renovada de forma automática en el sistema ni desbloquea nada en el visor',
@@ -204,7 +216,9 @@ async function avisarAdministrador({ items, folios, sessionId, modo, envio }) {
     '</div>',
     '<p><strong>Folios asociados:</strong> ' + escaparHtml(folios || '(ninguno)') + '<br>',
     '<strong>Sesión de ONVO Pay:</strong> ' + escaparHtml(sessionId) + '<br>',
-    '<strong>Modo:</strong> ' + escaparHtml(modo) + (modo === 'test' ? ' (pago de prueba, sin dinero real)' : '') + '</p>',
+    '<strong>Modo:</strong> ' + escaparHtml(modo) + (modo === 'test' ? ' (pago de prueba, sin dinero real)' : '') +
+      (moneda === 'CRC' ? '<br><strong>Cobrado en:</strong> colones (CRC)' + (totalUSDReportado ? ' — equivalente a $' + totalUSDReportado.toFixed(2) : '') + (tipoCambioUsado ? ' — tipo de cambio usado: ₡' + tipoCambioUsado : '') : '') +
+      '</p>',
     '<p style="color:#777;font-size:12px;margin-top:18px;">Nota: este aviso confirma que el pago llegó correctamente, pero todavía no marca ninguna ficha como renovada de forma automática en el sistema ni desbloquea nada en el visor público. Eso se agrega en la siguiente fase.</p>',
     '</div>',
   ].join('');
