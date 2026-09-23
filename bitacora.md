@@ -513,6 +513,16 @@ Retomando la observación 2 del punto 55 (quedó pendiente de diagnóstico en es
 
 **Verificado:** sintaxis del bloque `<script>` de `admin-envios.html` sin errores.
 
+## 60. Equivalente en colones (informativo) en el correo de aviso, también para pagos en dólares (2026-09-23)
+
+El usuario pidió que, cuando un cliente paga en dólares (el caso normal, no en colones), el correo de aviso de pago al administrador igual muestre a cuántos colones equivale ese monto al tipo de cambio del día — sin cambiar en nada el cobro real, que sigue siendo en USD.
+
+**Cambios:**
+- `crear-pago.js`: ahora, cuando el pago es en USD, intenta obtener el tipo de cambio guardado (el mismo que usa el pago en CRC) solo para calcular ese equivalente informativo — es un intento "best-effort": si falla (por ejemplo, el BCCR no ha respondido ese día), simplemente se omite el dato y el pago en dólares sigue funcionando normal, sin ningún error visible para el cliente. Se agregó `totalCRCInformativo` a la metadata que se le manda a ONVO Pay.
+- `onvo-webhook.js`: el correo de aviso (texto y HTML) ahora muestra, cuando el pago fue en dólares y ese dato está disponible, una línea "Cobrado en: dólares (USD) — equivalente informativo: ₡X (tipo de cambio del día: ₡Y)". Cuando el pago fue en colones, el correo sigue mostrando lo mismo que ya mostraba desde el punto 58 (equivalente en dólares).
+
+**Verificado:** sintaxis de ambos archivos (`node -c`) sin errores. **Pendiente:** subir estos dos archivos y hacer una prueba real de pago en dólares para confirmar que la línea nueva aparece correctamente en el correo.
+
 ## 17. Pendiente
 
 - Integración de pago real con ONVO Pay: **las renovaciones (punto 31) y todos los demás productos del carrito (punto 33), con las mejoras de claridad del punto 34, la corrección del flujo de regreso del punto 36, y las correcciones de folio/checkout/reporte de pago de los puntos 38 y 40, ya usan pago real en modo prueba, confirmado funcionando de punta a punta (ver punto 40).** Falta: (a) la siguiente fase, que marque automáticamente la ficha como renovada en S3 y active el bloqueo del visor público (`ver.js`) para fichas no pagadas; (b) cambiar de modo prueba a modo real (llaves `onvo_live_`) cuando el usuario esté listo para cobrar de verdad — **el usuario confirmó (2026-09-22) que va a dejar este cambio para después: primero quiere hacer sus propias pruebas con el sitio ya actualizado en producción, y después coordina la actualización de ONVO**; (c) actualizar o retirar la etiqueta "Mockup de checkout — solo demostración" del recuadro de pago; (d) confirmar si el pago real por SINPE Móvil ya funciona o si la pestaña de esa opción debe ocultarse mientras tanto.
