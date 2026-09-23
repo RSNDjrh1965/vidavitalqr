@@ -147,9 +147,18 @@
       </div>
     </div>
     <div class="no-print" style="text-align:center; margin-top:16px; display:flex; gap:10px; justify-content:center; flex-wrap:wrap;">
-      <button id="imprimirBtn">Imprimir etiqueta</button>
-      <button id="descargarBtn" class="accion-secundaria">Descargar como imagen (PNG)</button>
+      <button id="descargarBtn">Descargar como imagen (PNG) — recomendado</button>
+      <button id="imprimirBtn" class="accion-secundaria">Imprimir etiqueta (desde el navegador)</button>
     </div>
+    <!-- ---- 2026-09-23: la descarga como PNG (arriba) es el método confiable, confirmado por el
+         usuario — carga esa imagen directo en el software de su impresora de etiquetas (MHT-L1081)
+         y sale perfecta. El botón "Imprimir etiqueta" usa el diálogo de impresión del propio
+         navegador, que con esta impresora térmica no siempre respeta el tamaño de papel indicado
+         por la página (@page) y puede salir recortada, escalada o torcida — por eso, si de todas
+         formas se usa, hay que revisar manualmente esas opciones en el diálogo antes de imprimir. ---->
+    <p class="no-print" id="imprimirAyuda" style="font-size:0.78rem; color:var(--slate); text-align:center; margin-top:10px; max-width:480px; margin-left:auto; margin-right:auto; display:none;">
+      Si usa "Imprimir etiqueta", en el diálogo de impresión revise: <strong>Más ajustes → Tamaño de papel: Personalizado (2 x 3 in / 50.8 x 76.2 mm)</strong> y <strong>Escala: 100% (no "Ajustar al papel")</strong> — de lo contrario puede salir recortada o torcida. Si tiene dudas, use mejor "Descargar como imagen (PNG)".
+    </p>
     <p class="no-print" id="descargaMsg" style="font-size:0.8rem; color:var(--slate); text-align:center; margin-top:8px;"></p>
   </div>
 </div>
@@ -163,6 +172,7 @@
   var msg = document.getElementById('msg');
   var etiquetaWrap = document.getElementById('etiquetaWrap');
   var imprimirBtn = document.getElementById('imprimirBtn');
+  var imprimirAyuda = document.getElementById('imprimirAyuda');
   var descargarBtn = document.getElementById('descargarBtn');
   var descargaMsg = document.getElementById('descargaMsg');
   var etiquetaEl = document.getElementById('etiqueta');
@@ -229,6 +239,7 @@
   //      etiqueta con sus propios estilos — así no queda ningún otro elemento de la página
   //      que el navegador pueda paginar de más (2026-09-18). ----
   imprimirBtn.addEventListener('click', function(){
+    if (imprimirAyuda) imprimirAyuda.style.display = '';
     // ---- Rotación 90° para la impresora de etiquetas del usuario (2026-09-18): su impresora
     //      (MHT-L1081) alimenta el rollo en orientación vertical (2in de ancho x 3in de largo),
     //      no horizontal — por eso, al enviarle una página de 3in x 2in (horizontal), el diálogo
@@ -274,13 +285,29 @@
     );
     doc.close();
 
+    // ---- corrección 2026-09-23: el cierre anterior era un setTimeout fijo de 300ms después de
+    //      llamar a print(), sin esperar a que el diálogo de impresión del navegador realmente
+    //      terminara — en la impresora térmica del usuario (MHT-L1081), ese diálogo tarda más y la
+    //      ventana se cerraba mientras seguía en uso, lo que dejaba el navegador bloqueado/sin
+    //      responder. Ahora se usa el evento estándar "afterprint" (se dispara cuando el usuario
+    //      cierra o confirma el diálogo de impresión, sin importar cuánto tarde) y, como respaldo
+    //      por si algún navegador no lo dispara, un plazo mucho más largo (15s en vez de 300ms) que
+    //      da tiempo de sobra a revisar y confirmar el diálogo con calma. ----
     var yaImprimio = false;
+    var cierreRespaldo = null;
+    function cerrarVentana(){
+      if (cierreRespaldo) { clearTimeout(cierreRespaldo); cierreRespaldo = null; }
+      try { ventana.close(); } catch (e) { /* la ventana ya pudo haberse cerrado sola */ }
+    }
     function imprimirYCerrar(){
       if (yaImprimio) return;
       yaImprimio = true;
       ventana.focus();
+      try { ventana.onafterprint = cerrarVentana; } catch (e) { /* algunos navegadores no lo permiten */ }
       ventana.print();
-      setTimeout(function(){ try { ventana.close(); } catch (e) {} }, 300);
+      // ---- respaldo: si "afterprint" nunca se disparó (pasa en algunos navegadores/SO), se
+      //      cierra sola después de 15 segundos en vez de 300ms, dando tiempo real para imprimir ----
+      cierreRespaldo = setTimeout(cerrarVentana, 15000);
     }
     ventana.onload = imprimirYCerrar;
     setTimeout(imprimirYCerrar, 400); // respaldo si onload no dispara en algún navegador
