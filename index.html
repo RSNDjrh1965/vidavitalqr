@@ -850,6 +850,18 @@
     color:var(--muted); font-family:"Source Sans 3", sans-serif;
   }
   .method-tab.active{ background:var(--card); color:var(--ink); box-shadow:0 2px 6px rgba(18,40,43,0.12); }
+  /* ---- selector de moneda $/₡ (checkout-card-head), agregado 2026-09-23 -- mismo lenguaje
+     visual que .method-tab pero más angosto, para que no compita con las pestañas de método de
+     pago que están más abajo en la misma tarjeta ---- */
+  .currency-toggle{ display:flex; }
+  .currency-btn{
+    padding:6px 12px;
+    border-radius:100px;
+    font-size:0.78rem; font-weight:600;
+    cursor:pointer; border:1px solid var(--line); background:var(--paper);
+    color:var(--muted); font-family:"IBM Plex Mono", monospace;
+  }
+  .currency-btn.is-active{ background:var(--ink); color:#fff; border-color:var(--ink); }
   .pay-fields{ display:flex; flex-direction:column; gap:12px; }
   .pay-fields.hidden{ display:none; }
   .hidden{ display:none !important; }
@@ -1970,6 +1982,16 @@
               <div class="amount" id="cxAmount">$7.00</div>
             </div>
 
+            <!-- ---- selector de moneda ($/₡), agregado 2026-09-23 -- oculto por defecto: solo se
+                 muestra si /.netlify/functions/tipo-cambio.js devuelve un tipo de cambio válido
+                 (ver moneda.js más abajo); si el negocio aún no ha habilitado el pago en colones
+                 (variable HABILITAR_PAGO_CRC en Netlify), el cliente simplemente no ve la opción,
+                 en vez de ver un botón que fallaría al pagar ---- -->
+            <div class="currency-toggle" id="cxCurrencyToggle" style="display:none; gap:8px; margin:0 0 14px 0;">
+              <button type="button" class="currency-btn is-active" id="cxCurrencyUSD" data-moneda="USD">US$ Dólares</button>
+              <button type="button" class="currency-btn" id="cxCurrencyCRC" data-moneda="CRC">₡ Colones</button>
+            </div>
+
             <div class="checkout-concepto" id="cxConceptoRow" style="display:none;">
               <span class="k" data-i18n="cxConceptoLabel">Concepto de pago:</span> <strong id="cxConcepto"></strong>
             </div>
@@ -2233,6 +2255,35 @@
   var cxConceptoRow = document.getElementById('cxConceptoRow');
   var cxConcepto = document.getElementById('cxConcepto');
 
+  // ---- selector de moneda $/₡, agregado 2026-09-23 -- ver netlify/functions/tipo-cambio.js /
+  // actualizar-tipo-cambio.js / crear-pago.js. VVQR_MONEDA es la fuente de verdad de qué moneda
+  // eligió el cliente en pantalla; tipoCambioActual es solo para la VISTA PREVIA (el monto real se
+  // recalcula siempre en el servidor, en crear-pago.js, nunca se confía en este valor). ----
+  var VVQR_MONEDA = 'USD';
+  var tipoCambioActual = null;
+  var cxCurrencyToggle = document.getElementById('cxCurrencyToggle');
+  var cxCurrencyUSD = document.getElementById('cxCurrencyUSD');
+  var cxCurrencyCRC = document.getElementById('cxCurrencyCRC');
+
+  fetch('/.netlify/functions/tipo-cambio')
+    .then(function(resp){ return resp.ok ? resp.json() : null; })
+    .then(function(json){
+      if (json && json.tipoCambio > 0) {
+        tipoCambioActual = json.tipoCambio;
+        if (cxCurrencyToggle) cxCurrencyToggle.style.display = 'flex';
+      }
+    })
+    .catch(function(){ /* si falla, sencillamente no se ofrece pagar en colones */ });
+
+  function seleccionarMoneda(moneda){
+    VVQR_MONEDA = moneda;
+    if (cxCurrencyUSD) cxCurrencyUSD.classList.toggle('is-active', moneda === 'USD');
+    if (cxCurrencyCRC) cxCurrencyCRC.classList.toggle('is-active', moneda === 'CRC');
+    renderOrder();
+  }
+  if (cxCurrencyUSD) cxCurrencyUSD.addEventListener('click', function(){ seleccionarMoneda('USD'); });
+  if (cxCurrencyCRC) cxCurrencyCRC.addEventListener('click', function(){ seleccionarMoneda('CRC'); });
+
   // ---- fichas externas (persona / mascota / objeto): se abren en pestaña nueva cada vez que se elige un producto ----
   var FICHA_URL = 'https://vidavitalqr.com/ficha.html';
   var FICHA_MASCOTA_URL = 'https://vidavitalqr.com/ficha-mascota.html';
@@ -2424,7 +2475,17 @@
     } catch (e) { /* si falla, no es crítico */ }
   })();
 
-  function fmt(n){ return '$' + n.toFixed(2); }
+  // ---- fmt(n): "n" siempre viene en dólares (así están definidos ITEMS/PRECIOS) -- si el
+  // cliente eligió pagar en colones y ya se tiene el tipo de cambio (ver selector $/₡ más arriba),
+  // se muestra convertido a colones SOLO como vista previa; el monto que realmente se cobra se
+  // vuelve a calcular, de forma independiente, dentro de crear-pago.js. ----
+  function fmt(n){
+    if (VVQR_MONEDA === 'CRC' && tipoCambioActual) {
+      var crc = Math.round(n * tipoCambioActual);
+      return '₡' + crc.toLocaleString('es-CR');
+    }
+    return '$' + n.toFixed(2);
+  }
 
   // ---- diccionario de traducción vigente (mismo patrón que updateButton() ya usaba) — se
   // reutiliza en renderOrder(), en los mensajes de envío/pago y en la validación del modal de
@@ -2943,7 +3004,7 @@
     fetch('/.netlify/functions/crear-pago', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ items: items, email: email })
+      body: JSON.stringify({ items: items, email: email, moneda: VVQR_MONEDA })
     })
       .then(function(resp){
         return resp.json().catch(function(){ return null; }).then(function(json){ return { ok: resp.ok, json: json }; });

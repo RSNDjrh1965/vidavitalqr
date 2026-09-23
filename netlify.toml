@@ -2,5 +2,9 @@
   functions = "netlify/functions"
   publish = "."
 
-[functions]
-  node_bundler = "esbuild"
+# ---- actualizar-tipo-cambio.js: se ejecuta sola una vez al día, sin que nadie la llame, para
+# mantener guardado el tipo de cambio (BCCR + 2% de margen) que usan crear-pago.js y tipo-cambio.js
+# para el pago en colones. Hora elegida: 15:00 UTC = 9:00 a.m. hora de Costa Rica (UTC-6), ya
+# entrado el día hábil en que el BCCR suele publicar su dato. ----
+[functions."actualizar-tipo-cambio"]
+  schedule = "0 15 * * *"
