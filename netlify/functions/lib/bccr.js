@@ -11,13 +11,19 @@
 //   https://gee.bccr.fi.cr/indicadores/Documentos/WEBSERVICES%20DE%20INDICADORES%20ECONOMICOS.pdf
 //
 // El servicio expone un binding HTTP GET simple (además del SOAP completo) con querystring:
-//   .../ObtenerIndicadoresEconomicosXML?Indicador=318&FechaInicio=dd/mm/yyyy&FechaFinal=dd/mm/yyyy
+//   .../ObtenerIndicadoresEconomicos?Indicador=318&FechaInicio=dd/mm/yyyy&FechaFinal=dd/mm/yyyy
 //   &Nombre=...&SubNiveles=N&CorreoElectronico=...&Token=...
 // y devuelve XML con un nodo <INGC011_CAT_INDICADORECONOMIC> por cada fecha, cada uno con
 // <DES_FECHA> y <NUM_VALOR>. Se consulta un rango de 7 días (no solo "hoy") porque el BCCR no
 // publica dato los fines de semana ni los feriados, y se toma el valor más reciente del rango.
+//
+// 2026-09-23: se cambió de "ObtenerIndicadoresEconomicosXML" a "ObtenerIndicadoresEconomicos"
+// (sin el sufijo "XML") porque el primero daba error 503 en todas las pruebas reales, mientras
+// que este segundo nombre es el que se confirmó funcionando en un ejemplo real de integración.
+// También se agregó un encabezado de navegador (User-Agent/Accept), por si el sitio del BCCR
+// bloquea peticiones que no parecen venir de un navegador normal.
 
-const BCCR_BASE = 'https://gee.bccr.fi.cr/Indicadores/Suscripciones/WS/wsindicadoreseconomicos.asmx/ObtenerIndicadoresEconomicosXML';
+const BCCR_BASE = 'https://gee.bccr.fi.cr/Indicadores/Suscripciones/WS/wsindicadoreseconomicos.asmx/ObtenerIndicadoresEconomicos';
 const INDICADOR_VENTA = 318;
 const DIAS_RANGO_CONSULTA = 7;
 
@@ -53,12 +59,23 @@ async function obtenerTipoCambioVentaOficial({ correo, token, nombre }) {
 
   let resp;
   try {
-    resp = await fetch(url);
+    resp = await fetch(url, {
+      headers: {
+        // ---- algunos sitios del gobierno bloquean peticiones sin apariencia de navegador ----
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36',
+        'Accept': 'text/xml,application/xml,*/*',
+      },
+    });
   } catch (err) {
     throw new Error('No se pudo contactar al servicio del BCCR: ' + err.message);
   }
   if (!resp.ok) {
-    throw new Error('El servicio del BCCR respondió con estado ' + resp.status);
+    // ---- se incluye un fragmento del cuerpo de la respuesta en el error, para poder diagnosticar
+    // en los logs de Netlify si el BCCR está devolviendo una página de error/bloqueo en vez de un
+    // simple estado HTTP vacío ----
+    let cuerpo = '';
+    try { cuerpo = (await resp.text()).slice(0, 300); } catch (e) { /* sin cuerpo legible */ }
+    throw new Error('El servicio del BCCR respondió con estado ' + resp.status + (cuerpo ? ' — cuerpo: ' + cuerpo : ''));
   }
 
   const xml = await resp.text();
