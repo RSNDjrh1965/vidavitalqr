@@ -184,6 +184,11 @@ exports.handler = async (event) => {
   let currencyOnvo = 'USD';
   let unitAmount = Math.round(totalUSD * 100); // USD: la unidad más pequeña es el centavo
   let tipoCambioUsado = null;
+  // ---- equivalente informativo en colones (agregado 2026-09-23): aunque el cliente pague en
+  // dólares, se calcula igual (best-effort, nunca bloquea el pago si falla) para que el aviso de
+  // pago al administrador (onvo-webhook.js) pueda mostrar "esto son tantos colones al tipo de
+  // cambio de hoy" como referencia — es solo informativo, nunca cambia lo que realmente se cobra. ----
+  let totalCRCInformativo = null;
 
   if (moneda === 'CRC') {
     try {
@@ -198,12 +203,24 @@ exports.handler = async (event) => {
     // ---- decisión confirmada por el usuario: siempre colones ENTEROS, redondeando hacia ARRIBA
     // (nunca hacia el más cercano) -- así nunca se cobra de menos por un redondeo ----
     const totalCRC = Math.ceil(totalUSD * tipoCambioUsado);
+    totalCRCInformativo = totalCRC;
     // ---- multiplicador de subunidad: 100 = céntimos (confirmado con una prueba real el
     // 2026-09-23 — ver la nota al inicio del archivo). El total en colones sigue siendo siempre
     // un entero (totalCRC); lo que cambia es que ONVO Pay espera ese entero expresado en céntimos. ----
     const subunitMultiplier = Number(process.env.ONVO_CRC_SUBUNIT_MULTIPLIER || '100');
     unitAmount = Math.ceil(totalCRC * subunitMultiplier);
     currencyOnvo = 'CRC';
+  } else {
+    // ---- pago en USD: se intenta obtener el tipo de cambio solo para mostrarlo en el correo de
+    // aviso — si el BCCR/S3 fallara por cualquier motivo, no se bloquea el pago en dólares, solo se
+    // omite ese dato informativo del correo (igual que cuando el pago en CRC todavía no está
+    // disponible, pero aquí sin devolver ningún error al cliente) ----
+    try {
+      tipoCambioUsado = await obtenerTipoCambioGuardado();
+      totalCRCInformativo = Math.ceil(totalUSD * tipoCambioUsado);
+    } catch (err) {
+      console.log('crear-pago: no se pudo obtener el tipo de cambio informativo para el aviso (pago sigue en USD) —', err.message);
+    }
   }
 
   // ---- una sola línea de pago con el total ya calculado (subtotal + envío + IVA una sola vez),
@@ -237,6 +254,7 @@ exports.handler = async (event) => {
       items: JSON.stringify(items.map((it) => ({ item: it.itemId, folio: it.folio, tipo: it.tipo, placaEstilo: it.placaEstilo || undefined }))),
       moneda: currencyOnvo,
       tipoCambioUsado: tipoCambioUsado ? String(tipoCambioUsado) : '',
+      totalCRCInformativo: totalCRCInformativo ? String(totalCRCInformativo) : '',
       totalUSD: totalUSD.toFixed(2),
       folios: folios.join(','),
       envio: envio > 0 ? envio.toFixed(2) : '',

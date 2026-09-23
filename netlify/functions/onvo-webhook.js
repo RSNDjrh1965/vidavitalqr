@@ -146,11 +146,15 @@ exports.handler = async (event) => {
   const moneda = meta.moneda === 'CRC' ? 'CRC' : 'USD';
   const tipoCambioUsado = meta.tipoCambioUsado ? parseFloat(meta.tipoCambioUsado) : null;
   const totalUSDReportado = meta.totalUSD ? parseFloat(meta.totalUSD) : null;
+  // ---- equivalente informativo en colones (agregado 2026-09-23): cuando el pago fue en USD,
+  // crear-pago.js igual intenta calcular a cuántos colones equivale al tipo de cambio del día,
+  // solo para mostrarlo aquí como referencia — nunca es el monto realmente cobrado ----
+  const totalCRCInformativo = meta.totalCRCInformativo ? parseFloat(meta.totalCRCInformativo) : null;
 
   console.log('onvo-webhook: pago CONFIRMADO —', items.length, 'producto(s), folios:', folios || '(ninguno)', '— sesión', sessionId, '— modo', modo, '— moneda', moneda);
 
   // ---- 3) Avisar por correo al administrador (mismo destinatario que ya recibe los demás avisos) ----
-  await avisarAdministrador({ items, folios, sessionId, modo, envio, moneda, tipoCambioUsado, totalUSDReportado });
+  await avisarAdministrador({ items, folios, sessionId, modo, envio, moneda, tipoCambioUsado, totalUSDReportado, totalCRCInformativo });
 
   // TODO (próxima fase, una vez confirmado que esto funciona en pruebas): marcar cada ficha
   // (según folio/tipo en "items") como renovada/pagada en S3 (reiniciar su fecha "creado", igual
@@ -163,7 +167,7 @@ exports.handler = async (event) => {
   return { statusCode: 200, body: 'ok' };
 };
 
-async function avisarAdministrador({ items, folios, sessionId, modo, envio, moneda, tipoCambioUsado, totalUSDReportado }) {
+async function avisarAdministrador({ items, folios, sessionId, modo, envio, moneda, tipoCambioUsado, totalUSDReportado, totalCRCInformativo }) {
   const apiKey = process.env.RESEND_API_KEY;
   if (!apiKey) {
     console.error('onvo-webhook: falta RESEND_API_KEY — no se pudo avisar por correo del pago confirmado.');
@@ -174,11 +178,13 @@ async function avisarAdministrador({ items, folios, sessionId, modo, envio, mone
     ? items.map((it) => '  - ' + descripcionItem(it) + (it.folio ? ' (folio: ' + it.folio + ')' : '')).join('\n')
     : '  (sin detalle de productos)';
   const lineaEnvio = envio > 0 ? '  - Envío: $' + envio.toFixed(2) + '\n' : '';
-  // ---- línea de moneda: solo se muestra cuando el pedido se cobró en colones, para no cambiar
-  // el aviso de los pagos en dólares (la gran mayoría) ----
+  // ---- línea de moneda: si el pedido se cobró en colones, muestra el equivalente en dólares; si
+  // se cobró en dólares (la gran mayoría), muestra el equivalente informativo en colones al tipo
+  // de cambio del día (agregado 2026-09-23, a pedido del usuario) — en ambos casos nunca es el
+  // monto realmente cobrado, solo una referencia ----
   const lineaMoneda = moneda === 'CRC'
     ? 'Cobrado en: colones (CRC)' + (totalUSDReportado ? ' — equivalente a $' + totalUSDReportado.toFixed(2) : '') + (tipoCambioUsado ? ' — tipo de cambio usado: ₡' + tipoCambioUsado : '') + '\n'
-    : '';
+    : (totalCRCInformativo ? 'Cobrado en: dólares (USD) — equivalente informativo: ₡' + totalCRCInformativo.toLocaleString('es-CR') + (tipoCambioUsado ? ' (tipo de cambio del día: ₡' + tipoCambioUsado + ')' : '') + '\n' : '');
 
   const asunto = 'Pago confirmado — ' + items.length + ' producto(s)' + (moneda === 'CRC' ? ' (₡)' : '') + (modo === 'test' ? ' (MODO PRUEBA)' : '');
   const cuerpo = [
@@ -217,7 +223,9 @@ async function avisarAdministrador({ items, folios, sessionId, modo, envio, mone
     '<p><strong>Folios asociados:</strong> ' + escaparHtml(folios || '(ninguno)') + '<br>',
     '<strong>Sesión de ONVO Pay:</strong> ' + escaparHtml(sessionId) + '<br>',
     '<strong>Modo:</strong> ' + escaparHtml(modo) + (modo === 'test' ? ' (pago de prueba, sin dinero real)' : '') +
-      (moneda === 'CRC' ? '<br><strong>Cobrado en:</strong> colones (CRC)' + (totalUSDReportado ? ' — equivalente a $' + totalUSDReportado.toFixed(2) : '') + (tipoCambioUsado ? ' — tipo de cambio usado: ₡' + tipoCambioUsado : '') : '') +
+      (moneda === 'CRC'
+        ? '<br><strong>Cobrado en:</strong> colones (CRC)' + (totalUSDReportado ? ' — equivalente a $' + totalUSDReportado.toFixed(2) : '') + (tipoCambioUsado ? ' — tipo de cambio usado: ₡' + tipoCambioUsado : '')
+        : (totalCRCInformativo ? '<br><strong>Cobrado en:</strong> dólares (USD) — equivalente informativo: ₡' + totalCRCInformativo.toLocaleString('es-CR') + (tipoCambioUsado ? ' (tipo de cambio del día: ₡' + tipoCambioUsado + ')' : '') : '')) +
       '</p>',
     '<p style="color:#777;font-size:12px;margin-top:18px;">Nota: este aviso confirma que el pago llegó correctamente, pero todavía no marca ninguna ficha como renovada de forma automática en el sistema ni desbloquea nada en el visor público. Eso se agrega en la siguiente fase.</p>',
     '</div>',
