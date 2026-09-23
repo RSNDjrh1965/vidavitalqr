@@ -13,8 +13,11 @@
 // tipo de cambio sube mientras tanto.
 //
 // Requiere estas variables de entorno en Netlify (Project configuration → Environment variables):
-//   BCCR_CORREO — el correo con el que se registró en el servicio web del BCCR.
-//   BCCR_TOKEN  — el token de suscripción que le dio el BCCR al registrarse.
+//   BCCR_API_TOKEN — token "Bearer" de la API nueva del BCCR (SDDE), generado en el portal del
+//                    BCCR en "Mi perfil → Generar token". Es el método preferido — ver lib/bccr.js.
+//   BCCR_CORREO / BCCR_TOKEN — correo y token del servicio viejo del BCCR (respaldo automático,
+//                    si la API nueva llegara a fallar; puede faltar y la función sigue intentando
+//                    con la API nueva).
 //   (además de las mismas S3_ACCESS_KEY_ID / S3_SECRET_ACCESS_KEY / S3_REGION / S3_BUCKET_RESUMEN
 //   que ya usa guardar-envio.js).
 // Ninguna debe escribirse en este archivo ni en ningún otro que se suba al repositorio.
@@ -41,16 +44,17 @@ function getS3Client() {
 }
 
 exports.handler = async () => {
+  const apiToken = process.env.BCCR_API_TOKEN;
   const correo = process.env.BCCR_CORREO;
   const token = process.env.BCCR_TOKEN;
-  if (!correo || !token) {
-    console.error('actualizar-tipo-cambio: faltan las variables de entorno BCCR_CORREO / BCCR_TOKEN en Netlify.');
-    return { statusCode: 500, body: JSON.stringify({ error: 'Falta configurar BCCR_CORREO / BCCR_TOKEN en Netlify.' }) };
+  if (!apiToken && !(correo && token)) {
+    console.error('actualizar-tipo-cambio: faltan las variables de entorno del BCCR en Netlify (BCCR_API_TOKEN, o BCCR_CORREO + BCCR_TOKEN).');
+    return { statusCode: 500, body: JSON.stringify({ error: 'Falta configurar BCCR_API_TOKEN (o BCCR_CORREO + BCCR_TOKEN) en Netlify.' }) };
   }
 
   let oficial;
   try {
-    oficial = await obtenerTipoCambioVentaOficial({ correo, token, nombre: 'VidaVitalQR' });
+    oficial = await obtenerTipoCambioVentaOficial({ apiToken, correo, token, nombre: 'VidaVitalQR' });
   } catch (err) {
     console.error('actualizar-tipo-cambio: no se pudo consultar el BCCR —', err.message);
     return { statusCode: 502, body: JSON.stringify({ error: 'No se pudo consultar el tipo de cambio del BCCR: ' + err.message }) };
