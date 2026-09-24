@@ -313,7 +313,7 @@ function paginaVisor(datos) {
       <h3 data-i18n="contactos"></h3>
       ${contactosHtml}
     </div>
-    ${datos.pdfUrl ? `<a class="btnPdf" href="${escapeHtml(datos.pdfUrl)}" target="_blank" rel="noopener" data-i18n="botonPdf"></a>` : ''}
+    ${datos.pdfUrl ? `<a class="btnPdf" id="btnPdf" href="${escapeHtml(datos.pdfUrl)}" target="_blank" rel="noopener" data-i18n="botonPdf"></a>` : ''}
   </div>
   <div class="ubicPrompt" id="ubicPrompt">
     <p data-i18n="ubicPreguntaTexto"></p>
@@ -336,23 +336,38 @@ function paginaVisor(datos) {
         var Ctx = window.AudioContext || window.webkitAudioContext;
         if (!Ctx) return;
         var ctx = new Ctx();
-        var now = ctx.currentTime;
-        function tono(freq, inicio, duracion, pico) {
-          var osc = ctx.createOscillator();
-          var gain = ctx.createGain();
-          osc.type = 'sine';
-          osc.frequency.value = freq;
-          gain.gain.setValueAtTime(0, now + inicio);
-          gain.gain.linearRampToValueAtTime(pico, now + inicio + 0.015);
-          gain.gain.exponentialRampToValueAtTime(0.001, now + inicio + duracion);
-          osc.connect(gain).connect(ctx.destination);
-          osc.start(now + inicio);
-          osc.stop(now + inicio + duracion + 0.05);
+        function tonos() {
+          var now = ctx.currentTime;
+          function tono(freq, inicio, duracion, pico) {
+            var osc = ctx.createOscillator();
+            var gain = ctx.createGain();
+            osc.type = 'sine';
+            osc.frequency.value = freq;
+            gain.gain.setValueAtTime(0, now + inicio);
+            gain.gain.linearRampToValueAtTime(pico, now + inicio + 0.015);
+            gain.gain.exponentialRampToValueAtTime(0.001, now + inicio + duracion);
+            osc.connect(gain).connect(ctx.destination);
+            osc.start(now + inicio);
+            osc.stop(now + inicio + duracion + 0.05);
+          }
+          tono(523.25, 0, 1.8, 0.18);
+          tono(659.25, 0.1, 1.7, 0.14);
+          tono(783.99, 0.22, 1.6, 0.16);
+          tono(1046.5, 0.38, 1.3, 0.09);
         }
-        tono(523.25, 0, 1.8, 0.18);
-        tono(659.25, 0.1, 1.7, 0.14);
-        tono(783.99, 0.22, 1.6, 0.16);
-        tono(1046.5, 0.38, 1.3, 0.09);
+        // ---- los navegadores móviles crean el motor de audio "suspendido" hasta detectar una
+        // interacción directa del usuario; abrir el enlace del QR normalmente cuenta como esa
+        // interacción, pero el sonido nunca se oía porque nunca se le pedía al contexto de audio
+        // que se reanudara. Si ya está listo (estado "running"), suena de inmediato; si está
+        // "suspended", se pide reanudarlo y se toca justo después. Si el navegador de todas
+        // formas lo bloquea (ej. iPhone en silencio), la llamada a resume() puede quedar
+        // pendiente sin sonar nunca — el catch de más abajo sigue cubriendo ese caso sin afectar
+        // el resto de la ficha. ----
+        if (ctx.state === 'suspended') {
+          ctx.resume().then(tonos).catch(function () {});
+        } else {
+          tonos();
+        }
       } catch (e) {
         // Si el navegador bloquea el audio, seguimos sin sonido, sin afectar el resto.
       }
@@ -372,6 +387,13 @@ function paginaVisor(datos) {
 
   var TEXTOS = ${JSON.stringify(TEXTOS)};
   var FOLIO = ${JSON.stringify(datos.folio || '')};
+  // ---- URL del PDF completo, por idioma. "PDF_URL_DEFAULT" es el PDF en el idioma con que se
+  // llenó la ficha (siempre existe, es el que ya funcionaba antes). "PDF_URLS" trae, además, el
+  // mismo documento en los otros idiomas cuando el formulario logró generarlos y subirlos (ver
+  // subir-pdf-idioma.js) — si un idioma en particular no se pudo generar, simplemente no aparece
+  // aquí y el botón cae de vuelta al PDF por defecto, sin que la persona note ningún error. ----
+  var PDF_URL_DEFAULT = ${JSON.stringify(datos.pdfUrl || '')};
+  var PDF_URLS = ${JSON.stringify((datos.pdfUrls && typeof datos.pdfUrls === 'object') ? datos.pdfUrls : {})};
   var idiomaActual = 'es';
   // estadoUbicacion: 'pendiente' mientras se espera la respuesta del navegador al permiso de
   // ubicación; 'concedida' si la persona que escaneó aceptó compartirla; 'denegada' si la
@@ -398,6 +420,8 @@ function paginaVisor(datos) {
     document.querySelectorAll('.langbar button').forEach(function(b){
       b.classList.toggle('activo', b.getAttribute('data-lang') === idiomaActual);
     });
+    var btnPdf = document.getElementById('btnPdf');
+    if (btnPdf) btnPdf.href = PDF_URLS[idiomaActual] || PDF_URL_DEFAULT;
     actualizarAvisoUbicacion();
     try { localStorage.setItem('vidavitalqr_lang', idiomaActual); } catch(e){}
   }
