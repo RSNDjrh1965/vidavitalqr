@@ -901,7 +901,7 @@ $('photoRemove').addEventListener('click', e => {
   }
   // Servicio gratuito de conteo compartido (sin necesidad de servidor propio).
   const COUNTER_API = 'https://abacus.jasoncameron.dev';
-  const COUNTER_NAMESPACE = 'vidavitalqr-objetos-cr-ficha-emergencia';
+  const COUNTER_NAMESPACE = 'vidavitalqr-objetos-cr-ficha-emergencia-2026';
   const COUNTER_KEY = 'aperturas';
   const LOCAL_FALLBACK_KEY = 'vidavitalqr_objetos_open_count_local';
 
@@ -1455,6 +1455,40 @@ async function generatePdfBlob(){
   return pdf.output('blob');
 }
 
+// ---- genera y sube el PDF de la ficha en los idiomas que falten (los 3 que no sean el idioma
+// con que se llenó el formulario), para que quien escanee después pueda ver el PDF completo en
+// su propio idioma, no solo el texto de la pantalla del visor (eso ya se traducía antes). Se
+// llama DESPUÉS de que la ficha principal ya se guardó con éxito (ver el bloque que llama a esta
+// función), así que cualquier fallo aquí NUNCA debe afectar ni deshacer ese guardado que ya
+// ocurrió: cada idioma se intenta por separado, con su propio try/catch, y si alguno falla
+// (captura de pantalla, red, PDF muy pesado, etc.) simplemente se omite en silencio — ver.js ya
+// está preparado para caer de vuelta al PDF del idioma original si el de un idioma en particular
+// no está disponible (ver PDF_URLS/PDF_URL_DEFAULT en ver.js). Al final siempre se restaura el
+// idioma que la persona tenía elegido en pantalla, para que no note ningún cambio. ----
+async function generarYSubirPdfsOtrosIdiomas(folio){
+  const idiomaOriginal = LANG_FICHA;
+  const otros = ['es','en','fr','pt'].filter(l => l !== idiomaOriginal);
+  for (const lang of otros) {
+    try {
+      aplicarIdiomaFicha(lang);
+      // pequeña pausa para que el navegador termine de repintar el formulario en el nuevo
+      // idioma antes de tomar la captura — sin esto, html2canvas puede alcanzar a capturar
+      // texto todavía a medio traducir.
+      await new Promise(r => setTimeout(r, 150));
+      const blob = await generatePdfBlob();
+      const base64 = await blobToBase64(blob);
+      await fetch('/.netlify/functions/subir-pdf-idioma', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ folio, idioma: lang, filename: `${folio}-${lang}.pdf`, pdfBase64: base64 }),
+      });
+    } catch (errIdioma) {
+      console.error('No se pudo generar/subir el PDF en idioma "' + lang + '" (no crítico, se omite):', errIdioma);
+    }
+  }
+  aplicarIdiomaFicha(idiomaOriginal);
+}
+
 // ---- ir a la sección de pago seguro de VidaVitalQR, pasando el número de la ficha (respaldo,
 // solo se usa cuando esta ficha no se abrió como pestaña nueva desde el landing — ver
 // avisarOpenerYCerrar() más abajo, que es el camino normal) ----
@@ -1692,6 +1726,11 @@ $('btnEmail').addEventListener('click', async () => {
     let pinNuevo = null;
     let qrUrlGenerado = null;
     try{ const respJson = await resp.json(); pinNuevo = respJson && respJson.pin; qrUrlGenerado = respJson && respJson.qrUrl; }catch(e){}
+
+    // ---- ficha ya guardada con éxito arriba: ahora, mejor esfuerzo, se genera el PDF también
+    // en los otros 3 idiomas y se sube por separado (ver la función y su comentario). Cualquier
+    // fallo aquí se ignora sin afectar el resto de este flujo, que ya se completó. ----
+    try{ await generarYSubirPdfsOtrosIdiomas(folio); }catch(errIdiomas){ console.error('generarYSubirPdfsOtrosIdiomas falló (no crítico):', errIdiomas); }
 
     // el envío ya terminó — se quita el overlay de "procesando" antes de mostrar el modal del
     // PIN (o de cerrar la pestaña), para que no quede tapándolo por encima
