@@ -330,39 +330,49 @@ function paginaVisor(datos) {
   // aviso a los contactos de emergencia (más abajo), ni bloquea la carga de la ficha — si el
   // navegador bloquea el sonido (común en iPhone o con el teléfono en silencio), la ficha se ve
   // exactamente igual, solo sin el sonido.
+  //
+  // ---- IMPORTANTE (corrección 2026-09-24 sobre el primer intento de arreglo): se comprobó con
+  // una prueba automatizada que abrir el enlace que resulta de escanear un código QR NO cuenta,
+  // en la práctica, como una interacción directa del usuario para efectos de audio — el motor de
+  // audio queda "suspendido" para siempre si nunca hay un toque/clic real dentro de la propia
+  // página. Por eso, además del intento inmediato al cargar (que en la mayoría de los casos no va
+  // a sonar, y está bien que así sea), ahora también se reintenta en el primer toque, clic o tecla
+  // que la persona haga en cualquier parte de la pantalla — así el sonido sí llega a escucharse,
+  // aunque sea con un pequeño retraso frente al splash visual si la persona no toca la pantalla de
+  // inmediato. ----
   (function () {
-    function playCampanitaSuaveExtendida() {
+    var Ctx = window.AudioContext || window.webkitAudioContext;
+    var ctx = null;
+    var sonoConExito = false;
+    var eventosGesto = ['click', 'touchstart', 'pointerdown', 'keydown'];
+
+    function tonos() {
+      if (!ctx || sonoConExito) return; // evita que suene dos veces si hay más de un intento
+      sonoConExito = true;
+      quitarListenersGesto();
+      var now = ctx.currentTime;
+      function tono(freq, inicio, duracion, pico) {
+        var osc = ctx.createOscillator();
+        var gain = ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.value = freq;
+        gain.gain.setValueAtTime(0, now + inicio);
+        gain.gain.linearRampToValueAtTime(pico, now + inicio + 0.015);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + inicio + duracion);
+        osc.connect(gain).connect(ctx.destination);
+        osc.start(now + inicio);
+        osc.stop(now + inicio + duracion + 0.05);
+      }
+      tono(523.25, 0, 1.8, 0.18);
+      tono(659.25, 0.1, 1.7, 0.14);
+      tono(783.99, 0.22, 1.6, 0.16);
+      tono(1046.5, 0.38, 1.3, 0.09);
+    }
+
+    function intentarSonido() {
+      if (sonoConExito || !Ctx) return;
       try {
-        var Ctx = window.AudioContext || window.webkitAudioContext;
-        if (!Ctx) return;
-        var ctx = new Ctx();
-        function tonos() {
-          var now = ctx.currentTime;
-          function tono(freq, inicio, duracion, pico) {
-            var osc = ctx.createOscillator();
-            var gain = ctx.createGain();
-            osc.type = 'sine';
-            osc.frequency.value = freq;
-            gain.gain.setValueAtTime(0, now + inicio);
-            gain.gain.linearRampToValueAtTime(pico, now + inicio + 0.015);
-            gain.gain.exponentialRampToValueAtTime(0.001, now + inicio + duracion);
-            osc.connect(gain).connect(ctx.destination);
-            osc.start(now + inicio);
-            osc.stop(now + inicio + duracion + 0.05);
-          }
-          tono(523.25, 0, 1.8, 0.18);
-          tono(659.25, 0.1, 1.7, 0.14);
-          tono(783.99, 0.22, 1.6, 0.16);
-          tono(1046.5, 0.38, 1.3, 0.09);
-        }
-        // ---- los navegadores móviles crean el motor de audio "suspendido" hasta detectar una
-        // interacción directa del usuario; abrir el enlace del QR normalmente cuenta como esa
-        // interacción, pero el sonido nunca se oía porque nunca se le pedía al contexto de audio
-        // que se reanudara. Si ya está listo (estado "running"), suena de inmediato; si está
-        // "suspended", se pide reanudarlo y se toca justo después. Si el navegador de todas
-        // formas lo bloquea (ej. iPhone en silencio), la llamada a resume() puede quedar
-        // pendiente sin sonar nunca — el catch de más abajo sigue cubriendo ese caso sin afectar
-        // el resto de la ficha. ----
+        if (!ctx) ctx = new Ctx();
         if (ctx.state === 'suspended') {
           ctx.resume().then(tonos).catch(function () {});
         } else {
@@ -373,16 +383,27 @@ function paginaVisor(datos) {
       }
     }
 
+    function quitarListenersGesto() {
+      eventosGesto.forEach(function (ev) {
+        document.removeEventListener(ev, intentarSonido);
+      });
+    }
+
     var splash = document.getElementById('splashMarca');
-    if (!splash) return;
-    requestAnimationFrame(function () {
-      splash.classList.add('activo');
-      playCampanitaSuaveExtendida();
+    if (splash) {
+      requestAnimationFrame(function () {
+        splash.classList.add('activo');
+      });
+      setTimeout(function () {
+        splash.classList.add('desvanecido');
+        setTimeout(function () { splash.style.display = 'none'; }, 550);
+      }, 1600);
+    }
+
+    intentarSonido(); // intento inmediato (funciona en los casos en que el navegador sí considera activada la página)
+    eventosGesto.forEach(function (ev) {
+      document.addEventListener(ev, intentarSonido, { passive: true });
     });
-    setTimeout(function () {
-      splash.classList.add('desvanecido');
-      setTimeout(function () { splash.style.display = 'none'; }, 550);
-    }, 1600);
   })();
 
   var TEXTOS = ${JSON.stringify(TEXTOS)};
