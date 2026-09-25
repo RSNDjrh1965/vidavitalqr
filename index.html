@@ -882,6 +882,49 @@
   .field-row .field{ flex:1; }
   @media (max-width:640px){ .field-row{ flex-direction:column; } }
 
+  /* ---------- SINPE Móvil (pago manual), agregado 2026-09-24 -- bloque que se muestra en el
+     checkout REAL cuando el cliente elige la pestaña "SINPE Móvil": muestra el monto en colones,
+     el número al que debe enviar el SINPE, los pasos a seguir y un botón de WhatsApp para avisar
+     el pago -- no hay integración con la API de ONVO para SINPE, la confirmación la hace el
+     negocio manualmente por WhatsApp (ver bitacora.md). ---------- */
+  .sinpe-manual-box{
+    background:var(--paper-dim); border:1.4px solid var(--line); border-radius:14px;
+    padding:18px 18px 16px; margin-bottom:16px;
+  }
+  .sinpe-manual-box .monto-label{ font-size:0.82rem; color:var(--muted); margin-bottom:2px; }
+  .sinpe-manual-box .monto-crc{ font-family:"Zilla Slab", Georgia, serif; font-weight:700; font-size:1.9rem; color:var(--ink); margin-bottom:14px; }
+  .sinpe-numero-row{
+    display:flex; align-items:center; justify-content:space-between; gap:10px;
+    background:var(--card); border:1.4px solid var(--line); border-radius:10px;
+    padding:12px 14px; margin-bottom:14px;
+  }
+  .sinpe-numero-row .num-label{ font-size:0.78rem; color:var(--muted); text-transform:uppercase; letter-spacing:0.04em; margin-bottom:2px; }
+  .sinpe-numero-row .num-valor{ font-family:"IBM Plex Mono", monospace; font-weight:600; font-size:1.15rem; color:var(--ink); }
+  .btn-copiar{
+    font-family:"Source Sans 3", sans-serif; font-weight:600; font-size:0.82rem;
+    padding:7px 12px; border-radius:7px; border:1.4px solid var(--teal); color:var(--teal-deep);
+    background:transparent; cursor:pointer; white-space:nowrap;
+  }
+  .sinpe-pasos{ margin:0 0 14px; padding-left:20px; font-size:0.9rem; color:var(--ink-soft); line-height:1.55; }
+  .sinpe-pasos li{ margin-bottom:4px; }
+  .sinpe-pasos strong{ color:var(--ink); }
+  .comprobante-aviso{
+    display:flex; align-items:flex-start; gap:10px;
+    background:var(--signal-soft); border:1.4px solid var(--signal); border-radius:10px;
+    padding:12px 14px; margin-bottom:2px;
+  }
+  .comprobante-aviso svg{ width:22px; height:22px; flex:none; margin-top:1px; color:var(--signal); }
+  .comprobante-aviso .txt{ font-size:0.87rem; color:var(--ink); line-height:1.45; }
+  .comprobante-aviso strong{ display:block; margin-bottom:2px; }
+  .btn-whatsapp{
+    display:flex; align-items:center; justify-content:center; gap:9px;
+    width:100%; font-family:"Source Sans 3", sans-serif; font-weight:700; font-size:1rem;
+    padding:14px 18px; margin-top:18px; border-radius:100px; border:none; cursor:pointer;
+    background:#25D366; color:#0B3B17;
+  }
+  .btn-whatsapp:disabled{ opacity:0.45; cursor:not-allowed; }
+  .btn-whatsapp svg{ width:20px; height:20px; flex:none; }
+
   /* ---------- FICHA MÉDICA (previa al pago) ---------- */
   .ficha-medica{ display:none; background:var(--card); }
   .ficha-medica.is-open{ display:block; }
@@ -2041,10 +2084,46 @@
                   <p style="margin:0; font-size:0.82rem; color:var(--muted);" data-i18n="cxSinpeNote">Recibirá una notificación en su aplicación bancaria para autorizar el cobro.</p>
                 </div>
 
+                <!-- ---- pago real por SINPE Móvil, agregado 2026-09-24: es MANUAL (no hay
+                     integración con la API de ONVO para SINPE) -- el cliente transfiere por su
+                     propia app bancaria y avisa por WhatsApp con el botón de abajo; el negocio
+                     confirma el pago manualmente. Solo se muestra cuando el checkout está en modo
+                     real Y la pestaña "SINPE Móvil" está activa (ver renderOrder()/setMethod()).
+                     No sustituye ni toca el bloque #cxFieldsSinpe de arriba, que es del mockup
+                     demo y no se usa en modo real. ---- -->
+                <div class="sinpe-manual-box" id="cxSinpeManualBox" style="display:none;">
+                  <div class="monto-label" data-i18n="cxSinpeMontoLabel">Total a pagar por SINPE Móvil</div>
+                  <div class="monto-crc" id="cxSinpeMontoCRC">₡0</div>
+
+                  <div class="sinpe-numero-row">
+                    <div>
+                      <div class="num-label" data-i18n="cxSinpeEnviarA">Enviar SINPE a</div>
+                      <div class="num-valor" id="cxSinpeNumero">6093-3090</div>
+                    </div>
+                    <button type="button" class="btn-copiar" id="cxSinpeCopiarBtn" data-i18n="cxSinpeCopiar">Copiar número</button>
+                  </div>
+
+                  <ol class="sinpe-pasos">
+                    <li>Abrí la app de tu banco y enviá <strong id="cxSinpePasoMonto">₡0</strong> por SINPE Móvil al número de arriba.</li>
+                    <li>Tu banco te da un comprobante o captura de pantalla de la transferencia — guardalo.</li>
+                    <li>Tocá el botón verde de abajo: se abre WhatsApp con el mensaje ya listo.</li>
+                  </ol>
+
+                  <div class="comprobante-aviso">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2Z"/><circle cx="12" cy="13" r="4"/></svg>
+                    <div class="txt"><strong>Importante:</strong> dentro del chat de WhatsApp, tocá el clip 📎 y adjuntá la captura del comprobante antes de enviar. Sin el comprobante no podemos confirmar tu pago.</div>
+                  </div>
+                </div>
+
                 <div class="checkout-order" id="cxOrder"></div>
                 <p class="select-note" id="cxEmptyNote" style="display:none;" data-i18n="cxEmptyNoteDefault">Aún no ha seleccionado nada. Use "Agregar a mi pago" en la renovación o en una presentación física para verlo aquí.</p>
 
                 <button type="submit" class="checkout-pay-btn" id="cxPayBtn">Pagar $7.00 (demo)</button>
+                <button type="button" class="btn-whatsapp" id="cxWhatsappBtn" style="display:none;">
+                  <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12.04 2C6.58 2 2.13 6.45 2.13 11.91c0 1.75.46 3.45 1.32 4.95L2 22l5.28-1.38a9.9 9.9 0 0 0 4.76 1.21h.01c5.46 0 9.91-4.45 9.91-9.91C21.96 6.45 17.51 2 12.04 2Zm5.78 14.03c-.24.68-1.39 1.3-1.92 1.38-.49.08-1.11.11-1.79-.11-.41-.13-.94-.3-1.62-.6-2.85-1.23-4.71-4.1-4.85-4.29-.14-.19-1.16-1.54-1.16-2.94 0-1.4.73-2.09.99-2.37.26-.28.57-.35.76-.35.19 0 .38 0 .55.01.18.01.41-.07.64.49.24.57.81 1.98.88 2.12.07.14.12.31.02.5-.09.19-.14.31-.28.48-.14.16-.29.36-.41.49-.14.14-.28.29-.12.57.16.28.71 1.17 1.52 1.9 1.05.94 1.93 1.23 2.21 1.37.28.14.44.12.61-.07.16-.19.68-.79.86-1.07.18-.28.36-.23.6-.14.24.09 1.55.73 1.82.87.27.14.44.2.51.32.07.12.07.68-.17 1.36Z"/></svg>
+                  <span id="cxWhatsappBtnTexto" data-i18n="cxSinpeBtnWhatsapp">Ya pagué — avisar por WhatsApp</span>
+                </button>
+                <p class="select-note" id="cxSinpeEsperaNote" style="display:none; text-align:center;" data-i18n="cxSinpeEsperaNota">Confirmaremos tu pago manualmente y activaremos tu ficha lo antes posible.</p>
                 <div class="checkout-demo-note" id="cxDemoNote" style="display:none;" data-i18n="cxDemoNoteText">Mockup de checkout &mdash; demostración únicamente. No se procesa ningún cobro real ni se envía ningún correo real.</div>
                 <div class="checkout-demo-note" id="cxRealError" style="display:none; color:#b42318;"></div>
               </form>
@@ -2270,6 +2349,11 @@
       if (json && json.tipoCambio > 0) {
         tipoCambioActual = json.tipoCambio;
         if (cxCurrencyToggle) cxCurrencyToggle.style.display = 'flex';
+        // ---- SINPE Móvil (pago manual, agregado 2026-09-24) depende de tipoCambioActual -- si
+        // el tipo de cambio llega después de que ya se pintó el carrito (esta llamada es
+        // asíncrona), se vuelve a pintar para que la pestaña SINPE aparezca sin que el cliente
+        // tenga que hacer nada ----
+        if (window.renderOrder) { window.renderOrder(); }
       }
     })
     .catch(function(){ /* si falla, sencillamente no se ofrece pagar en colones */ });
@@ -2611,28 +2695,32 @@
     cxForm.dataset.modoReal = modoReal ? '1' : '';
     cxForm.dataset.itemsReal = JSON.stringify(itemsReal);
 
-    var elMethodTabs = document.querySelector('.method-tabs');
+    // ---- datos que necesita el botón de WhatsApp de SINPE Móvil (agregado 2026-09-24) para
+    // armar el mensaje pre-rellenado -- se guardan en variables de módulo (declaradas junto a
+    // setMethod(), más abajo) porque se usan fuera de renderOrder(), al hacer clic en el botón ----
+    ultimoTotalUSD = total;
+    ultimasEtiquetasReal = etiquetas;
+    ultimosFoliosReal = itemsReal.map(function(e){ return e.folio; }).filter(function(f){ return !!f; });
+
     var elFieldsCard = document.getElementById('cxFieldsCard');
-    var elFieldsSinpe = document.getElementById('cxFieldsSinpe');
     var elRealEmailField = document.getElementById('cxRealEmailField');
     var elDemoNote = document.getElementById('cxDemoNote');
-    if (elMethodTabs) elMethodTabs.style.display = modoReal ? 'none' : '';
-    if (elFieldsCard) {
-      elFieldsCard.style.display = modoReal ? 'none' : '';
-      elFieldsCard.querySelectorAll('[required]').forEach(function(el){ el.disabled = modoReal; });
-    }
-    if (elFieldsSinpe) {
-      // en modo real la ocultamos de forma explícita; en modo demo, dejamos que setMethod()
-      // (según la pestaña Tarjeta/SINPE activa) siga controlando su visibilidad, como siempre.
-      if (modoReal) {
-        elFieldsSinpe.style.display = 'none';
-        elFieldsSinpe.querySelectorAll('[required]').forEach(function(el){ el.disabled = true; });
-      } else {
-        elFieldsSinpe.style.display = '';
-      }
-    }
+    if (elFieldsCard) elFieldsCard.style.display = modoReal ? 'none' : '';
     if (elRealEmailField) elRealEmailField.style.display = modoReal ? '' : 'none';
     if (elDemoNote) elDemoNote.style.display = modoReal ? 'none' : '';
+
+    // ---- SINPE Móvil (pago manual), agregado 2026-09-24: en modo real ya NO se ocultan las
+    // pestañas de método de pago -- antes solo se mostraba "Pagar con ONVO Pay" y por eso SINPE
+    // nunca aparecía como opción real para el cliente (ver bitacora.md). La pestaña SINPE en modo
+    // real solo se ofrece si ya se tiene el tipo de cambio (tipoCambioActual, ver fetch de
+    // tipo-cambio más arriba), porque el monto de SINPE siempre se muestra en colones; si no hay
+    // tipo de cambio disponible, se cae de vuelta a solo Tarjeta. El resto de la visibilidad de
+    // #cxFieldsCard / #cxFieldsSinpe / el bloque manual de SINPE / el botón de WhatsApp queda a
+    // cargo de setMethod(), que ya distingue modo real de modo demo. ----
+    var sinpeDisponibleReal = !!tipoCambioActual;
+    if (tabSinpe) tabSinpe.style.display = (!modoReal || sinpeDisponibleReal) ? '' : 'none';
+    if (modoReal && !sinpeDisponibleReal && metodoActivo === 'sinpe') { metodoActivo = 'card'; }
+    setMethod(metodoActivo);
 
     cxPayBtn.textContent = modoReal
       ? ((dic.cxPagarDemoPre || 'Pagar ') + fmt(total) + (dic.cxPagarOnvoPost || ' con ONVO Pay'))
@@ -2710,10 +2798,59 @@
   var cardRequiredInputs = fieldsCard.querySelectorAll('[required]');
   var sinpeRequiredInputs = fieldsSinpe.querySelectorAll('[required]');
 
+  // ---- SINPE Móvil (pago manual), agregado 2026-09-24 -- ver bitacora.md. No hay integración
+  // con la API de ONVO para SINPE: el cliente transfiere por su propia app bancaria al número de
+  // abajo y avisa por WhatsApp; el negocio confirma el pago manualmente. metodoActivo/
+  // ultimoTotalUSD/ultimasEtiquetasReal/ultimosFoliosReal son variables de módulo: se leen desde
+  // renderOrder() (para saber qué pestaña estaba activa al recalcular, y para tener a mano el
+  // monto/los productos/los folios vigentes) y desde el botón de WhatsApp de abajo. ----
+  var cxSinpeManualBox = document.getElementById('cxSinpeManualBox');
+  var cxWhatsappBtn = document.getElementById('cxWhatsappBtn');
+  var cxSinpeEsperaNote = document.getElementById('cxSinpeEsperaNote');
+  var SINPE_TELEFONO_WA = '50660933090';
+  var SINPE_TELEFONO_DISPLAY = '6093-3090';
+  var metodoActivo = 'card';
+  var ultimoTotalUSD = 0;
+  var ultimasEtiquetasReal = [];
+  var ultimosFoliosReal = [];
+
+  function actualizarBloqueSinpeReal(){
+    if (!tipoCambioActual) return;
+    var montoCRC = Math.round(ultimoTotalUSD * tipoCambioActual);
+    var montoTexto = '₡' + montoCRC.toLocaleString('es-CR');
+    var elMonto = document.getElementById('cxSinpeMontoCRC');
+    var elPasoMonto = document.getElementById('cxSinpePasoMonto');
+    if (elMonto) elMonto.textContent = montoTexto;
+    if (elPasoMonto) elPasoMonto.textContent = montoTexto;
+  }
+
   function setMethod(method){
+    metodoActivo = method;
     var isCard = method === 'card';
+    var modoReal = cxForm && cxForm.dataset.modoReal === '1';
     tabCard.classList.toggle('active', isCard);
     tabSinpe.classList.toggle('active', !isCard);
+
+    if (modoReal) {
+      // ---- pago real: la tarjeta la cobra la página hospedada de ONVO Pay (no hay campos de
+      // tarjeta propios que mostrar) y SINPE es el bloque manual + botón de WhatsApp ----
+      fieldsCard.classList.add('hidden');
+      fieldsSinpe.classList.add('hidden');
+      cardRequiredInputs.forEach(function(el){ el.disabled = true; });
+      sinpeRequiredInputs.forEach(function(el){ el.disabled = true; });
+      if (cxPayBtn) cxPayBtn.style.display = isCard ? '' : 'none';
+      if (cxSinpeManualBox) cxSinpeManualBox.style.display = isCard ? 'none' : '';
+      if (cxWhatsappBtn) cxWhatsappBtn.style.display = isCard ? 'none' : '';
+      if (cxSinpeEsperaNote) cxSinpeEsperaNote.style.display = isCard ? 'none' : '';
+      if (!isCard) actualizarBloqueSinpeReal();
+      return;
+    }
+
+    // ---- modo demo (mockup), sin cambios de comportamiento respecto a como estaba ----
+    if (cxPayBtn) cxPayBtn.style.display = '';
+    if (cxSinpeManualBox) cxSinpeManualBox.style.display = 'none';
+    if (cxWhatsappBtn) cxWhatsappBtn.style.display = 'none';
+    if (cxSinpeEsperaNote) cxSinpeEsperaNote.style.display = 'none';
     fieldsCard.classList.toggle('hidden', !isCard);
     fieldsSinpe.classList.toggle('hidden', isCard);
     // evita que campos ocultos bloqueen la validación del formulario
@@ -2723,6 +2860,48 @@
   setMethod('card');
   tabCard.addEventListener('click', function(){ setMethod('card'); });
   tabSinpe.addEventListener('click', function(){ setMethod('sinpe'); });
+
+  // ---- botón "Copiar número" del bloque SINPE ----
+  var cxSinpeCopiarBtn = document.getElementById('cxSinpeCopiarBtn');
+  if (cxSinpeCopiarBtn) {
+    cxSinpeCopiarBtn.addEventListener('click', function(){
+      var dicCopiar = getDic();
+      var textoOriginal = cxSinpeCopiarBtn.textContent;
+      function marcarCopiado(){
+        cxSinpeCopiarBtn.textContent = dicCopiar.cxSinpeCopiado || '¡Copiado!';
+        setTimeout(function(){ cxSinpeCopiarBtn.textContent = textoOriginal; }, 1800);
+      }
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(SINPE_TELEFONO_DISPLAY).then(marcarCopiado).catch(function(){ /* si falla, el número ya está visible en pantalla para copiarlo a mano */ });
+      }
+    });
+  }
+
+  // ---- botón "Ya pagué — avisar por WhatsApp": abre WhatsApp con el mensaje ya redactado. No
+  // llama a crear-pago.js ni a ONVO Pay -- este flujo es enteramente manual (ver bitacora.md). ----
+  if (cxWhatsappBtn) {
+    cxWhatsappBtn.addEventListener('click', function(){
+      var dicWa = getDic();
+      var emailInput = document.getElementById('cxRealEmail');
+      var errorBox = document.getElementById('cxRealError');
+      var email = (emailInput && emailInput.value || '').trim();
+      if (errorBox) { errorBox.style.display = 'none'; errorBox.textContent = ''; }
+      if (!email) {
+        if (errorBox) { errorBox.textContent = dicWa.errIngreseCorreo || 'Ingrese su correo electrónico para continuar.'; errorBox.style.display = ''; }
+        if (emailInput) emailInput.focus();
+        return;
+      }
+      if (!tipoCambioActual) { return; }
+      var montoCRC = Math.round(ultimoTotalUSD * tipoCambioActual);
+      var montoTexto = '₡' + montoCRC.toLocaleString('es-CR');
+      var etiquetasTexto = ultimasEtiquetasReal.join(' + ');
+      var foliosTexto = ultimosFoliosReal.join(', ');
+      var mensaje = 'Hola, quiero confirmar mi pago por SINPE Móvil de ' + montoTexto + ' — ' + etiquetasTexto
+        + (foliosTexto ? ' (folio ' + foliosTexto + ')' : '') + '. Correo: ' + email + '. Adjunto el comprobante de la transferencia.';
+      var url = 'https://wa.me/' + SINPE_TELEFONO_WA + '?text=' + encodeURIComponent(mensaje);
+      window.open(url, '_blank', 'noopener');
+    });
+  }
 
   // ---- checkout demo: auto-formatting ----
   var cardNumber = document.getElementById('cxCardNumber');
