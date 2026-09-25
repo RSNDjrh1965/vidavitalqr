@@ -858,6 +858,40 @@ contra el ejemplo que ya se le había mostrado a James.
 **Pendiente para más adelante:** marcar automáticamente la ficha como renovada en S3 y activar el
 bloqueo del visor público (`ver.js`) para fichas no pagadas — sigue sin resolverse (ver punto 17).
 
+## 16.2. Retiro del flujo manual de SINPE Móvil en el checkout real (2026-09-26)
+
+**Hallazgo:** al hacer una prueba de pago real por SINPE, James notó que el número que aparecía en
+pantalla era el suyo propio (`6093-3090`), no uno de ONVO. Se confirmó que el checkout real de
+`index.html` tenía un bloque de SINPE Móvil **manual** (agregado el 2026-09-24, antes de saber que
+ONVO podía automatizar SINPE): mostraba el número personal de James y un botón de WhatsApp para que
+el cliente avisara el pago con una captura del comprobante — sin ninguna llamada a `crear-pago.js`
+ni a la API de ONVO. Es decir, aunque ya se había activado SINPE Móvil en el panel de ONVO y
+corregido el webhook (punto 16.1), el sitio seguía sin usar esa automatización: los pagos por SINPE
+no pasaban por ONVO y no quedaban registrados solos en el Registro de Ingresos.
+
+**Corrección:** en `index.html`, dentro de `setMethod()` (rama `modoReal`), se retiró la
+visibilidad condicional que mostraba el bloque manual de SINPE y el botón de WhatsApp cuando esa
+pestaña estaba activa — ahora, en modo real, siempre se muestra el mismo botón "Pagar" para
+cualquiera de las dos pestañas (Tarjeta / SINPE Móvil), y nunca se muestra el bloque manual ni el
+botón de WhatsApp. El botón "Pagar" ya era, desde antes, completamente independiente del método
+elegido (`iniciarPagoReal()` solo manda `items`/`email`/`moneda` a `crear-pago.js` y redirige a la
+URL que da ONVO), así que el cambio fue mínimo y aislado: una sola función, sin tocar
+`crear-pago.js` ni ningún backend. El cliente ahora elige tarjeta o SINPE Móvil dentro de la propia
+página segura de ONVO — ambos métodos quedan confirmados y registrados automáticamente por el mismo
+webhook (`payment-intent.succeeded`, ver punto 16.1). Las pestañas de arriba se conservan solo como
+información visual de que SINPE está disponible; ya no cambian el comportamiento del pago.
+
+**Verificado sin desplegar a Netlify:** `node --check` sobre los bloques `<script>` extraídos;
+`diff` completo contra el respaldo confirmando que el cambio quedó confinado a esas 4 líneas de
+`setMethod()`; prueba con Playwright simulando modo real con un folio de renovación, confirmando
+que el botón "Pagar" aparece y el bloque manual/botón de WhatsApp permanecen ocultos tanto en la
+pestaña "Tarjeta" como en "SINPE Móvil", sin errores de JavaScript.
+
+**Pendiente (fuera de alcance de este cambio):** el código del bloque manual (`SINPE_TELEFONO_WA`,
+`actualizarBloqueSinpeReal()`, el botón "Copiar número", etc.) queda en el archivo sin usarse en
+modo real — no causa ningún problema porque simplemente no se muestra, pero se puede limpiar del
+todo en una próxima entrega si se quiere dejar el código más corto.
+
 ## 17. Pendiente
 
 - Integración de pago real con ONVO Pay: **las renovaciones (punto 31) y todos los demás productos del carrito (punto 33), con las mejoras de claridad del punto 34, la corrección del flujo de regreso del punto 36, y las correcciones de folio/checkout/reporte de pago de los puntos 38 y 40, ya usan pago real en modo prueba, confirmado funcionando de punta a punta (ver punto 40).** Falta: (a) la siguiente fase, que marque automáticamente la ficha como renovada en S3 y active el bloqueo del visor público (`ver.js`) para fichas no pagadas; (b) cambiar de modo prueba a modo real (llaves `onvo_live_`) — **el usuario ya tiene las llaves de producción (2026-09-24, ver punto 63); falta que él mismo las coloque en las variables de entorno de Netlify**; (c) ~~actualizar o retirar la etiqueta "Mockup de checkout — solo demostración" del recuadro de pago~~ **hecho (punto 63, 2026-09-24)**; (d) ~~confirmar si el pago real por SINPE Móvil ya funciona o si la pestaña de esa opción debe ocultarse mientras tanto~~ **hecho (punto 68 y 71, 2026-09-24/26): SINPE Móvil ya está automatizado vía el Checkout hospedado de ONVO (habilitado en el panel de ONVO) — el mismo webhook confirma tarjeta y SINPE, y ambos ya se registran automáticamente en el Registro de Ingresos.**

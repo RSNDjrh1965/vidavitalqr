@@ -1689,8 +1689,8 @@ function emailValido(str){
       if (!ctxProc) ctxProc = new CtxProc();
       if (ctxProc.state === 'suspended') { ctxProc.resume().catch(function () {}); }
       sonarCampanitaProcesando();
-      // se repite cada 2.2s mientras dure el procesamiento -- se detiene con detenerSonidoProcesando()
-      intervaloSonidoProcesando = setInterval(sonarCampanitaProcesando, 2200);
+      // se repite cada 6s mientras dure el procesamiento -- se detiene con detenerSonidoProcesando()
+      intervaloSonidoProcesando = setInterval(sonarCampanitaProcesando, 6000);
     } catch (e) { /* si el navegador bloquea el audio, seguimos sin sonido, sin afectar el envío */ }
   };
 
