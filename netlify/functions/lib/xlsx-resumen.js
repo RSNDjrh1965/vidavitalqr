@@ -31,6 +31,7 @@
 
 const ExcelJS = require('exceljs');
 const { PutObjectCommand, GetObjectCommand } = require('@aws-sdk/client-s3');
+const { fechaVencimiento: calcularFechaVencimiento } = require('./vigencia');
 
 const HEADER_FILL = 'FF12282B';
 const HEADER_FONT = 'FFF9F6EF';
@@ -48,6 +49,17 @@ const COL_MESES = 7;
 const COL_PDF = 8;
 const COL_FOTO = 9;
 const COL_QR = 10;
+// ---- columnas de vigencia (agregadas 2026-09-25) — siempre al final, para no correr ni
+// desordenar ninguna columna existente ni las imágenes ya incrustadas ----
+// COL_VENCIMIENTO: fecha de vencimiento (fecha de inicio de la vigencia + 12 meses), calculada al
+// guardar/renovar y escrita como valor fijo (no cambia hasta la próxima renovación).
+// COL_ESTADO: fórmula de Excel que compara esa fecha con HOY() — "Vigente" / "Vencida" /
+// "Eliminada" — se recalcula sola cada vez que se abre el archivo, igual que "Meses
+// transcurridos" ya hacía. "Eliminada" es solo informativo en el Excel: la eliminación real de
+// la ficha (borrar sus datos de S3) la hace revisar-vigencia.js; la fila queda como registro
+// histórico de que existió.
+const COL_VENCIMIENTO = 11;
+const COL_ESTADO = 12;
 
 const FOTO_ANCHO_PX = 74;
 const FOTO_ALTO_PX = 74;
@@ -99,6 +111,8 @@ function nuevaHojaConEstilo(workbook) {
     { header: 'URL del objeto (PDF)', key: 'pdf', width: 14 },
     { header: 'Fotografía', key: 'foto', width: FOTO_COL_WIDTH },
     { header: 'Código QR', key: 'qr', width: 16 },
+    { header: 'Fecha de vencimiento', key: 'vencimiento', width: 18 },
+    { header: 'Estado', key: 'estado', width: 14 },
   ];
   const headerRow = sheet.getRow(1);
   headerRow.height = 22;
@@ -318,6 +332,36 @@ async function migrarAgregarColumnaPin(workbook, sheetVieja, s3, bucket) {
   return sheetNueva;
 }
 
+// ---- migración liviana (agregada 2026-09-25): agrega los encabezados de "Fecha de vencimiento"
+// y "Estado" a una hoja que ya tiene el esquema con PIN (10 columnas) pero todavía no las
+// columnas de vigencia — a diferencia de las migraciones de arriba, no hace falta reconstruir
+// toda la hoja fila por fila (no se reordena ni se mueve ninguna columna existente, así que las
+// fotos ya incrustadas y las fórmulas existentes quedan intactas); solo se agregan las dos
+// columnas nuevas, vacías, listas para llenarse en el próximo guardado de cada fila.
+function tieneColumnasVigencia(sheet) {
+  const encabezadoEstado = sheet.getRow(1).getCell(COL_ESTADO).value;
+  return String(encabezadoEstado || '').trim() === 'Estado';
+}
+
+function asegurarColumnasVigencia(sheet) {
+  if (tieneColumnasVigencia(sheet)) return;
+  sheet.getColumn(COL_VENCIMIENTO).width = 18;
+  sheet.getColumn(COL_ESTADO).width = 14;
+  const headerRow = sheet.getRow(1);
+  [
+    [COL_VENCIMIENTO, 'Fecha de vencimiento'],
+    [COL_ESTADO, 'Estado'],
+  ].forEach(([col, texto]) => {
+    const cell = headerRow.getCell(col);
+    cell.value = texto;
+    cell.font = { bold: true, color: { argb: HEADER_FONT } };
+    cell.alignment = { vertical: 'middle', horizontal: 'center' };
+    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: HEADER_FILL } };
+    cell.border = { top: BORDER, left: BORDER, bottom: BORDER, right: BORDER };
+  });
+  headerRow.commit();
+}
+
 async function cargarOCrearLibro(s3, bucket, key) {
   const workbook = new ExcelJS.Workbook();
   let sheet;
@@ -332,6 +376,8 @@ async function cargarOCrearLibro(s3, bucket, key) {
       sheet = await migrarEsquemaAntiguo(workbook, sheet, s3, bucket);
     } else if (esEsquemaSinPin(sheet)) {
       sheet = await migrarAgregarColumnaPin(workbook, sheet, s3, bucket);
+    } else {
+      asegurarColumnasVigencia(sheet);
     }
   } catch (err) {
     const noExiste = err.name === 'NoSuchKey' || err.Code === 'NoSuchKey' || err.$metadata?.httpStatusCode === 404;
@@ -379,7 +425,7 @@ function offsetParaCentrar(colWidthChars, rowHeightPt, imgWidthPx, imgHeightPx) 
 }
 
 async function actualizarResumenXlsx(s3, bucket, key, fila) {
-  const { contador, pin, nombre, fecha, pdfUrl, fotoBase64, qrUrl } = fila;
+  const { contador, pin, nombre, fecha, pdfUrl, fotoBase64, qrUrl, creadoVigencia } = fila;
   const { workbook, sheet } = await cargarOCrearLibro(s3, bucket, key);
 
   let rowNumber = buscarFilaPorContador(sheet, contador);
@@ -422,11 +468,29 @@ async function actualizarResumenXlsx(s3, bucket, key, fila) {
   row.getCell(COL_PDF).value = pdfUrl ? { text: 'Ver PDF', hyperlink: pdfUrl } : '';
   row.getCell(COL_QR).value = qrUrl ? { text: 'Ver código QR', hyperlink: qrUrl } : '';
 
+  // ---- "Fecha de vencimiento" y "Estado" (agregadas 2026-09-25) ----
+  // "creadoVigencia" es la fecha real de inicio de la vigencia anual (campo "creado" del login,
+  // que solo se reinicia con una renovación pagada — a diferencia de "Fecha de actualización",
+  // que cambia con cualquier edición). Si por algún motivo no llegó (fichas guardadas antes de
+  // este cambio, o un error puntual al resolver el login), se deja la fila tal como estaba —
+  // nunca se sobrescribe con una fecha inventada.
+  if (creadoVigencia instanceof Date && !isNaN(creadoVigencia.getTime())) {
+    const vencimiento = calcularFechaVencimiento(creadoVigencia.toISOString());
+    row.getCell(COL_VENCIMIENTO).value = vencimiento;
+    row.getCell(COL_VENCIMIENTO).numFmt = FECHA_FORMATO;
+    const celdaVencimiento = `${colALetra(COL_VENCIMIENTO)}${rowNumber}`;
+    // Vigente mientras hoy sea antes del vencimiento; Vencida durante los 2 meses de gracia
+    // después; Eliminada pasado ese plazo (la eliminación real de los datos la hace la función
+    // programada revisar-vigencia.js — esta fórmula es solo para que el Excel siempre refleje el
+    // estado correcto sin depender de que esa función ya haya corrido ese día).
+    row.getCell(COL_ESTADO).value = { formula: `IF(TODAY()<${celdaVencimiento},"Vigente",IF(TODAY()<EDATE(${celdaVencimiento},2),"Vencida","Eliminada"))` };
+  }
+
   row.eachCell({ includeEmpty: true }, (cell) => {
     cell.border = { top: BORDER, left: BORDER, bottom: BORDER, right: BORDER };
     cell.alignment = { vertical: 'middle', horizontal: 'left', wrapText: true };
   });
-  [COL_ACTUALIZACION, COL_PIN, COL_FECHA_INICIO, COL_FECHA_ACTUALIZACION, COL_MESES].forEach((col) => {
+  [COL_ACTUALIZACION, COL_PIN, COL_FECHA_INICIO, COL_FECHA_ACTUALIZACION, COL_MESES, COL_VENCIMIENTO, COL_ESTADO].forEach((col) => {
     row.getCell(col).alignment = { vertical: 'middle', horizontal: 'center' };
   });
   [COL_PDF, COL_QR].forEach((col) => {
