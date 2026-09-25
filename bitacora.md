@@ -652,11 +652,215 @@ Dado el riesgo de implementar a ciegas una integración de pagos mal documentada
 
 **Verificado sin desplegar a Netlify** (siguiendo la preferencia ya conocida del usuario de probar localmente cuando es posible): `node --check` sobre todo el JavaScript del archivo (sin errores), `diff` completo contra la copia de respaldo confirmando que **solo** se agregaron los bloques nuevos de SINPE (CSS, HTML y JS) y nada más del sitio cambió, y pruebas automatizadas con un navegador Chromium real (Playwright) simulando: (1) un cliente con folio conocido y tipo de cambio disponible — la pestaña SINPE aparece, muestra el monto correcto en colones, y el botón de WhatsApp arma la URL y el mensaje esperados; (2) el mismo botón bloqueado con un mensaje de error si no se ha escrito el correo; (3) que nunca se llama a `crear-pago.js` en el flujo de SINPE; (4) que al volver a la pestaña "Tarjeta" reaparece el botón normal de ONVO Pay; (5) que el modo demo (visitante nuevo, sin folio) sigue exactamente igual que antes, con el mockup de siempre.
 
-**Pendiente:** que James suba el ZIP actualizado y confirme, en el sitio real, que la pestaña SINPE aparece correctamente y que el botón de WhatsApp funciona desde un celular; y decidir si se traduce el bloque nuevo a inglés/francés/portugués.
+**Confirmado por James (2026-09-25):** subió el ZIP a producción y probó el flujo real — "Funciona bien." Punto cerrado. Pendiente, sin urgencia: decidir si se traduce el bloque nuevo (pestaña SINPE) a inglés/francés/portugués — por ahora solo existe en español.
+
+## 69. Sonido de marca también durante el procesamiento del envío de la ficha (2026-09-25)
+
+James notó que el tiempo de procesamiento al hacer clic en "Enviar" se alargó (por los PDFs
+adicionales en otros idiomas del punto 65, la tarjeta Identificador QR, etc.) y pidió que, durante
+esa espera, sonara el mismo sonido que va a identificar la marca — el mismo "campanita suave" que
+ya suena en la pantalla de escaneo (punto 62/66) — en vez de dejar la espera en silencio.
+
+**Implementado en `ficha.html`, `ficha-mascota.html` y `ficha-objeto.html`** (los tres formularios
+privados de llenado; no toca `ver.js`, que ya tenía su propio sonido independiente): se agregó el
+mismo generador de sonido por código (Web Audio API, sin archivos de audio externos) usado en el
+visor, pero repetido cada 2.2 segundos mientras dure el envío, en vez de sonar una sola vez. El
+sonido arranca en el mismo instante en que se hace clic en el botón "Enviar" (justo cuando aparece
+el recuadro "Procesando su ficha…") y se detiene exactamente en los mismos 4 puntos donde ese
+recuadro se oculta (envío exitoso, error al generar el PDF, ficha demasiado pesada para enviar, o
+cualquier otro error del servidor) — nunca queda sonando de más.
+
+**Por qué no hizo falta el reintento por gesto del punto 66:** a diferencia de abrir un enlace de
+QR (que el navegador no cuenta como una interacción real del usuario), un clic real en el botón
+"Enviar" sí es un gesto válido — el `AudioContext` se crea de forma síncrona dentro del propio
+manejador de clic, antes de cualquier `await`, así que el navegador lo deja sonar de inmediato sin
+necesitar ningún truco adicional.
+
+**Verificado sin desplegar a Netlify:** `node --check` sobre todo el JavaScript de los tres
+archivos (sin errores), `diff` completo contra las copias de respaldo confirmando que **solo** se
+agregó el bloque de sonido y las 5 líneas de arranque/parada por archivo (nada más de los
+formularios cambió), y pruebas automatizadas con un navegador Chromium real (Playwright)
+simulando un clic real: se confirmó que el sonido arranca de inmediato en estado "running" (sin
+quedar "suspendido"), que se repite cada ciclo de ~2.2s mientras no se detenga, que deja de sonar
+de inmediato al llamar a la función de parada (sin sonidos de más), y que llamar a la función de
+parada sin haber iniciado nunca no produce ningún error.
+
+**Nota de alcance, descartada intencionalmente:** el punto 66 (sonido en la pantalla de escaneo,
+`ver.js`) sigue funcionando exactamente igual e independiente de este cambio — son dos sonidos
+separados, en dos momentos distintos del producto (al escanear vs. al enviar/guardar la ficha), y
+ninguno depende del otro.
+
+## 70. Vigencia anual automática: avisos de renovación, estado "vencida" y eliminación tras el período de gracia (2026-09-25)
+
+James planteó un problema de procedimiento interno: la única forma que tenía de saber hasta cuándo
+estaba vigente cada ficha era revisar el cuadro resumen (Excel) ficha por ficha, y bloquear el
+código a mano si el cliente no renovaba — sin ningún recordatorio automático de vencimiento. Se
+diseñó y aprobó con James (ver el documento "Política de vigencia y eliminación de fichas" del
+Proyecto ADJDATA) un sistema de 3 estados, con una cronología de avisos y textos ya aprobados por
+él, y se implementó completo en este punto.
+
+**Diseño (aprobado por James):**
+- **Vigente** — dentro del año pagado, todo se muestra normal.
+- **Vencida** — pasó el año sin renovar. Dura 2 meses de gracia: la información esencial de
+  emergencia (contactos y datos médicos — tipo de sangre para persona, especie/raza/veterinario
+  para mascota, tipo/marca/señas para objeto, y los "Comentarios importantes", que es donde
+  quedan escritas alergias/condiciones/indicaciones) se sigue mostrando igual; se oculta
+  temporalmente solo la fotografía y el botón de "Ver ficha completa (PDF)" (la ficha en PDF trae
+  todo, incluida la foto, así que dejar ese botón visible habría anulado el sentido de ocultar la
+  foto). Aparece un aviso arriba de la ficha explicando la situación.
+- **Eliminada** — pasados los 2 meses de gracia sin renovar, se borra POR COMPLETO de S3: el JSON
+  de datos públicos, el PDF (en los 4 idiomas si se llegaron a generar), la foto, la tarjeta
+  "Identificador QR" y el código QR, además del registro privado de acceso (folio/PIN). La fila
+  del cuadro resumen NO se borra — queda como registro histórico, con su columna "Estado"
+  mostrando "Eliminada" automáticamente.
+
+**Cronología de avisos por correo (aprobada por James, textos exactos en el documento del
+Proyecto):** 30 y 7 días antes de vencer (recordatorios), el día que vence (aviso de que pasó a
+"vencida", con la fecha límite de eliminación), a los 30 días de vencida (aviso intermedio), a los
+55 días de vencida (aviso final, quedan 5 días) y a los 60 días de vencida (confirmación de
+eliminación, ya sin poder recuperar la información).
+
+**Archivos nuevos:**
+- `netlify/functions/lib/vigencia.js` — reglas compartidas de fecha de vencimiento (creado + 12
+  meses), fin del período de gracia (+2 meses más) y el estado resultante
+  (vigente/vencida/eliminada), usadas por igual en `send-ficha.js`, `xlsx-resumen.js`, `ver.js` y
+  la nueva función programada. Si una ficha no tiene el campo "creado" (fichas de antes de este
+  cambio), siempre se trata como "vigente" — nunca se oculta ni se elimina nada por un dato que la
+  ficha nunca llegó a tener.
+- `netlify/functions/revisar-vigencia.js` — función PROGRAMADA (una vez al día, mismo patrón que
+  `actualizar-tipo-cambio.js`, ver `netlify.toml` — corre a las 13:00 UTC = 7:00 a.m. Costa Rica)
+  que recorre TODAS las fichas (personas, mascotas, objetos, incluida la ubicación antigua sin
+  carpeta de fichas nunca vueltas a guardar desde que existe esa organización), envía el correo de
+  la cronología que corresponda según cuántos días faltan o han pasado, y elimina por completo lo
+  que ya cumplió los 2 meses de gracia. Nunca repite un correo ya enviado (guarda banderas
+  `vigencia.avisos` en el propio registro de login) ni dos veces el mismo día si el estado no
+  cambió; si Resend rechaza un envío, NO marca ese aviso como enviado, para reintentarlo al día
+  siguiente en vez de perderlo en silencio. El correo de cada aviso se envía a "correoTitular" si
+  existe, y si no (ficha de antes de este cambio) usa como respaldo el correo del contacto de
+  emergencia 1, para que ninguna ficha existente se quede sin ningún aviso.
+
+**Cambios en archivos existentes:**
+- **`ficha.html`, `ficha-mascota.html`, `ficha-objeto.html`:** se agregó un campo nuevo, obligatorio,
+  "Correo del titular" — separado a propósito de los correos de los contactos de emergencia — que
+  es a donde llegan los avisos de esta cronología. Se agregó también el texto corto de política ya
+  aprobado por James, visible cerca del botón "Enviar". Ambos con validación de formato antes de
+  poder enviar la ficha, igual que ya existía para el correo del contacto 1.
+- **`send-ficha.js`:** guarda el nuevo "correoTitular" (conservando el valor anterior si en un
+  guardado puntual llega vacío, para nunca perder un dato ya guardado); guarda también las
+  banderas `vigencia.avisos` (reiniciadas a "ningún aviso enviado" cada vez que arranca de cero el
+  conteo de los 12 meses: ficha nueva, o renovación pagada); y ahora resuelve primero el registro
+  de acceso (antes se subían primero los archivos a S3) para poder incluir la fecha de vigencia en
+  el JSON público que lee `ver.js`.
+- **`lib/xlsx-resumen.js`:** se agregaron dos columnas nuevas al final del cuadro resumen —
+  "Fecha de vencimiento" (valor fijo, calculado al guardar/renovar) y "Estado" (fórmula de Excel
+  que compara esa fecha con HOY(), igual de "viva" que ya lo era "Meses transcurridos" — se
+  recalcula sola cada vez que se abre el archivo). Un archivo resumen.xlsx que ya existía de antes
+  (sin estas columnas) las recibe automáticamente la próxima vez que se guarda cualquier ficha, sin
+  tocar ni reordenar ninguna columna ni fotografía ya existente.
+- **`ver.js`:** calcula el estado de vigencia de la ficha que se está viendo y, si está "vencida",
+  muestra el aviso correspondiente (en los 4 idiomas del sitio) y oculta la foto y el botón del PDF
+  completo, sin ocultar nada de la información esencial de emergencia. Si por algún motivo la
+  función programada diaria todavía no corrió o falló al borrar una ficha en particular que ya
+  debería estar eliminada, `ver.js` igual deja de mostrar cualquier información de esa ficha (nunca
+  sirve datos de algo que ya pasó los 2 meses de gracia), aunque el borrado real de los datos en S3
+  siempre lo hace `revisar-vigencia.js`, nunca esta página.
+- **`netlify.toml`:** nueva entrada `[functions."revisar-vigencia"]` con su propio horario diario.
+
+**Decisión de alcance, confirmada con James:** esta primera versión NO conecta el webhook de pago
+de ONVO (`onvo-webhook.js`) para marcar una ficha como renovada — sigue usando el mecanismo que ya
+existía (el formulario marca la renovación como pagada al guardar, lo que reinicia el conteo de
+los 12 meses en `send-ficha.js`). Conectar el webhook de ONVO directamente queda señalado como una
+mejora aparte, pendiente para más adelante.
+
+**Verificado sin desplegar a Netlify:** `node --check` en los 5 archivos de código nuevos/tocados;
+`diff` completo contra las copias de respaldo en cada uno de los 3 formularios HTML confirmando
+que los cambios son idénticos y están confinados a lo esperado; pruebas automatizadas con
+`exceljs` real simulando un cuadro resumen nuevo, una renovación (la fecha de vencimiento se
+actualiza correctamente) y un cuadro resumen antiguo sin las columnas nuevas (se le agregan solas,
+sin tocar filas/fotos ya existentes); pruebas de `ver.js` con un cliente S3 simulado cubriendo los
+4 casos (vigente, vencida, eliminada, y ficha antigua sin campo "creado" — tratada como vigente);
+pruebas de `revisar-vigencia.js` con un cliente S3 y un Resend simulados cubriendo una ficha a
+punto de vencer (recibe los dos recordatorios), una ficha recién vencida con más de 30 días de
+gracia (recibe el aviso de "vencida" y el aviso intermedio), una ficha ya fuera del período de
+gracia (se elimina por completo: PDF, foto, QR, JSON público y registro de acceso, todos
+confirmados borrados), idempotencia (correr la función dos veces seguidas no reenvía ningún aviso
+ya marcado) y reintento ante un fallo de Resend (si el envío falla, el aviso NO se marca como
+enviado, para reintentarlo al día siguiente); y prueba con Playwright confirmando que el campo
+"Correo del titular" y el texto de política aparecen correctamente en los 3 formularios, sin
+errores de JavaScript.
+
+**Pendiente para más adelante (fuera de alcance de esta entrega):** conectar el webhook de ONVO
+Pay para marcar la ficha como renovada al confirmarse el pago real (ver nota de alcance arriba).
+
+## 16.1. Registro de Ingresos automático + corrección del webhook de ONVO (SINPE Móvil) (2026-09-26)
+
+**Contexto:** James activó SINPE Móvil en el Checkout hospedado de ONVO (Panel de ONVO →
+Configuración → Métodos de pago), confirmado por la propia asesora de soporte de ONVO: el Checkout
+hospedado (`checkout/sessions/one-time-link`, el mismo que ya usa `crear-pago.js`) soporta SINPE
+Móvil de forma automática una vez habilitado ahí — no hace falta integrar por separado el flujo de
+Payment Intents + Payment Methods que describe la documentación pública de ONVO. La asesora indicó
+además que hay que consumir tres eventos de webhook: `payment-intent.succeeded`,
+`payment-intent.deferred` y `mobile-transfer.received`, y recomendó usar un número de teléfono para
+SINPE Móvil que NO esté asociado a SINPE Móvil de ningún banco.
+
+**Bug encontrado y corregido:** al revisar los logs del panel de ONVO (Webhooks → Ver logs) se
+confirmó que el endpoint tenía un 50% de error — `checkout-session.succeeded` respondía 200, pero
+`payment-intent.succeeded` respondía 502. La causa: el código de `onvo-webhook.js` tomaba el `id`
+que llega en el evento y lo buscaba como si fuera una Checkout Session (`GET
+/checkout/sessions/{id}`), pero para `payment-intent.succeeded` ese `id` es el de un Payment
+Intent (un objeto distinto en la API de ONVO) — la consulta fallaba (no encontrado) y el webhook
+devolvía 502. Se confirmó revisando el payload real de un evento fallido (compartido por James
+desde el panel de ONVO): ese payload YA trae todo lo necesario directamente (`amount`, `currency`,
+`charges[].refNumber`, `metadata` con los mismos campos que ya usaba el correo de aviso), así que
+la corrección fue dejar de volver a consultar la sesión y usar el contenido del propio evento.
+
+**Cambio de diseño importante:** se detectó que, para un mismo pago, ONVO envía TANTO
+`checkout-session.succeeded` COMO `payment-intent.succeeded` — antes ambos disparaban el correo de
+aviso (potencial correo duplicado por pago, aunque no se había notado porque el segundo fallaba con
+502 antes de llegar a enviarlo). Ahora `payment-intent.succeeded` es el ÚNICO evento que dispara
+tanto el correo de aviso como el registro del ingreso; `checkout-session.succeeded` se reconoce
+(200) pero se ignora a propósito. `payment-intent.deferred` y `mobile-transfer.received` (pasos
+intermedios del flujo de SINPE Móvil) también se reconocen con 200 para que ONVO no los reintente,
+pero no disparan ninguna acción — solo el `succeeded` definitivo confirma el pago.
+
+**Registro de Ingresos (nuevo, `netlify/functions/lib/ingresos.js`):** cada `payment-intent.succeeded`
+real (se excluyen los de `mode: "test"`) agrega una fila nueva a `registro-ingresos.xlsx`, guardado
+en el mismo bucket privado que `resumen.xlsx` (`BUCKET_RESUMEN`). Columnas: Fecha, Folio/Ficha,
+Cliente (resuelto desde `login/<folio>.json` cuando hay folio, o el nombre genérico que da ONVO si
+no), Medio de pago (Tarjeta/SINPE Móvil, resuelto con una consulta a `GET
+/payment-methods/{paymentMethodId}`), Moneda, Monto bruto cobrado, Tipo de cambio aplicado, y
+luego, todas como FÓRMULAS de Excel (nunca valores fijos): Comisión ONVO (3% + $0.35, convertido a
+colones cuando la moneda es CRC), IVA sobre esa comisión (0.777%), Total costos ONVO, Monto neto
+(valor libre), IVA neto a trasladar a Hacienda (13% del bruto − IVA de ONVO), Utilidad neta
+aproximada (monto neto − IVA neto) y Pago de impuesto aproximado (10% de esa utilidad) — todos los
+porcentajes y la fórmula del impuesto fueron indicados explícitamente por James (2026-09-25/26) como
+referencia de estimación para su contabilidad, no un cálculo fiscal oficial; queda anotado así en
+la documentación del código y se le recomendó confirmarlos con su contador antes de declarar.
+Termina con Estado, Referencia ONVO (`refNumber`, para conciliar contra el estado de cuenta) y el
+ID interno del Payment Intent (para idempotencia).
+
+**Idempotencia:** si ONVO reintenta la entrega del mismo `payment-intent.succeeded` (les pasa
+cuando la primera respuesta tarda o falla), no se duplica la fila — se detecta por el ID del
+Payment Intent y se omite.
+
+**Verificado sin desplegar a Netlify:** `node --check` en los 2 archivos tocados/nuevos; pruebas
+con un cliente S3 simulado y `fetch` simulado (ONVO y Resend), reproduciendo el payload real que
+compartió James, cubriendo: pago con tarjeta en colones con folio (se resuelve el nombre del
+cliente desde el login, se agrega la fila); el mismo pago reenviado por ONVO (se detecta como
+duplicado, no se agrega dos veces); pago con SINPE Móvil en dólares sin folio (se resuelve
+"SINPE Móvil" como medio de pago); `checkout-session.succeeded` del mismo pago (se ignora, no
+duplica correo ni fila); `payment-intent.deferred` y `mobile-transfer.received` (se reconocen sin
+acción); un pago de prueba (`mode: "test"`, se avisa por correo pero NO se agrega al Registro de
+Ingresos); y un secreto de firma incorrecto (se rechaza). Las fórmulas de la hoja resultante se
+recalcularon con LibreOffice (`recalc.py` del skill de xlsx): 0 errores, valores verificados a mano
+contra el ejemplo que ya se le había mostrado a James.
+
+**Pendiente para más adelante:** marcar automáticamente la ficha como renovada en S3 y activar el
+bloqueo del visor público (`ver.js`) para fichas no pagadas — sigue sin resolverse (ver punto 17).
 
 ## 17. Pendiente
 
-- Integración de pago real con ONVO Pay: **las renovaciones (punto 31) y todos los demás productos del carrito (punto 33), con las mejoras de claridad del punto 34, la corrección del flujo de regreso del punto 36, y las correcciones de folio/checkout/reporte de pago de los puntos 38 y 40, ya usan pago real en modo prueba, confirmado funcionando de punta a punta (ver punto 40).** Falta: (a) la siguiente fase, que marque automáticamente la ficha como renovada en S3 y active el bloqueo del visor público (`ver.js`) para fichas no pagadas; (b) cambiar de modo prueba a modo real (llaves `onvo_live_`) — **el usuario ya tiene las llaves de producción (2026-09-24, ver punto 63); falta que él mismo las coloque en las variables de entorno de Netlify**; (c) ~~actualizar o retirar la etiqueta "Mockup de checkout — solo demostración" del recuadro de pago~~ **hecho (punto 63, 2026-09-24)**; (d) ~~confirmar si el pago real por SINPE Móvil ya funciona o si la pestaña de esa opción debe ocultarse mientras tanto~~ **hecho (punto 68, 2026-09-24): SINPE Móvil ya está disponible en modo real, como pago manual confirmado por WhatsApp — no automatizado vía ONVO.**
+- Integración de pago real con ONVO Pay: **las renovaciones (punto 31) y todos los demás productos del carrito (punto 33), con las mejoras de claridad del punto 34, la corrección del flujo de regreso del punto 36, y las correcciones de folio/checkout/reporte de pago de los puntos 38 y 40, ya usan pago real en modo prueba, confirmado funcionando de punta a punta (ver punto 40).** Falta: (a) la siguiente fase, que marque automáticamente la ficha como renovada en S3 y active el bloqueo del visor público (`ver.js`) para fichas no pagadas; (b) cambiar de modo prueba a modo real (llaves `onvo_live_`) — **el usuario ya tiene las llaves de producción (2026-09-24, ver punto 63); falta que él mismo las coloque en las variables de entorno de Netlify**; (c) ~~actualizar o retirar la etiqueta "Mockup de checkout — solo demostración" del recuadro de pago~~ **hecho (punto 63, 2026-09-24)**; (d) ~~confirmar si el pago real por SINPE Móvil ya funciona o si la pestaña de esa opción debe ocultarse mientras tanto~~ **hecho (punto 68 y 71, 2026-09-24/26): SINPE Móvil ya está automatizado vía el Checkout hospedado de ONVO (habilitado en el panel de ONVO) — el mismo webhook confirma tarjeta y SINPE, y ambos ya se registran automáticamente en el Registro de Ingresos.**
 - **Decidir si se necesita un listado de "pedidos con envío pendiente" en `admin-envios.html`** (ver punto 42), en vez de consultar solo folio por folio.
 - **Vigilar si el error 413 (punto 43) vuelve a presentarse** tras subir la corrección.
 - Grabación y edición de los 3 videos para redes sociales, por parte del usuario — no forma parte del código del sitio.

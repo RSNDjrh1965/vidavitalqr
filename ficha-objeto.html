@@ -365,6 +365,10 @@
 <div class="field full"><label data-i18n="lblSenales">Otras señales</label><input type="text" id="senales" placeholder="Referencias de ubicación" data-i18n-ph="senalesPh"></div>
 </div>
 <p class="hint" style="margin-top:14px;" data-i18n="hintCorreoObligatorio">El correo del contacto 1 es obligatorio: ahí se enviará el código de acceso (folio y PIN) cada vez que se cree o actualice esta ficha, y también un aviso automático cada vez que alguien escanee el código QR. Cualquier información importante relacionada con la ficha se enviará a este correo.</p>
+<div class="grid cols3">
+<div class="field no-print"><label data-i18n="lblCorreoTitular">Correo del titular (obligatorio)</label><input type="email" id="correoTitular" placeholder="correo@ejemplo.com" required></div>
+</div>
+<p class="hint no-print" data-i18n="hintCorreoTitular">Este es el correo de la persona titular de la ficha (quien la paga). A este correo se enviarán los avisos de vencimiento y renovación anual — distinto de los correos de los contactos de emergencia de arriba.</p>
 <div class="contact-rows">
 <div class="grid cols4">
 <div class="field"><label data-i18n="lblContacto1">Nombre de contacto 1</label><input type="text" id="contacto1"></div>
@@ -402,6 +406,10 @@
 
 <!-- Páginas de adjuntos (usadas para generar el PDF) -->
 <div class="print-only" id="printAttachments"></div>
+
+
+<!-- Política de vigencia y eliminación (2026-09-25) -->
+<p class="hint no-print" style="margin-top:14px;" data-i18n="politicaVigenciaTexto">Su ficha tiene vigencia anual. Si no la renueva a tiempo, la información básica de emergencia se mantiene visible por 2 meses adicionales; pasado ese plazo, la ficha y su información se eliminan por completo.</p>
 
 <!-- Acciones -->
 <div class="actions no-print">
@@ -484,6 +492,10 @@ const TEXTOS_FICHA = {
     lblDistrito: 'Distrito', distritoPh: 'Ej. Carmen', optSeleccioneCantonPrimero: 'Seleccione un cantón primero…',
     lblSenales: 'Otras señales', senalesPh: 'Referencias de ubicación',
     hintCorreoObligatorio: 'El correo del contacto 1 es obligatorio: ahí se enviará el código de acceso (folio y PIN) cada vez que se cree o actualice esta ficha, y también un aviso automático cada vez que alguien escanee el código QR. Cualquier información importante relacionada con la ficha se enviará a este correo.',
+    lblCorreoTitular: 'Correo del titular (obligatorio)',
+    hintCorreoTitular: 'Este es el correo de la persona titular de la ficha (quien la paga). A este correo se enviarán los avisos de vencimiento y renovación anual — distinto de los correos de los contactos de emergencia de arriba.',
+    alertEmailTitularInvalido: 'El correo del titular es obligatorio y debe tener un formato válido (por ejemplo, correo@ejemplo.com). Ahí se enviarán los avisos de vencimiento y renovación de esta ficha.',
+    politicaVigenciaTexto: 'Su ficha tiene vigencia anual. Si no la renueva a tiempo, la información básica de emergencia se mantiene visible por 2 meses adicionales; pasado ese plazo, la ficha y su información se eliminan por completo.',
     lblContacto1: 'Nombre de contacto 1', lblContacto2: 'Nombre de contacto 2',
     lblRelacionObjeto: 'Relación con el objeto', relacionPh: 'Dueño, encargado…',
     lblCorreoObligatorio: 'Correo (obligatorio)', lblCorreoOpcional: 'Correo (opcional, para el aviso)',
@@ -568,6 +580,10 @@ const TEXTOS_FICHA = {
     lblDistrito: 'District', distritoPh: 'E.g. Carmen', optSeleccioneCantonPrimero: 'Select a county first…',
     lblSenales: 'Other landmarks', senalesPh: 'Location references',
     hintCorreoObligatorio: 'Contact 1\'s email is required: the access code (folio and PIN) will be sent there every time this card is created or updated, along with an automatic alert every time someone scans the QR code. Any important information related to the card will be sent to this email.',
+    lblCorreoTitular: 'Owner\'s email (required)',
+    hintCorreoTitular: 'This is the email of the person who owns the record (who pays for it). Renewal and expiration notices will be sent here — separate from the emergency contact emails above.',
+    alertEmailTitularInvalido: 'The owner\'s email is required and must be a valid format (e.g. name@example.com). Renewal and expiration notices for this record will be sent there.',
+    politicaVigenciaTexto: 'Your record has annual validity. If you do not renew it in time, basic emergency information stays visible for 2 additional months; after that period, the record and its information are permanently deleted.',
     lblContacto1: 'Contact 1 name', lblContacto2: 'Contact 2 name',
     lblRelacionObjeto: 'Relationship to the item', relacionPh: 'Owner, caretaker…',
     lblCorreoObligatorio: 'Email (required)', lblCorreoOpcional: 'Email (optional, for the alert)',
@@ -651,6 +667,10 @@ const TEXTOS_FICHA = {
     lblDistrito: 'District', distritoPh: 'Ex. Carmen', optSeleccioneCantonPrimero: 'Sélectionnez d\'abord un canton…',
     lblSenales: 'Autres repères', senalesPh: 'Références de localisation',
     hintCorreoObligatorio: 'L\'e-mail du contact 1 est obligatoire : le code d\'accès (folio et PIN) y sera envoyé à chaque création ou mise à jour de cette fiche, ainsi qu\'une alerte automatique chaque fois que quelqu\'un scanne le code QR. Toute information importante liée à la fiche sera envoyée à cet e-mail.',
+    lblCorreoTitular: 'E-mail du titulaire (obligatoire)',
+    hintCorreoTitular: 'Il s\'agit de l\'e-mail de la personne titulaire de la fiche (qui la paie). Les avis d\'expiration et de renouvellement y seront envoyés — distinct des e-mails des contacts d\'urgence ci-dessus.',
+    alertEmailTitularInvalido: 'L\'e-mail du titulaire est obligatoire et doit être valide (ex. nom@exemple.com). Les avis d\'expiration et de renouvellement de cette fiche y seront envoyés.',
+    politicaVigenciaTexto: 'Votre fiche a une validité annuelle. Si vous ne la renouvelez pas à temps, les informations d\'urgence de base restent visibles pendant 2 mois supplémentaires ; passé ce délai, la fiche et ses informations sont définitivement supprimées.',
     lblContacto1: 'Nom du contact 1', lblContacto2: 'Nom du contact 2',
     lblRelacionObjeto: 'Relation avec l\'objet', relacionPh: 'Propriétaire, responsable…',
     lblCorreoObligatorio: 'E-mail (obligatoire)', lblCorreoOpcional: 'E-mail (facultatif, pour l\'alerte)',
@@ -734,6 +754,10 @@ const TEXTOS_FICHA = {
     lblDistrito: 'Distrito', distritoPh: 'Ex. Carmen', optSeleccioneCantonPrimero: 'Selecione um município primeiro…',
     lblSenales: 'Outros sinais', senalesPh: 'Referências de localização',
     hintCorreoObligatorio: 'O e-mail do contato 1 é obrigatório: nele será enviado o código de acesso (folio e PIN) sempre que esta ficha for criada ou atualizada, além de um aviso automático sempre que alguém escanear o código QR. Qualquer informação importante relacionada à ficha será enviada a esse e-mail.',
+    lblCorreoTitular: 'E-mail do titular (obrigatório)',
+    hintCorreoTitular: 'Este é o e-mail da pessoa titular da ficha (quem paga por ela). Os avisos de vencimento e renovação serão enviados para cá — diferente dos e-mails dos contatos de emergência acima.',
+    alertEmailTitularInvalido: 'O e-mail do titular é obrigatório e deve ter um formato válido (por exemplo, nome@exemplo.com). Os avisos de vencimento e renovação desta ficha serão enviados para lá.',
+    politicaVigenciaTexto: 'Sua ficha tem vigência anual. Se você não a renovar a tempo, as informações básicas de emergência permanecem visíveis por 2 meses adicionais; passado esse prazo, a ficha e suas informações são excluídas por completo.',
     lblContacto1: 'Nome do contato 1', lblContacto2: 'Nome do contato 2',
     lblRelacionObjeto: 'Relação com o objeto', relacionPh: 'Dono, responsável…',
     lblCorreoObligatorio: 'E-mail (obrigatório)', lblCorreoOpcional: 'E-mail (opcional, para o aviso)',
@@ -1585,6 +1609,7 @@ function precargarDatosFicha(datos){
   setVal('distrito', datos.distrito);
   setVal('senales', datos.senales);
   setVal('comentarios', datos.comentarios);
+  setVal('correoTitular', datos.correoTitular);
   setVal('contacto1', datos.contacto1); setVal('telcontacto1', datos.telcontacto1); setVal('parentesco1', datos.parentesco1); setVal('emailcontacto1', datos.emailcontacto1);
   setVal('contacto2', datos.contacto2); setVal('telcontacto2', datos.telcontacto2); setVal('parentesco2', datos.parentesco2); setVal('emailcontacto2', datos.emailcontacto2);
 
@@ -1623,7 +1648,66 @@ function emailValido(str){
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test((str || '').trim());
 }
 
+// ---- Sonido de marca durante el procesamiento del envío (agregado 2026-09-25, a pedido de
+// James): el tiempo de guardado se alargó (genera PDF, tarjeta y hasta 3 PDFs adicionales por
+// idioma, sube todo a la nube), así que se repite el mismo sonido "campanita suave" que ya
+// identifica la marca en la pantalla de escaneo (ver netlify/functions/ver.js) mientras dura el
+// proceso, en vez de dejar la espera en silencio. El AudioContext se crea de forma síncrona
+// dentro del manejador de clic del botón (antes de cualquier "await"), porque un clic real del
+// usuario sí cuenta como gesto válido para el navegador -- a diferencia de abrir un enlace de QR
+// (ver.js), aquí no hace falta ningún reintento por gesto. ----
+(function () {
+  var CtxProc = window.AudioContext || window.webkitAudioContext;
+  var ctxProc = null;
+  var intervaloSonidoProcesando = null;
+
+  function tonoProcesando(freq, inicio, duracion, pico) {
+    if (!ctxProc) return;
+    var now = ctxProc.currentTime;
+    var osc = ctxProc.createOscillator();
+    var gain = ctxProc.createGain();
+    osc.type = 'sine';
+    osc.frequency.value = freq;
+    gain.gain.setValueAtTime(0, now + inicio);
+    gain.gain.linearRampToValueAtTime(pico, now + inicio + 0.015);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + inicio + duracion);
+    osc.connect(gain).connect(ctxProc.destination);
+    osc.start(now + inicio);
+    osc.stop(now + inicio + duracion + 0.05);
+  }
+
+  function sonarCampanitaProcesando() {
+    tonoProcesando(523.25, 0, 1.8, 0.18);
+    tonoProcesando(659.25, 0.1, 1.7, 0.14);
+    tonoProcesando(783.99, 0.22, 1.6, 0.16);
+    tonoProcesando(1046.5, 0.38, 1.3, 0.09);
+  }
+
+  window.iniciarSonidoProcesando = function () {
+    if (!CtxProc || intervaloSonidoProcesando) return;
+    try {
+      if (!ctxProc) ctxProc = new CtxProc();
+      if (ctxProc.state === 'suspended') { ctxProc.resume().catch(function () {}); }
+      sonarCampanitaProcesando();
+      // se repite cada 2.2s mientras dure el procesamiento -- se detiene con detenerSonidoProcesando()
+      intervaloSonidoProcesando = setInterval(sonarCampanitaProcesando, 2200);
+    } catch (e) { /* si el navegador bloquea el audio, seguimos sin sonido, sin afectar el envío */ }
+  };
+
+  window.detenerSonidoProcesando = function () {
+    if (intervaloSonidoProcesando) {
+      clearInterval(intervaloSonidoProcesando);
+      intervaloSonidoProcesando = null;
+    }
+  };
+})();
+
 $('btnEmail').addEventListener('click', async () => {
+  if (!emailValido($('correoTitular').value)) {
+    alert(T().alertEmailTitularInvalido);
+    $('correoTitular').focus();
+    return;
+  }
   if (!emailValido($('emailcontacto1').value)) {
     alert(T().alertEmailInvalido);
     $('emailcontacto1').focus();
@@ -1638,6 +1722,7 @@ $('btnEmail').addEventListener('click', async () => {
   btn.textContent = T().generandoPdf;
   if (procBadge) procBadge.classList.add('visible');
   if (procOverlay) procOverlay.classList.add('visible');
+  if (window.iniciarSonidoProcesando) window.iniciarSonidoProcesando();
 
   const folio = $('counterNum').textContent.trim() || 'VidaVitalQR';
   const filename = `${folio}.pdf`;
@@ -1652,6 +1737,7 @@ $('btnEmail').addEventListener('click', async () => {
     btn.textContent = originalText;
     if (procBadge) procBadge.classList.remove('visible');
     if (procOverlay) procOverlay.classList.remove('visible');
+    if (window.detenerSonidoProcesando) window.detenerSonidoProcesando();
     return;
   }
 
@@ -1686,6 +1772,7 @@ $('btnEmail').addEventListener('click', async () => {
       distrito: $('distrito').value || '',
       senales: $('senales').value || '',
       comentarios: $('comentarios').value || '',
+      correoTitular: $('correoTitular').value || '',
       contacto1: $('contacto1').value || '', telcontacto1: $('telcontacto1').value || '', parentesco1: $('parentesco1').value || '', emailcontacto1: $('emailcontacto1').value || '',
       contacto2: $('contacto2').value || '', telcontacto2: $('telcontacto2').value || '', parentesco2: $('parentesco2').value || '', emailcontacto2: $('emailcontacto2').value || '',
       fotoBase64: fotoBase64 || '',
@@ -1708,13 +1795,14 @@ $('btnEmail').addEventListener('click', async () => {
       btn.textContent = originalText;
       if (procBadge) procBadge.classList.remove('visible');
       if (procOverlay) procOverlay.classList.remove('visible');
+      if (window.detenerSonidoProcesando) window.detenerSonidoProcesando();
       return;
     }
 
     const resp = await fetch('/.netlify/functions/send-ficha', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({ folio, filename, pdfBase64, nombreCompleto, tipo: 'Objeto', fotoBase64, contactos, datosVisor, datosFormulario, esRenovacionPago: esRenovacion, idioma: LANG_FICHA })
+      body: JSON.stringify({ folio, filename, pdfBase64, nombreCompleto, tipo: 'Objeto', fotoBase64, contactos, datosVisor, datosFormulario, esRenovacionPago: esRenovacion, idioma: LANG_FICHA, correoTitular: $('correoTitular').value || '' })
     });
 
     if(!resp.ok){
@@ -1735,6 +1823,7 @@ $('btnEmail').addEventListener('click', async () => {
     // el envío ya terminó — se quita el overlay de "procesando" antes de mostrar el modal del
     // PIN (o de cerrar la pestaña), para que no quede tapándolo por encima
     if (procOverlay) procOverlay.classList.remove('visible');
+    if (window.detenerSonidoProcesando) window.detenerSonidoProcesando();
 
     if (pinNuevo) {
       await mostrarPinModal(pinNuevo, folio, qrUrlGenerado);
@@ -1753,6 +1842,7 @@ $('btnEmail').addEventListener('click', async () => {
     btn.textContent = originalText;
     if (procBadge) procBadge.classList.remove('visible');
     if (procOverlay) procOverlay.classList.remove('visible');
+    if (window.detenerSonidoProcesando) window.detenerSonidoProcesando();
   }
 });
 

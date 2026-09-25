@@ -8,3 +8,12 @@
 # entrado el día hábil en que el BCCR suele publicar su dato. ----
 [functions."actualizar-tipo-cambio"]
   schedule = "0 15 * * *"
+
+# ---- revisar-vigencia.js: se ejecuta sola una vez al día (2026-09-25) — revisa la vigencia anual
+# de cada ficha, envía los correos de la cronología de avisos (recordatorios de renovación, aviso
+# de "vencida", avisos del período de gracia) y elimina por completo lo que ya pasó los 2 meses de
+# gracia sin renovar. Hora elegida: 13:00 UTC = 7:00 a.m. hora de Costa Rica (UTC-6), para que los
+# correos del día lleguen temprano en la mañana. Ver netlify/functions/lib/vigencia.js y el
+# documento "Política de vigencia y eliminación de fichas" del Proyecto ADJDATA. ----
+[functions."revisar-vigencia"]
+  schedule = "0 13 * * *"
