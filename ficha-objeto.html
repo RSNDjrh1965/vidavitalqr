@@ -353,9 +353,14 @@
 <div class="grid cols3">
 <div class="field"><label data-i18n="lblPais">País</label><input type="text" id="pais" placeholder="Ej. Costa Rica" data-i18n-ph="paisPh"></div>
 <div class="field">
+<label data-i18n="lblProvincia">Provincia</label>
+<input type="text" id="provincia" placeholder="Ej. San José" data-i18n-ph="provinciaPh">
+<select id="provinciaSelect" class="no-print" style="display:none;"><option value="" data-i18n="optSeleccioneProvincia">Seleccione una provincia…</option></select>
+</div>
+<div class="field">
 <label data-i18n="lblCiudad">Ciudad / Cantón</label>
 <input type="text" id="ciudad" readonly>
-<select id="cantonSelect" class="no-print" style="display:none;"><option value="" data-i18n="optSeleccioneCanton">Seleccione un cantón…</option></select>
+<select id="cantonSelect" class="no-print" style="display:none;"><option value="" data-i18n="optSeleccioneProvinciaPrimero">Seleccione una provincia primero…</option></select>
 </div>
 <div class="field">
 <label data-i18n="lblDistrito">Distrito</label>
@@ -488,6 +493,7 @@ const TEXTOS_FICHA = {
     colorPh: 'Ej. Negro con detalles rojos',
     lblSenasParticulares: 'Señas particulares', senasPh: 'Rayones, etiquetas, grabados, número de serie, adhesivos, etc.',
     h2DatosContacto: 'Datos de contacto y ubicación', lblPais: 'País', paisPh: 'Ej. Costa Rica',
+    lblProvincia: 'Provincia', provinciaPh: 'Ej. San José', optSeleccioneProvincia: 'Seleccione una provincia…', optSeleccioneProvinciaPrimero: 'Seleccione una provincia primero…',
     lblCiudad: 'Ciudad / Cantón', optSeleccioneCanton: 'Seleccione un cantón…',
     lblDistrito: 'Distrito', distritoPh: 'Ej. Carmen', optSeleccioneCantonPrimero: 'Seleccione un cantón primero…',
     lblSenales: 'Otras señales', senalesPh: 'Referencias de ubicación',
@@ -576,6 +582,7 @@ const TEXTOS_FICHA = {
     colorPh: 'E.g. Black with red details',
     lblSenasParticulares: 'Distinguishing marks', senasPh: 'Scratches, tags, engravings, serial number, stickers, etc.',
     h2DatosContacto: 'Contact and location information', lblPais: 'Country', paisPh: 'E.g. Costa Rica',
+    lblProvincia: 'Province', provinciaPh: 'E.g. San José', optSeleccioneProvincia: 'Select a province…', optSeleccioneProvinciaPrimero: 'Select a province first…',
     lblCiudad: 'City / County', optSeleccioneCanton: 'Select a county…',
     lblDistrito: 'District', distritoPh: 'E.g. Carmen', optSeleccioneCantonPrimero: 'Select a county first…',
     lblSenales: 'Other landmarks', senalesPh: 'Location references',
@@ -663,6 +670,7 @@ const TEXTOS_FICHA = {
     colorPh: 'Ex. Noir avec détails rouges',
     lblSenasParticulares: 'Signes distinctifs', senasPh: 'Rayures, étiquettes, gravures, numéro de série, autocollants, etc.',
     h2DatosContacto: 'Informations de contact et de localisation', lblPais: 'Pays', paisPh: 'Ex. Costa Rica',
+    lblProvincia: 'Province', provinciaPh: 'Ex. San José', optSeleccioneProvincia: 'Sélectionnez une province…', optSeleccioneProvinciaPrimero: "Sélectionnez d'abord une province…",
     lblCiudad: 'Ville / Canton', optSeleccioneCanton: 'Sélectionnez un canton…',
     lblDistrito: 'District', distritoPh: 'Ex. Carmen', optSeleccioneCantonPrimero: 'Sélectionnez d\'abord un canton…',
     lblSenales: 'Autres repères', senalesPh: 'Références de localisation',
@@ -750,6 +758,7 @@ const TEXTOS_FICHA = {
     colorPh: 'Ex. Preto com detalhes vermelhos',
     lblSenasParticulares: 'Sinais particulares', senasPh: 'Riscos, etiquetas, gravações, número de série, adesivos, etc.',
     h2DatosContacto: 'Dados de contato e localização', lblPais: 'País', paisPh: 'Ex. Costa Rica',
+    lblProvincia: 'Província', provinciaPh: 'Ex. San José', optSeleccioneProvincia: 'Selecione uma província…', optSeleccioneProvinciaPrimero: 'Selecione uma província primeiro…',
     lblCiudad: 'Cidade / Município', optSeleccioneCanton: 'Selecione um município…',
     lblDistrito: 'Distrito', distritoPh: 'Ex. Carmen', optSeleccioneCantonPrimero: 'Selecione um município primeiro…',
     lblSenales: 'Outros sinais', senalesPh: 'Referências de localização',
@@ -1185,7 +1194,12 @@ $('photoRemove').addEventListener('click', e => {
   }
 })();
 
-// ---- ubicación: cantones y distritos de Costa Rica (desplegables en cascada si el país es Costa Rica) ----
+// ---- ubicación: provincias, cantones y distritos de Costa Rica (desplegables en cascada si el
+// país es Costa Rica). Reestructurado 2026-09-26 a pedido de James: antes el cantón se mostraba
+// en un solo desplegable largo agrupado por provincia (optgroup), sin que la provincia quedara
+// nunca visible ni guardada por su cuenta -- ahora hay un campo "Provincia" propio, en el orden
+// oficial País → Provincia → Cantón → Distrito, que además filtra el desplegable de cantones
+// (antes mostraba los ~82 cantones del país de una sola vez). ----
 (function(){
   // Fuente: API pública "Ubicaciones de Costa Rica" (ubicaciones.paginasweb.cr), sin llave,
   // con CORS abierto — se consulta en vivo desde el navegador para mostrar siempre el listado
@@ -1194,13 +1208,12 @@ $('photoRemove').addEventListener('click', e => {
   const PROVINCIAS = { 1: 'San José', 2: 'Alajuela', 3: 'Cartago', 4: 'Heredia', 5: 'Guanacaste', 6: 'Puntarenas', 7: 'Limón' };
 
   const paisEl = $('pais');
+  const provinciaInput = $('provincia');
   const ciudadInput = $('ciudad');
   const distritoInput = $('distrito');
+  const provinciaSelect = $('provinciaSelect');
   const cantonSelect = $('cantonSelect');
   const distritoSelect = $('distritoSelect');
-
-  let cantonesCargados = false;
-  let cargaFallida = false;
 
   function normaliza(str){
     return (str || '')
@@ -1213,31 +1226,49 @@ $('photoRemove').addEventListener('click', e => {
     return normaliza(paisEl.value) === 'costa rica';
   }
 
-  async function cargarCantones(){
-    if (cantonesCargados || cargaFallida) return;
+  function poblarProvincias(){
+    if (provinciaSelect.options.length > 1) return; // ya poblado (7 provincias fijas, sin API)
+    Object.keys(PROVINCIAS).forEach(id => {
+      const opt = document.createElement('option');
+      opt.value = PROVINCIAS[id];
+      opt.textContent = PROVINCIAS[id];
+      opt.dataset.provinciaId = id;
+      provinciaSelect.appendChild(opt);
+    });
+  }
+
+  async function cargarCantonesDeProvincia(provinciaId){
+    cantonSelect.innerHTML = '<option value="">Cargando cantones…</option>';
     try {
-      const provinciaIds = Object.keys(PROVINCIAS);
-      const respuestas = await Promise.all(provinciaIds.map(id =>
-        fetch(`${API_BASE}/provincia/${id}/cantones.json`).then(r => { if(!r.ok) throw new Error('http'); return r.json(); })
-      ));
-      provinciaIds.forEach((provinciaId, i) => {
-        const og = document.createElement('optgroup');
-        og.label = PROVINCIAS[provinciaId];
-        const cantones = respuestas[i];
-        Object.keys(cantones).forEach(cantonId => {
-          const opt = document.createElement('option');
-          opt.value = cantones[cantonId];
-          opt.textContent = cantones[cantonId];
-          opt.dataset.provinciaId = provinciaId;
-          opt.dataset.cantonId = cantonId;
-          og.appendChild(opt);
-        });
-        cantonSelect.appendChild(og);
+      const resp = await fetch(`${API_BASE}/provincia/${provinciaId}/cantones.json`);
+      if (!resp.ok) throw new Error('http');
+      const cantones = await resp.json();
+      cantonSelect.innerHTML = '<option value="">Seleccione un cantón…</option>';
+      Object.keys(cantones).forEach(cantonId => {
+        const opt = document.createElement('option');
+        opt.value = cantones[cantonId];
+        opt.textContent = cantones[cantonId];
+        opt.dataset.provinciaId = provinciaId;
+        opt.dataset.cantonId = cantonId;
+        cantonSelect.appendChild(opt);
       });
-      cantonesCargados = true;
+      cantonSelect.style.display = '';
+      ciudadInput.setAttribute('readonly', 'readonly');
+      ciudadInput.placeholder = 'Seleccione un cantón arriba ▾';
+      const match = Array.from(cantonSelect.options).find(o => o.value === ciudadInput.value);
+      cantonSelect.value = match ? match.value : '';
+      if (cantonSelect.value) {
+        const opt = cantonSelect.selectedOptions[0];
+        cargarDistritos(opt.dataset.provinciaId, opt.dataset.cantonId);
+      } else {
+        distritoSelect.style.display = 'none';
+        distritoInput.removeAttribute('readonly');
+      }
     } catch (err) {
-      // Sin conexión con la API: se deja el campo como texto libre para no bloquear el formulario.
-      cargaFallida = true;
+      // Sin conexión con la API: se deja el cantón como texto libre para no bloquear el formulario.
+      cantonSelect.style.display = 'none';
+      ciudadInput.removeAttribute('readonly');
+      ciudadInput.placeholder = 'Ej. San José';
     }
   }
 
@@ -1267,21 +1298,59 @@ $('photoRemove').addEventListener('click', e => {
     }
   }
 
+  // ---- para fichas guardadas ANTES de este cambio (tienen ciudad/distrito pero nunca guardaron
+  // provincia): se busca en las 7 provincias cuál cantón coincide, para poder preseleccionar todo
+  // el desplegable en cascada sin perder el dato ya guardado ni pedirle a la persona que lo
+  // vuelva a escoger desde cero. ----
+  async function detectarProvinciaPorCanton(cantonNombre){
+    if (!cantonNombre) return null;
+    try {
+      const provinciaIds = Object.keys(PROVINCIAS);
+      const respuestas = await Promise.all(provinciaIds.map(id =>
+        fetch(`${API_BASE}/provincia/${id}/cantones.json`).then(r => (r.ok ? r.json() : {})).catch(() => ({}))
+      ));
+      for (let i = 0; i < provinciaIds.length; i++) {
+        const cantones = respuestas[i];
+        const encontrado = Object.values(cantones).some(nombre => normaliza(nombre) === normaliza(cantonNombre));
+        if (encontrado) return provinciaIds[i];
+      }
+    } catch (err) { /* sin conexión: se deja sin detectar, los campos quedan como texto libre */ }
+    return null;
+  }
+
   async function actualizarModoUbicacion(){
     if (esCostaRica()) {
-      await cargarCantones();
-      if (cargaFallida) return; // se queda como texto libre
-      cantonSelect.style.display = '';
-      ciudadInput.setAttribute('readonly', 'readonly');
-      ciudadInput.placeholder = 'Seleccione un cantón arriba ▾';
-      // si el valor actual de ciudad coincide con un cantón, reflejarlo en el select
-      const match = Array.from(cantonSelect.options).find(o => o.value === ciudadInput.value);
-      cantonSelect.value = match ? match.value : '';
-      if (cantonSelect.value) {
-        const opt = cantonSelect.selectedOptions[0];
-        cargarDistritos(opt.dataset.provinciaId, opt.dataset.cantonId);
+      poblarProvincias();
+      provinciaSelect.style.display = '';
+      provinciaInput.setAttribute('readonly', 'readonly');
+      provinciaInput.placeholder = 'Seleccione una provincia arriba ▾';
+
+      let provinciaId = null;
+      const matchProv = provinciaInput.value
+        ? Array.from(provinciaSelect.options).find(o => o.dataset.provinciaId && o.value === provinciaInput.value)
+        : null;
+      if (matchProv) {
+        provinciaId = matchProv.dataset.provinciaId;
+      } else if (ciudadInput.value) {
+        provinciaId = await detectarProvinciaPorCanton(ciudadInput.value);
+        if (provinciaId) {
+          provinciaInput.value = PROVINCIAS[provinciaId];
+          const opt = Array.from(provinciaSelect.options).find(o => o.dataset.provinciaId === provinciaId);
+          if (opt) provinciaSelect.value = opt.value;
+        }
+      }
+
+      if (provinciaId) {
+        await cargarCantonesDeProvincia(provinciaId);
+      } else {
+        cantonSelect.style.display = 'none';
+        cantonSelect.innerHTML = '<option value="" data-i18n="optSeleccioneProvinciaPrimero">Seleccione una provincia primero…</option>';
+        distritoSelect.style.display = 'none';
       }
     } else {
+      provinciaSelect.style.display = 'none';
+      provinciaInput.removeAttribute('readonly');
+      provinciaInput.placeholder = '';
       cantonSelect.style.display = 'none';
       ciudadInput.removeAttribute('readonly');
       ciudadInput.placeholder = '';
@@ -1290,6 +1359,20 @@ $('photoRemove').addEventListener('click', e => {
       distritoInput.placeholder = 'Ej. Carmen';
     }
   }
+
+  provinciaSelect.addEventListener('change', () => {
+    provinciaInput.value = provinciaSelect.value;
+    ciudadInput.value = '';
+    distritoInput.value = '';
+    distritoSelect.style.display = 'none';
+    const opt = provinciaSelect.selectedOptions[0];
+    if (opt && opt.dataset.provinciaId) {
+      cargarCantonesDeProvincia(opt.dataset.provinciaId);
+    } else {
+      cantonSelect.style.display = 'none';
+    }
+    updatePreview();
+  });
 
   cantonSelect.addEventListener('change', () => {
     ciudadInput.value = cantonSelect.value;
@@ -1312,8 +1395,12 @@ $('photoRemove').addEventListener('click', e => {
   paisEl.addEventListener('input', actualizarModoUbicacion);
   actualizarModoUbicacion();
 
-  // se expone para poder revertir el cantón/distrito a modo texto libre al limpiar el formulario
-  window.__resetUbicacionFicha = () => { cantonSelect.value=''; actualizarModoUbicacion(); };
+  // se expone para volver a evaluar el modo de ubicación después de precargar una ficha existente
+  // (precargarDatosFicha asigna pais/provincia/ciudad/distrito directamente, sin disparar 'input')
+  window.__actualizarUbicacionFicha = actualizarModoUbicacion;
+
+  // se expone para poder revertir provincia/cantón/distrito a modo texto libre al limpiar el formulario
+  window.__resetUbicacionFicha = () => { provinciaSelect.value=''; cantonSelect.value=''; actualizarModoUbicacion(); };
 })();
 
 // ---- live preview ----
@@ -1605,9 +1692,15 @@ function precargarDatosFicha(datos){
   setVal('fnac', datos.fnac);
   setVal('senas', datos.senas);
   setVal('pais', datos.pais);
+  setVal('provincia', datos.provincia);
   setVal('ciudad', datos.ciudad);
   setVal('distrito', datos.distrito);
   setVal('senales', datos.senales);
+  // ---- reevalúa el desplegable en cascada de ubicación con los valores recién cargados: los
+  // setVal() de arriba asignan .value directamente y no disparan el evento "input" del que
+  // depende normalmente (ver bloque de ubicación más abajo). Sin esto, el cantón/distrito de una
+  // ficha existente se mostraría como texto plano en vez de como el desplegable esperado. ----
+  if (typeof window.__actualizarUbicacionFicha === 'function') window.__actualizarUbicacionFicha();
   setVal('comentarios', datos.comentarios);
   setVal('correoTitular', datos.correoTitular);
   setVal('contacto1', datos.contacto1); setVal('telcontacto1', datos.telcontacto1); setVal('parentesco1', datos.parentesco1); setVal('emailcontacto1', datos.emailcontacto1);
@@ -1768,6 +1861,7 @@ $('btnEmail').addEventListener('click', async () => {
       fnac: $('fnac').value || '',
       senas: $('senas').value || '',
       pais: $('pais').value || '',
+      provincia: $('provincia').value || '',
       ciudad: $('ciudad').value || '',
       distrito: $('distrito').value || '',
       senales: $('senales').value || '',

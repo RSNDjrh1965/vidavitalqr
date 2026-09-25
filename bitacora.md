@@ -892,6 +892,90 @@ pestaña "Tarjeta" como en "SINPE Móvil", sin errores de JavaScript.
 modo real — no causa ningún problema porque simplemente no se muestra, pero se puede limpiar del
 todo en una próxima entrega si se quiere dejar el código más corto.
 
+## 16.3. Correcciones de la revisión en producción de James (2026-09-26)
+
+James probó el ZIP del punto 16.2 en producción (subido a GitHub/Netlify) y reportó 6 hallazgos con
+capturas de pantalla, sin llegar a completar el pago de prueba a propósito ("considero que es mejor
+hacer estas correcciones y después hacer un barrido final"). Los 6 se corrigieron, probaron
+localmente con Playwright (mockeando la API externa de ubicaciones y el `fetch` de ONVO cuando
+aplicaba, sin gastar créditos de Netlify) y se entregaron en un solo ZIP:
+
+1. **Texto del FAQ desactualizado ("¿Qué pasa si no renuevo a tiempo?")**: mostraba el texto viejo
+   de la política de vigencia (ver punto 70), distinto del ya corregido en el landing (`pol3Desc`,
+   mismo día). Se sincronizó `faqA2` con el mismo texto (2 meses de gracia, oculta foto/PDF, luego
+   elimina) en los 4 idiomas.
+2. **Faltaba el campo "Provincia"** en "Datos generales" de los 3 formularios (persona/mascota/
+   objeto): antes el cantón se mostraba en un solo desplegable agrupado por provincia (optgroup),
+   sin que la provincia quedara nunca visible ni guardada por separado. Se agregó un campo
+   "Provincia" propio, con el orden oficial País → Provincia → Cantón → Distrito: elegir la
+   provincia ahora filtra el desplegable de cantones (antes mostraba los ~82 cantones del país de
+   una vez). Se guarda como `datos.provincia` en `datosFormulario`. Para fichas existentes que no
+   tienen ese dato guardado, se agregó `detectarProvinciaPorCanton()`: busca en las 7 provincias
+   cuál cantón coincide con el ya guardado, para preseleccionar todo el desplegable sin pedirle a
+   la persona que lo vuelva a escoger. De paso se corrigió un descuido ya existente: al precargar
+   una ficha para renovar/actualizar, el país/cantón/distrito guardados nunca reactivaban el
+   desplegable en cascada (los `setVal()` no disparan el evento `input` del que dependía) — ahora
+   `precargarDatosFicha()` llama a `window.__actualizarUbicacionFicha()` después de cargar los
+   datos. El campo aparece en el PDF automáticamente porque la generación captura visualmente toda
+   la sección (`html2canvas` sobre `.wrap`), sin tocar el código del PDF.
+3. **El recuadro de pago quedaba "bloqueado"** si el cliente cometía un error en la página de ONVO
+   y usaba el botón de regreso del navegador: el botón "Pagar" se deja deshabilitado con el texto
+   "Conectando con ONVO Pay…" justo antes de redirigir, y esa página puede volver a mostrarse desde
+   la caché del navegador (bfcache) en ese mismo estado congelado. Se agregó un listener del evento
+   `pageshow` (se dispara también al restaurar desde bfcache, a diferencia de `load`) que vuelve a
+   calcular el recuadro de pago (`renderOrder()`), dejándolo listo para reintentar sin recargar la
+   página a mano.
+4. y 6. **No había forma de corregir un producto mal elegido ni de agregar más de uno desde el
+   recuadro de pago**: un clic sobre un botón "Agregar a mi pago" ya marcado en verde nunca lo
+   quitaba del carrito (llevaba directo al pago), y dentro del recuadro no había ningún enlace de
+   vuelta a la lista de productos. Se agregó un botón "×" en cada línea del resumen de pago (quita
+   ese producto del carrito) y un enlace "+ Agregar otro producto" que hace scroll de vuelta a la
+   sección de presentaciones. El carrito YA soportaba múltiples productos a la vez (el objeto
+   `selected{}` por ítem) — el problema era solo de descubribilidad/UX, no de arquitectura.
+5. **Las pestañas "Tarjeta"/"SINPE Móvil" del propio sitio, antes de redirigir a ONVO, causaban
+   confusión** (y, según James, un problema en la página de ONVO): eran puramente decorativas en
+   modo real desde el punto 71 (no cambiaban nada del pago), pero seguían visibles — por ejemplo,
+   con dólares seleccionados ONVO solo ofrece tarjeta adentro, y la pestaña "SINPE Móvil" de aquí
+   sugería lo contrario. Se ocultan por completo en modo real (`cxMethodTabs`), dejando solo el
+   botón "Pagar" — el cliente elige tarjeta o SINPE dentro de la página segura de ONVO, como ya
+   confirmó soporte de ONVO que funciona automáticamente.
+
+**Verificación:** sintaxis (`node --check`) limpia en los 4 archivos tocados (`index.html`,
+`ficha.html`, `ficha-mascota.html`, `ficha-objeto.html`); `diff` contra el ZIP anterior confirma que
+son los únicos 4 archivos modificados; pruebas con Playwright para cada hallazgo (carrito con
+múltiples productos + quitar/agregar, pestañas ocultas en modo real, botón de pago recuperándose
+tras un `pageshow` simulado, y el desplegable Provincia→Cantón→Distrito con la API externa
+mockeada, incluida la autodetección de provincia para una ficha "legada" sin ese dato). Pendiente:
+que James suba este ZIP y haga la prueba de pago real que dejó pendiente a propósito.
+
+## 16.4. Texto y controles del bloque de pago (2026-09-26)
+
+Dos ajustes más al mismo bloque, tras revisar el punto 16.3 en producción:
+
+- **Texto del bloque "Pago seguro con ONVO Pay"**: el título decía "Renovación anual VidaVitalQR"
+  (aunque el bloque aplica a cualquier compra, no solo renovaciones) y los primeros dos párrafos
+  explicaban mecánica interna ("así se procesa el pago...", "lo que haya marcado con 'Agregar a mi
+  pago'...") en vez de decirle al cliente cómo pagar. Se cambió a: título "Pago VidaVitalQR",
+  párrafo 1 con una descripción breve de los métodos disponibles (tarjeta o SINPE Móvil vía ONVO
+  Pay), y párrafo 2 con una nota aclarando que para pagar por SINPE Móvil hay que elegir primero la
+  moneda en colones (si se deja en dólares, ONVO solo ofrece tarjeta adentro). El tercer párrafo
+  (envío) y la lista de checkmarks quedaron igual, en los 4 idiomas.
+- **Las pestañas "Tarjeta"/"SINPE Móvil" seguían apareciendo con el carrito vacío**: el punto 16.3
+  las había ocultado solo en "modo real" (`cxForm.dataset.modoReal === '1'`), pero ese cálculo
+  nunca se evalúa mientras no hay ningún producto seleccionado — así que, al entrar a la página, el
+  recuadro de pago mostraba de entrada las pestañas + el formulario de tarjeta del mockup antiguo,
+  en vez del selector de moneda (US$/₡) que ya existe para elegir entre dólares y colones. James lo
+  confirmó con capturas y pidió eliminar esas pestañas del todo, dejando el selector de moneda en
+  su lugar. `setMethod()` se simplificó para ocultar siempre las pestañas y el formulario de
+  tarjeta/SINPE del propio sitio (ya no solo en modo real) — el selector de moneda (`cxCurrencyToggle`,
+  agregado el 2026-09-23) es independiente de esto y sigue funcionando exactamente igual, visible en
+  cuanto responde `/.netlify/functions/tipo-cambio` sin importar si hay productos en el carrito.
+
+**Verificación:** `node --check` limpio; el envío real a `crear-pago.js` sigue mandando
+`{items, email, moneda}` exactamente igual que antes — se confirmó con Playwright que el payload no
+cambia al elegir Colones ni al haber un producto en el carrito, y que las pestañas permanecen
+ocultas en todos los casos (carrito vacío, con producto, con moneda en colones).
+
 ## 17. Pendiente
 
 - Integración de pago real con ONVO Pay: **las renovaciones (punto 31) y todos los demás productos del carrito (punto 33), con las mejoras de claridad del punto 34, la corrección del flujo de regreso del punto 36, y las correcciones de folio/checkout/reporte de pago de los puntos 38 y 40, ya usan pago real en modo prueba, confirmado funcionando de punta a punta (ver punto 40).** Falta: (a) la siguiente fase, que marque automáticamente la ficha como renovada en S3 y active el bloqueo del visor público (`ver.js`) para fichas no pagadas; (b) cambiar de modo prueba a modo real (llaves `onvo_live_`) — **el usuario ya tiene las llaves de producción (2026-09-24, ver punto 63); falta que él mismo las coloque en las variables de entorno de Netlify**; (c) ~~actualizar o retirar la etiqueta "Mockup de checkout — solo demostración" del recuadro de pago~~ **hecho (punto 63, 2026-09-24)**; (d) ~~confirmar si el pago real por SINPE Móvil ya funciona o si la pestaña de esa opción debe ocultarse mientras tanto~~ **hecho (punto 68 y 71, 2026-09-24/26): SINPE Móvil ya está automatizado vía el Checkout hospedado de ONVO (habilitado en el panel de ONVO) — el mismo webhook confirma tarjeta y SINPE, y ambos ya se registran automáticamente en el Registro de Ingresos.**
