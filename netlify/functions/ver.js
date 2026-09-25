@@ -15,6 +15,7 @@
 //     del navegador.
 
 const { S3Client, GetObjectCommand } = require('@aws-sdk/client-s3');
+const { calcularEstado } = require('./lib/vigencia');
 
 const BUCKET_FICHAS = process.env.S3_BUCKET_FICHAS || 'vidavitalqr';
 
@@ -81,6 +82,12 @@ const TEXTOS = {
     ubicPreguntaTexto: '¿Autoriza compartir su ubicación exacta con los contactos de emergencia registrados en esta ficha? Si no autoriza, se les notificará igual, pero con una ubicación solo aproximada.',
     btnUbicSi: 'Sí, compartir ubicación exacta',
     btnUbicNo: 'No, usar solo aproximada',
+    // ---- 2026-09-25: aviso de ficha vencida (ver lib/vigencia.js). Solo se muestra en el
+    // período de gracia de 2 meses después del año de vigencia — la información esencial de
+    // emergencia (contactos y datos médicos) se sigue mostrando igual, para no arriesgar una
+    // emergencia real por falta de pago. Se oculta solo la fotografía y la ficha completa en PDF.
+    bannerVencida: '⚠️ Esta ficha está vencida. La información esencial de emergencia (contactos y datos médicos) se sigue mostrando, pero la foto y la ficha completa en PDF quedan ocultas hasta que el titular la renueve — y se eliminará por completo si no se renueva a tiempo.',
+    noEncontradoEliminada: 'Esta ficha ya no existe: se eliminó por falta de renovación.',
   },
   en: {
     tituloPersona: 'Emergency information',
@@ -111,6 +118,8 @@ const TEXTOS = {
     ubicPreguntaTexto: 'Do you authorize sharing your exact location with the emergency contacts registered on this record? If you do not authorize it, they will still be notified, but only with an approximate location.',
     btnUbicSi: 'Yes, share exact location',
     btnUbicNo: 'No, use approximate only',
+    bannerVencida: '⚠️ This record has expired. Essential emergency information (contacts and medical data) is still shown, but the photo and the full PDF record are hidden until the owner renews it — and it will be permanently deleted if not renewed in time.',
+    noEncontradoEliminada: 'This record no longer exists: it was deleted for lack of renewal.',
   },
   fr: {
     tituloPersona: "Informations d'urgence",
@@ -141,6 +150,8 @@ const TEXTOS = {
     ubicPreguntaTexto: "Autorisez-vous le partage de votre localisation exacte avec les contacts d'urgence enregistrés sur cette fiche ? Si vous ne l'autorisez pas, ils seront tout de même notifiés, mais avec une localisation seulement approximative.",
     btnUbicSi: 'Oui, partager la localisation exacte',
     btnUbicNo: 'Non, utiliser seulement l\'approximative',
+    bannerVencida: "⚠️ Cette fiche a expiré. Les informations d'urgence essentielles (contacts et données médicales) restent affichées, mais la photo et la fiche complète en PDF sont masquées jusqu'à ce que le titulaire la renouvelle — elle sera définitivement supprimée si elle n'est pas renouvelée à temps.",
+    noEncontradoEliminada: "Cette fiche n'existe plus : elle a été supprimée faute de renouvellement.",
   },
   pt: {
     tituloPersona: 'Informações de emergência',
@@ -171,6 +182,8 @@ const TEXTOS = {
     ubicPreguntaTexto: 'Você autoriza compartilhar sua localização exata com os contatos de emergência registrados nesta ficha? Se não autorizar, eles ainda serão notificados, mas com uma localização apenas aproximada.',
     btnUbicSi: 'Sim, compartilhar localização exata',
     btnUbicNo: 'Não, usar apenas a aproximada',
+    bannerVencida: '⚠️ Esta ficha está vencida. As informações essenciais de emergência (contatos e dados médicos) continuam sendo exibidas, mas a foto e a ficha completa em PDF ficam ocultas até que o titular a renove — e será excluída definitivamente se não for renovada a tempo.',
+    noEncontradoEliminada: 'Esta ficha não existe mais: foi excluída por falta de renovação.',
   },
 };
 
@@ -209,6 +222,15 @@ function paginaVisor(datos) {
   const dv = datos.datosVisor || {};
   const contactos = Array.isArray(datos.contactos) ? datos.contactos.filter((c) => c && (c.nombre || c.telefono)) : [];
 
+  // ---- 2026-09-25: estado de vigencia (ver lib/vigencia.js) — "datos.creado" es la fecha de
+  // inicio de la vigencia anual, copiada aquí por send-ficha.js. Si la ficha es de antes de este
+  // cambio (sin ese campo), se trata siempre como "vigente": nunca se oculta información por un
+  // dato que la ficha nunca llegó a tener. El caso "eliminada" ya se filtra antes, en
+  // exports.handler, así que aquí solo puede llegar 'vigente' o 'vencida'.
+  const estadoVigencia = calcularEstado(datos.creado);
+  const estaVencida = estadoVigencia === 'vencida';
+  const bannerVencidaHtml = estaVencida ? `<p class="bannerVencida" data-i18n="bannerVencida"></p>` : '';
+
   const filasExtra = esTipoMascota
     ? [
         ['especie', dv.especie],
@@ -244,7 +266,10 @@ function paginaVisor(datos) {
       }).join('')
     : `<p class="valor-libre" data-i18n="sinDatos"></p>`;
 
-  const fotoHtml = datos.fotoUrl
+  // Con la ficha vencida (período de gracia), la foto y el enlace al PDF completo se ocultan
+  // temporalmente — la información esencial de emergencia (contactos, datos médicos) se sigue
+  // mostrando igual, sin ocultar nada de eso. Ver bannerVencidaHtml arriba.
+  const fotoHtml = (datos.fotoUrl && !estaVencida)
     ? `<img class="foto" src="${escapeHtml(datos.fotoUrl)}" alt="${escapeHtml(datos.nombreCompleto || '')}">`
     : '';
 
@@ -266,6 +291,7 @@ function paginaVisor(datos) {
   .card h1{font-size:1.35rem;margin:0 0 4px;color:var(--teal-deep);}
   .subtitulo{color:var(--muted);font-size:0.92rem;margin:0 0 18px;}
   .foto{width:88px;height:88px;border-radius:50%;object-fit:cover;float:right;margin-left:14px;border:2px solid var(--line);overflow:hidden;background:var(--paper);color:transparent;font-size:0;}
+  .bannerVencida{background:#FBE8DE;border:1px solid var(--signal);color:#7A2E12;border-radius:10px;padding:10px 12px;font-size:0.85rem;font-weight:600;margin:0 0 14px;}
   .nombre-usuario{font-size:1.15rem;font-weight:700;margin:0 0 14px;}
   .dato{display:flex;gap:8px;padding:8px 0;border-top:1px solid var(--line);font-size:0.95rem;}
   .dato .etiqueta{color:var(--muted);min-width:130px;}
@@ -305,6 +331,7 @@ function paginaVisor(datos) {
     ${fotoHtml}
     <h1 data-i18n="${esTipoMascota ? 'tituloMascota' : (esTipoObjeto ? 'tituloObjeto' : 'tituloPersona')}"></h1>
     <p class="subtitulo" data-i18n="subtitulo"></p>
+    ${bannerVencidaHtml}
     <p class="nombre-usuario">${escapeHtml(datos.nombreCompleto || '')}</p>
     ${filasExtraHtml}
     ${paisHtml}
@@ -313,7 +340,7 @@ function paginaVisor(datos) {
       <h3 data-i18n="contactos"></h3>
       ${contactosHtml}
     </div>
-    ${datos.pdfUrl ? `<a class="btnPdf" id="btnPdf" href="${escapeHtml(datos.pdfUrl)}" target="_blank" rel="noopener" data-i18n="botonPdf"></a>` : ''}
+    ${(datos.pdfUrl && !estaVencida) ? `<a class="btnPdf" id="btnPdf" href="${escapeHtml(datos.pdfUrl)}" target="_blank" rel="noopener" data-i18n="botonPdf"></a>` : ''}
   </div>
   <div class="ubicPrompt" id="ubicPrompt">
     <p data-i18n="ubicPreguntaTexto"></p>
@@ -572,6 +599,16 @@ exports.handler = async (event) => {
     datos.folio = datos.folio || folio; // por si el JSON guardado no trae el folio explícito
   } catch (err) {
     return { statusCode: 404, headers, body: paginaError('No se encontró información para este código.') };
+  }
+
+  // ---- 2026-09-25: red de seguridad de vigencia — si ya pasaron los 2 meses de gracia pero la
+  // función programada diaria (revisar-vigencia.js) todavía no corrió hoy o falló al borrar esta
+  // ficha en particular, igual se deja de mostrar cualquier información aquí (nunca se sirve
+  // información de una ficha que ya debería estar eliminada, aunque el borrado real en S3 se
+  // haya atrasado). El borrado real de los datos lo hace siempre revisar-vigencia.js, nunca esta
+  // página (que solo lee). ----
+  if (calcularEstado(datos.creado) === 'eliminada') {
+    return { statusCode: 404, headers, body: paginaError('Esta ficha ya no existe: se eliminó por falta de renovación.') };
   }
 
   // El aviso a los contactos ya no se envía desde aquí: se dispara desde el navegador de quien

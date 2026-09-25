@@ -1,18 +1,39 @@
 // ---- onvo-webhook.js ----
-// Recibe los eventos que ONVO Pay envía cuando cambia el estado de una Checkout Session (por
-// ejemplo, cuando un pago de renovación se completa). Verifica que la petición venga realmente
-// de ONVO, confirma el pago consultando directamente a la API de ONVO (nunca confía ciegamente
-// en el contenido del webhook) y, si el pago quedó confirmado, avisa por correo al administrador.
+// Recibe los eventos que ONVO Pay envía cuando cambia el estado de un pago (tarjeta o SINPE
+// Móvil, ambos pasan por el mismo Checkout hospedado — ver crear-pago.js). Verifica que la
+// petición venga realmente de ONVO, avisa por correo al administrador cuando un pago queda
+// confirmado, y agrega ese pago como una fila nueva al Registro de Ingresos (ver lib/ingresos.js).
 //
-// Primera fase (2026-09-15): esta función SOLO confirma y notifica el pago — todavía no marca la
-// ficha como renovada en S3 ni cambia el bloqueo del visor público. Eso queda para la siguiente
-// fase, una vez confirmado que los pagos de prueba llegan correctamente hasta aquí.
+// Segunda fase (2026-09-26): a diferencia de la primera fase, esta función ya NO vuelve a
+// consultar la API de ONVO para confirmar el pago — el propio evento "payment-intent.succeeded"
+// ya trae todo lo necesario (monto, moneda, metadata, referencia). Ese cambio fue necesario
+// porque la consulta anterior (GET /checkout/sessions/{id}) fallaba con error 502: el ID que
+// llega en "payment-intent.succeeded" es el de un Payment Intent, no el de una Checkout Session
+// (son objetos distintos en la API de ONVO) — se confirmó revisando los logs del webhook en el
+// panel de ONVO (2026-09-26).
+//
+// "payment-intent.succeeded" es el ÚNICO evento que dispara el correo de aviso y el registro del
+// ingreso. "checkout-session.succeeded" se ignora a propósito (antes SÍ disparaba ambos, pero
+// ONVO manda los dos eventos para el mismo pago, así que hacerlo con los dos duplicaba el correo
+// y hubiera duplicado también la fila del Registro de Ingresos). "payment-intent.deferred" y
+// "mobile-transfer.received" (eventos propios del flujo de SINPE Móvil, según indicó soporte de
+// ONVO) se reconocen y se responden con 200 para que ONVO no los reintente, pero tampoco disparan
+// nada — son solo pasos intermedios antes de que llegue (o no) el "succeeded" definitivo.
+//
+// Sigue pendiente (ver bitácora): marcar cada ficha como renovada/pagada en S3 y activar el
+// bloqueo del visor público para fichas no pagadas (ver.js).
 //
 // Requiere dos variables de entorno en Netlify (Project configuration → Environment variables):
-//   - ONVO_SECRET_KEY: la misma llave secreta usada en crear-pago.js.
+//   - ONVO_SECRET_KEY: la misma llave secreta usada en crear-pago.js (se usa aquí solo para
+//     consultar el método de pago y determinar si fue tarjeta o SINPE — ya no para confirmar el
+//     pago en sí, que ahora se confía directamente al contenido de "payment-intent.succeeded").
 //   - ONVO_WEBHOOK_SECRET: el "Secreto de firma" que se ve en el panel de ONVO Pay, en
 //     Webhooks → (el endpoint de vidavitalqr.com) → Secreto de firma → Mostrar.
 // Ninguna de las dos debe escribirse en este archivo ni en ningún otro que se suba al repositorio.
+
+const { S3Client } = require('@aws-sdk/client-s3');
+const { GetObjectCommand } = require('@aws-sdk/client-s3');
+const { agregarIngreso } = require('./lib/ingresos');
 
 const ONVO_API_BASE = 'https://api.onvopay.com/v1';
 // ---- reporte de pagos confirmados: este aviso llega solo al administrador (nunca se muestra ni
@@ -21,7 +42,32 @@ const ONVO_API_BASE = 'https://api.onvopay.com/v1';
 const DESTINATARIO = 'roljamher@hotmail.com';
 const REMITENTE = 'VidaVitalQR <ficha@vidavitalqr.com>';
 
-const EVENTOS_DE_PAGO = ['checkout-session.succeeded', 'payment-intent.succeeded'];
+// ---- bucket/llave del Registro de Ingresos (mismo bucket privado que resumen.xlsx) ----
+const BUCKET_RESUMEN = process.env.S3_BUCKET_RESUMEN || 'resumen-vidavitalqr';
+const REGISTRO_INGRESOS_KEY = 'registro-ingresos.xlsx';
+
+function getS3Client() {
+  const region = process.env.S3_REGION || 'us-east-1';
+  const accessKeyId = process.env.S3_ACCESS_KEY_ID;
+  const secretAccessKey = process.env.S3_SECRET_ACCESS_KEY;
+  if (!accessKeyId || !secretAccessKey) {
+    throw new Error('Faltan configurar S3_ACCESS_KEY_ID / S3_SECRET_ACCESS_KEY en Netlify.');
+  }
+  return new S3Client({ region, credentials: { accessKeyId, secretAccessKey } });
+}
+
+function streamToString(stream) {
+  return new Promise((resolve, reject) => {
+    const chunks = [];
+    stream.on('data', (chunk) => chunks.push(chunk));
+    stream.on('error', reject);
+    stream.on('end', () => resolve(Buffer.concat(chunks).toString('utf-8')));
+  });
+}
+
+// ---- eventos que solo se reconocen (200 OK) sin disparar ninguna acción — pasos intermedios del
+// flujo de SINPE Móvil que ONVO puede enviar antes del "succeeded" definitivo ----
+const EVENTOS_INFORMATIVOS_SINPE = ['payment-intent.deferred', 'mobile-transfer.received'];
 
 // ---- etiquetas legibles de cada producto del catálogo (deben coincidir con PRECIOS en
 // crear-pago.js) -- se usan para que el aviso de pago al administrador muestre el nombre real del
@@ -84,50 +130,39 @@ exports.handler = async (event) => {
   }
 
   const tipoEvento = payload.type;
-  const sessionId = payload.data && payload.data.id;
+  const data = payload.data;
 
-  if (!sessionId) {
+  if (!data || !data.id) {
     return { statusCode: 200, body: 'ok (evento sin id, se ignora)' };
   }
-  if (EVENTOS_DE_PAGO.indexOf(tipoEvento) === -1) {
-    // otros eventos (fallidos, expirados, suscripciones, etc.) no nos interesan por ahora
+
+  if (EVENTOS_INFORMATIVOS_SINPE.indexOf(tipoEvento) !== -1) {
+    // pasos intermedios del flujo de SINPE Móvil (transferencia detectada, pago en proceso) —
+    // se reconocen para que ONVO no los reintente, pero no confirman nada todavía
+    console.log('onvo-webhook: evento informativo de SINPE recibido (', tipoEvento, ') — payment intent', data.id, '— se espera el "payment-intent.succeeded" definitivo.');
+    return { statusCode: 200, body: 'ok (evento informativo: ' + tipoEvento + ')' };
+  }
+
+  if (tipoEvento !== 'payment-intent.succeeded') {
+    // incluye "checkout-session.succeeded" (a propósito, ver nota arriba: se ignora para no
+    // duplicar el correo y la fila del Registro de Ingresos) y cualquier otro evento (fallidos,
+    // expirados, suscripciones, etc.) que no nos interese por ahora
     return { statusCode: 200, body: 'ok (evento ignorado: ' + tipoEvento + ')' };
   }
 
-  const secretKey = process.env.ONVO_SECRET_KEY;
-  if (!secretKey) {
-    console.error('onvo-webhook: falta la variable de entorno ONVO_SECRET_KEY en Netlify.');
-    return { statusCode: 500, body: 'Falta configuración.' };
+  if (data.status !== 'succeeded') {
+    console.log('onvo-webhook: payment intent', data.id, 'no viene con status "succeeded" (', data.status, ') — se ignora por seguridad.');
+    return { statusCode: 200, body: 'ok (status inesperado)' };
   }
 
-  // ---- 2) Confirmar el pago consultando directamente a ONVO (no confiar solo en el webhook) ----
-  let session;
-  try {
-    const resp = await fetch(ONVO_API_BASE + '/checkout/sessions/' + encodeURIComponent(sessionId), {
-      headers: { Authorization: 'Bearer ' + secretKey },
-    });
-    session = await resp.json().catch(() => null);
-    if (!resp.ok || !session) {
-      console.error('onvo-webhook: no se pudo confirmar la sesión', sessionId, '— status', resp.status);
-      return { statusCode: 502, body: 'No se pudo confirmar el pago.' };
-    }
-  } catch (err) {
-    console.error('onvo-webhook: error al consultar la sesión', sessionId, err);
-    return { statusCode: 502, body: 'Error al confirmar el pago.' };
-  }
-
-  if (session.paymentStatus !== 'paid') {
-    console.log('onvo-webhook: sesión', sessionId, 'todavía no está pagada (', session.paymentStatus, ') — se ignora por ahora.');
-    return { statusCode: 200, body: 'ok (no pagado aún)' };
-  }
-
-  const meta = session.metadata || {};
-  const modo = session.mode || 'desconocido';
+  const paymentIntentId = data.id;
+  const modo = data.mode || 'desconocido';
+  const meta = data.metadata || {};
 
   // ---- metadata.items es un JSON con [{item, folio, tipo, placaEstilo?}, ...] armado por
   // crear-pago.js (placaEstilo solo viene en "plate_personal" -- ver bitácora punto 39); si por
-  // algún motivo no viene (por ejemplo, sesiones creadas antes de este cambio), se cae de vuelta
-  // a los campos "folio"/"tipo" sueltos que usaba la primera fase ----
+  // algún motivo no viene (por ejemplo, pagos de antes de este cambio), se cae de vuelta a los
+  // campos "folio"/"tipo" sueltos que usaba la primera fase ----
   let items = [];
   try {
     if (meta.items) items = JSON.parse(meta.items);
@@ -136,6 +171,7 @@ exports.handler = async (event) => {
     items = [{ item: 'renewal', folio: meta.folio || '', tipo: meta.tipo || '' }];
   }
   const folios = meta.folios || items.filter((it) => it.folio).map((it) => it.folio).join(',');
+  const primerFolio = items.find((it) => it.folio) ? items.find((it) => it.folio).folio : '';
   // ---- costo de envío (agregado por crear-pago.js en metadata.envio cuando el carrito incluía
   // algún producto físico) — se reporta aparte en el correo para que quede claro que ese monto
   // adicional es el envío y no un producto más ----
@@ -143,7 +179,7 @@ exports.handler = async (event) => {
   // ---- pago en colones (agregado 2026-09-23, ver crear-pago.js): si el pedido se cobró en CRC,
   // meta.moneda/tipoCambioUsado/totalUSD lo indican, para que el aviso al administrador muestre
   // ambos montos y el tipo de cambio real que se usó en ese pedido específico ----
-  const moneda = meta.moneda === 'CRC' ? 'CRC' : 'USD';
+  const moneda = (data.currency || meta.moneda || 'USD').toUpperCase() === 'CRC' ? 'CRC' : 'USD';
   const tipoCambioUsado = meta.tipoCambioUsado ? parseFloat(meta.tipoCambioUsado) : null;
   const totalUSDReportado = meta.totalUSD ? parseFloat(meta.totalUSD) : null;
   // ---- equivalente informativo en colones (agregado 2026-09-23): cuando el pago fue en USD,
@@ -151,21 +187,120 @@ exports.handler = async (event) => {
   // solo para mostrarlo aquí como referencia — nunca es el monto realmente cobrado ----
   const totalCRCInformativo = meta.totalCRCInformativo ? parseFloat(meta.totalCRCInformativo) : null;
 
-  console.log('onvo-webhook: pago CONFIRMADO —', items.length, 'producto(s), folios:', folios || '(ninguno)', '— sesión', sessionId, '— modo', modo, '— moneda', moneda);
+  // ---- monto real cobrado: viene directo en el evento, en la unidad mínima de la moneda (ej.
+  // 367100 = ₡3,671.00) — se usa este valor (y no el reportado en metadata) para el Registro de
+  // Ingresos, porque es el que ONVO confirma que efectivamente se cobró ----
+  const montoBrutoReal = typeof data.amount === 'number' ? data.amount / 100 : null;
+  const refNumber = (data.charges && data.charges[0] && data.charges[0].refNumber) || '';
 
-  // ---- 3) Avisar por correo al administrador (mismo destinatario que ya recibe los demás avisos) ----
-  await avisarAdministrador({ items, folios, sessionId, modo, envio, moneda, tipoCambioUsado, totalUSDReportado, totalCRCInformativo });
+  console.log('onvo-webhook: pago CONFIRMADO —', items.length, 'producto(s), folios:', folios || '(ninguno)', '— payment intent', paymentIntentId, '— modo', modo, '— moneda', moneda, '— monto', montoBrutoReal);
 
-  // TODO (próxima fase, una vez confirmado que esto funciona en pruebas): marcar cada ficha
-  // (según folio/tipo en "items") como renovada/pagada en S3 (reiniciar su fecha "creado", igual
-  // que hace send-ficha.js cuando se envía con esRenovacionPago), y activar el bloqueo del visor
-  // público para fichas no pagadas (ver.js) — ambos pendientes según el punto 17 de la bitácora.
-  // Los productos físicos/digitales sin folio (placa, pulsera, cadena, Identificador QR, código
-  // QR solo digital) no requieren esa marca — su ficha se crea y envía por separado desde el
-  // formulario de ficha correspondiente.
+  // ---- 2) Avisar por correo al administrador (mismo destinatario que ya recibe los demás avisos) ----
+  await avisarAdministrador({ items, folios, sessionId: paymentIntentId, modo, envio, moneda, tipoCambioUsado, totalUSDReportado, totalCRCInformativo });
+
+  // ---- 3) Registrar el ingreso, solo para pagos reales (nunca los de prueba, para no ensuciar
+  // el Registro de Ingresos con cifras que no son dinero real) ----
+  if (modo === 'test') {
+    console.log('onvo-webhook: pago de PRUEBA — no se agrega al Registro de Ingresos.');
+  } else if (montoBrutoReal === null) {
+    console.error('onvo-webhook: el evento no trae "amount" — no se pudo registrar el ingreso de', paymentIntentId);
+  } else {
+    try {
+      const secretKey = process.env.ONVO_SECRET_KEY;
+      const medioPago = secretKey ? await medioDePago(data.paymentMethodId, secretKey) : 'Desconocido';
+      const cliente = await resolverNombreCliente(primerFolio) || (data.customer && data.customer.name) || '';
+      const s3 = getS3Client();
+      const resultado = await agregarIngreso(s3, BUCKET_RESUMEN, REGISTRO_INGRESOS_KEY, {
+        paymentIntentId,
+        fecha: new Date(),
+        folio: folios || primerFolio,
+        cliente,
+        medioPago,
+        moneda,
+        montoBruto: montoBrutoReal,
+        tipoCambio: tipoCambioUsado,
+        referencia: refNumber,
+        estado: 'Confirmado',
+      });
+      if (resultado.duplicado) {
+        console.log('onvo-webhook: el pago', paymentIntentId, 'ya estaba registrado en el Registro de Ingresos — se omite (reintento del webhook).');
+      } else {
+        console.log('onvo-webhook: ingreso agregado al Registro de Ingresos, fila', resultado.rowNumber);
+      }
+    } catch (err) {
+      // Un fallo aquí NUNCA debe impedir que el webhook responda 200 — el pago ya está
+      // confirmado y el correo ya se envió; si el Registro de Ingresos falla, se agrega a mano
+      // con los datos de este correo, y queda este log para diagnosticar el problema.
+      console.error('onvo-webhook: no se pudo agregar el ingreso al Registro de Ingresos —', err);
+    }
+  }
+
+  // TODO (próxima fase): marcar cada ficha (según folio/tipo en "items") como renovada/pagada en
+  // S3 (reiniciar su fecha "creado", igual que hace send-ficha.js cuando se envía con
+  // esRenovacionPago), y activar el bloqueo del visor público para fichas no pagadas (ver.js) —
+  // ambos pendientes según el punto 17 de la bitácora. Los productos físicos/digitales sin folio
+  // (placa, pulsera, cadena, Identificador QR, código QR solo digital) no requieren esa marca —
+  // su ficha se crea y envía por separado desde el formulario de ficha correspondiente.
 
   return { statusCode: 200, body: 'ok' };
 };
+
+// ---- consulta a ONVO qué tipo de método de pago se usó (tarjeta o SINPE Móvil) ----
+// Nunca lanza un error hacia arriba: si la consulta falla o el tipo no se reconoce, devuelve
+// "Desconocido" — nunca debe impedir que se registre el ingreso solo porque no se pudo saber el
+// medio de pago exacto.
+async function medioDePago(paymentMethodId, secretKey) {
+  if (!paymentMethodId) return 'Desconocido';
+  try {
+    const resp = await fetch(ONVO_API_BASE + '/payment-methods/' + encodeURIComponent(paymentMethodId), {
+      headers: { Authorization: 'Bearer ' + secretKey },
+    });
+    const pm = await resp.json().catch(() => null);
+    if (!resp.ok || !pm) return 'Desconocido';
+    if (pm.type === 'card') return 'Tarjeta';
+    if (pm.type === 'mobile_number') return 'SINPE Móvil';
+    return pm.type || 'Desconocido';
+  } catch (err) {
+    console.error('onvo-webhook: no se pudo consultar el método de pago', paymentMethodId, '—', err);
+    return 'Desconocido';
+  }
+}
+
+// ---- busca el nombre real del cliente en su ficha (login/<folio>.json), a partir del folio
+// asociado al pago. Devuelve '' si no hay folio o no se encuentra (por ejemplo, productos sin
+// ficha propia, como una placa o un código QR solo digital) ----
+function carpetaDesdeFolio(folio) {
+  const f = String(folio || '').toUpperCase();
+  if (f.startsWith('VVMASCOTA')) return 'mascotas';
+  if (f.startsWith('VVOBJETO')) return 'objetos';
+  return 'personas';
+}
+
+function nombreDesdeDatosFormulario(datosFormulario, carpeta) {
+  const df = datosFormulario || {};
+  if (carpeta === 'personas') return [df.nombres, df.apellidos].filter(Boolean).join(' ');
+  return df.nombres || '';
+}
+
+async function resolverNombreCliente(folio) {
+  if (!folio) return '';
+  const carpeta = carpetaDesdeFolio(folio);
+  try {
+    const s3 = getS3Client();
+    let texto;
+    try {
+      const resp = await s3.send(new GetObjectCommand({ Bucket: BUCKET_RESUMEN, Key: `${carpeta}/login/${folio}.json` }));
+      texto = await streamToString(resp.Body);
+    } catch (err) {
+      const resp = await s3.send(new GetObjectCommand({ Bucket: BUCKET_RESUMEN, Key: `login/${folio}.json` }));
+      texto = await streamToString(resp.Body);
+    }
+    const registro = JSON.parse(texto);
+    return nombreDesdeDatosFormulario(registro.datosFormulario, carpeta);
+  } catch (err) {
+    return ''; // no se encontró el registro — se deja en blanco, no es un error crítico
+  }
+}
 
 async function avisarAdministrador({ items, folios, sessionId, modo, envio, moneda, tipoCambioUsado, totalUSDReportado, totalCRCInformativo }) {
   const apiKey = process.env.RESEND_API_KEY;

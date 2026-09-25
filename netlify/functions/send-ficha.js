@@ -22,6 +22,7 @@ const { S3Client, PutObjectCommand, GetObjectCommand } = require('@aws-sdk/clien
 const { buildQrSvg } = require('./lib/qr-svg');
 const { actualizarResumenXlsx } = require('./lib/xlsx-resumen');
 const { generarPin, hashPin } = require('./lib/pin');
+const { fechaVencimiento } = require('./lib/vigencia');
 
 const DESTINATARIO = 'vidavitalqr@zohomail.com';
 const REMITENTE = 'VidaVitalQR <ficha@vidavitalqr.com>';
@@ -110,7 +111,7 @@ function carpetaTipo(tipo, folio) {
 // — nunca se cambia solo, para no dejar al usuario sin acceso. Si el registro es de una versión
 // anterior que solo guardaba el hash (sin el texto plano), se genera un PIN nuevo esta vez, para
 // que a partir de ahora también quede recuperable.
-async function cargarOCrearLogin(s3, folio, datosFormulario, carpeta, resetCreado) {
+async function cargarOCrearLogin(s3, folio, datosFormulario, carpeta, resetCreado, correoTitular) {
   const key = `${carpeta}/login/${folio}.json`;
   const keyLegacy = `login/${folio}.json`;
   let registro = null;
@@ -138,16 +139,47 @@ async function cargarOCrearLogin(s3, folio, datosFormulario, carpeta, resetCread
   // generar (o regenerar) un PIN y mostrárselo al usuario en el modal.
   const esNuevo = !registro || !registro.pin;
   const pin = esNuevo ? generarPin() : registro.pin;
+
+  // "creado" marca el inicio de la vigencia anual (12 meses). Se conserva tal cual en una
+  // actualización normal de datos; solo se reinicia a "ahora" cuando el envío viene marcado
+  // explícitamente como una renovación pagada (resetCreado === true) — así vuelve a contar
+  // los 12 meses desde ese pago.
+  const creadoFinal = resetCreado ? new Date().toISOString() : ((registro && registro.creado) ? registro.creado : new Date().toISOString());
+
+  // ---- 2026-09-25: "correoTitular" es el correo de la persona TITULAR de la ficha (quien la
+  // llena/paga), separado a propósito de los correos de los contactos de emergencia
+  // (emailcontacto1/2) — se agrega específicamente para poder enviarle los avisos de vigencia y
+  // vencimiento (ver revisar-vigencia.js) al dueño real de la ficha, y no solo a sus contactos de
+  // emergencia. Si en este envío no vino un valor (formulario viejo sin el campo, o se dejó en
+  // blanco), se conserva el que ya tuviera guardado de antes; nunca se borra un valor ya
+  // guardado por dejarlo vacío sin querer.
+  const correoTitularFinal = (correoTitular && String(correoTitular).trim())
+    ? String(correoTitular).trim()
+    : ((registro && registro.correoTitular) || '');
+
+  // ---- 2026-09-25: banderas de qué avisos de la cronología de vigencia ya se enviaron, para que
+  // revisar-vigencia.js (función programada diaria) no repita un correo ya enviado. Se reinician
+  // todas a "no enviado" cuando arranca de cero el conteo de los 12 meses (ficha nueva, o
+  // renovación pagada que reinicia "creado") — así la cronología de avisos vuelve a contar desde
+  // el principio junto con la nueva vigencia.
+  const avisosPrevios = (registro && registro.vigencia && registro.vigencia.avisos) || {};
+  const reiniciarAvisos = resetCreado || !registro;
+  const avisos = {
+    aviso30: reiniciarAvisos ? false : !!avisosPrevios.aviso30,
+    aviso7: reiniciarAvisos ? false : !!avisosPrevios.aviso7,
+    avisoVencida: reiniciarAvisos ? false : !!avisosPrevios.avisoVencida,
+    avisoGracia30: reiniciarAvisos ? false : !!avisosPrevios.avisoGracia30,
+    avisoFinal55: reiniciarAvisos ? false : !!avisosPrevios.avisoFinal55,
+  };
+
   const nuevoRegistro = {
     folio,
     pin,
     pinHash: esNuevo ? hashPin(pin) : registro.pinHash,
     datosFormulario: datosFormulario && typeof datosFormulario === 'object' ? datosFormulario : {},
-    // "creado" marca el inicio de la vigencia anual (12 meses). Se conserva tal cual en una
-    // actualización normal de datos; solo se reinicia a "ahora" cuando el envío viene marcado
-    // explícitamente como una renovación pagada (resetCreado === true) — así vuelve a contar
-    // los 12 meses desde ese pago.
-    creado: resetCreado ? new Date().toISOString() : ((registro && registro.creado) ? registro.creado : new Date().toISOString()),
+    correoTitular: correoTitularFinal,
+    creado: creadoFinal,
+    vigencia: { avisos },
     actualizado: new Date().toISOString(),
   };
 
@@ -161,7 +193,7 @@ async function cargarOCrearLogin(s3, folio, datosFormulario, carpeta, resetCread
   // "pin" siempre viene relleno (con el PIN actual, nuevo o ya existente) — se usa tanto para
   // mostrarlo en el modal (solo cuando esNuevo) como para registrarlo en la columna "PIN" de
   // resumen.xlsx (siempre, para que James pueda recuperarlo si el usuario escribe por WhatsApp).
-  return { esNuevo, pin };
+  return { esNuevo, pin, creado: creadoFinal };
 }
 
 // ---- envía el código de acceso (folio + PIN) por correo a TODOS los contactos de emergencia
@@ -272,7 +304,7 @@ async function enviarCodigoPorCorreo(contactos, { folio, pin, nombreCompleto, ti
   return { intentados: correos.length, fallidos };
 }
 
-async function subirABuckets(s3, region, { folio, filename, pdfBase64, fotoBase64, tarjetaBase64, placaEstilo, nombreCompleto, tipo, contactos, datosVisor, idioma }) {
+async function subirABuckets(s3, region, { folio, filename, pdfBase64, fotoBase64, tarjetaBase64, placaEstilo, nombreCompleto, tipo, contactos, datosVisor, idioma, creado }) {
   const region_ = region;
   const carpeta = carpetaTipo(tipo, folio);
 
@@ -356,6 +388,13 @@ async function subirABuckets(s3, region, { folio, filename, pdfBase64, fotoBase6
       // idioma elegido al llenar/renovar la ficha (ES/EN/FR/PT) — lo lee avisar-escaneo.js para
       // enviar el aviso de escaneo en el mismo idioma que usó quien registró la ficha
       idioma: idioma || 'es',
+      // "creado" (inicio de la vigencia anual) y "fechaVencimiento" (creado + 12 meses), copiados
+      // aquí del registro privado de login — 2026-09-25, para que ver.js (la página pública que
+      // abre el código QR) pueda decidir si la ficha sigue vigente sin tener que leer el bucket
+      // privado de resumen. Nunca se guarda aquí el correo del titular ni ningún otro dato
+      // privado — solo lo que ver.js necesita para calcular el estado de vigencia.
+      creado: creado || null,
+      fechaVencimiento: creado ? fechaVencimiento(creado).toISOString() : null,
       actualizado: new Date().toISOString(),
     }), 'utf-8'),
     ContentType: 'application/json',
@@ -438,7 +477,7 @@ exports.handler = async (event) => {
     return { statusCode: 400, headers, body: JSON.stringify({ error: 'JSON inválido.' }) };
   }
 
-  const { folio, filename, pdfBase64, nombreCompleto, tipo, fotoBase64, tarjetaBase64, placaEstilo, contactos, datosVisor, datosFormulario, esRenovacionPago } = payload;
+  const { folio, filename, pdfBase64, nombreCompleto, tipo, fotoBase64, tarjetaBase64, placaEstilo, contactos, datosVisor, datosFormulario, esRenovacionPago, correoTitular } = payload;
   // ---- idioma elegido por quien llenó la ficha (ES/EN/FR/PT) — se guarda junto con la ficha
   // para que los correos automáticos que lleguen después (código de acceso aquí mismo, y el
   // aviso de escaneo en avisar-escaneo.js) puedan enviarse en ese mismo idioma. Solo se aceptan
@@ -465,15 +504,16 @@ exports.handler = async (event) => {
   try {
     const region = process.env.S3_REGION || 'us-east-1';
     const s3 = getS3Client();
-    const subido = await subirABuckets(s3, region, { folio, filename, pdfBase64, fotoBase64, tarjetaBase64, placaEstilo, nombreCompleto, tipo, contactos, datosVisor, idioma });
-    pdfUrl = subido.pdfUrl; fotoUrl = subido.fotoUrl; qrUrl = subido.qrUrl; qrSvg = subido.qrSvg; tarjetaUrl = subido.tarjetaUrl;
 
-    // El login (y su PIN) se resuelve ANTES de escribir el resumen, para poder incluir el PIN
-    // vigente en la columna "PIN" de resumen.xlsx en el mismo guardado.
+    // El login (PIN + fecha "creado" de vigencia) se resuelve PRIMERO — antes de subir a los
+    // buckets — para poder incluir "creado"/"fechaVencimiento" en el JSON público que lee ver.js,
+    // y el PIN vigente en la columna "PIN" de resumen.xlsx, todo en el mismo guardado.
     let pinActual = '';
+    let creadoActual = null;
     if (folio) {
-      const login = await cargarOCrearLogin(s3, folio, datosFormulario, carpeta, esRenovacionPago === true);
+      const login = await cargarOCrearLogin(s3, folio, datosFormulario, carpeta, esRenovacionPago === true, correoTitular);
       pinActual = login.pin || '';
+      creadoActual = login.creado || null;
       if (login.esNuevo) pinNuevo = login.pin;
       // se envía en cada guardado (ficha nueva o actualización), no solo cuando el PIN es nuevo,
       // para que los contactos de emergencia siempre tengan a la mano el folio y el PIN vigentes
@@ -483,6 +523,9 @@ exports.handler = async (event) => {
         codigoCorreoFallidos = resultadoCodigo.fallidos;
       }
     }
+
+    const subido = await subirABuckets(s3, region, { folio, filename, pdfBase64, fotoBase64, tarjetaBase64, placaEstilo, nombreCompleto, tipo, contactos, datosVisor, idioma, creado: creadoActual });
+    pdfUrl = subido.pdfUrl; fotoUrl = subido.fotoUrl; qrUrl = subido.qrUrl; qrSvg = subido.qrSvg; tarjetaUrl = subido.tarjetaUrl;
 
     // resumen.xlsx separado por tipo (personas/resumen.xlsx y mascotas/resumen.xlsx), para
     // poder revisarlos por separado. El resumen.xlsx combinado que ya existía en la raíz del
@@ -500,6 +543,9 @@ exports.handler = async (event) => {
       // tanto, el estilo elegido igual queda visible en el correo de notificación y en
       // personas/datos/<folio>.json.
       placaEstiloTexto: placaEstilo ? etiquetaPlacaEstilo(placaEstilo) : '',
+      // fecha de inicio de la vigencia anual (campo "creado" del login) — 2026-09-25, para las
+      // nuevas columnas "Estado" y "Fecha de vencimiento" del cuadro resumen (ver xlsx-resumen.js)
+      creadoVigencia: creadoActual ? new Date(creadoActual) : null,
     });
   } catch (err) {
     // No bloqueamos el envío del correo si falla la parte de S3 — se reporta en la respuesta
