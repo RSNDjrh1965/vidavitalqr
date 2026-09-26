@@ -976,6 +976,36 @@ Dos ajustes más al mismo bloque, tras revisar el punto 16.3 en producción:
 cambia al elegir Colones ni al haber un producto en el carrito, y que las pestañas permanecen
 ocultas en todos los casos (carrito vacío, con producto, con moneda en colones).
 
+## 16.5. Nuevo sonido de marca "Vidavitalllll" en el procesamiento de fichas (2026-09-26)
+
+James pidió reemplazar el sonido de "campanita" que suena mientras se procesa el envío de una
+ficha (`ficha.html`, `ficha-mascota.html`, `ficha-objeto.html`) por una melodía propia diseñada en
+conjunto con él a lo largo de varias iteraciones escuchadas directamente (variantes A-K más una
+versión final), llegando a: cuatro notas con timbre de piano (armónicos con distinto decaimiento
+por armónico + un pequeño "golpe" percusivo de ruido filtrado al inicio de cada nota, simulando el
+martillo), siguiendo el ritmo silábico "Vi-da-vi-taaaal" (tres notas cortas + una sostenida), sin
+la parte de "QR" que se probó y se descartó. Todo generado por código con Web Audio API (osciladores),
+sin ningún archivo de audio externo ni de terceros.
+
+**Cambio de comportamiento importante:** el sonido ya NO se repite con un intervalo de tiempo fijo
+(antes cada 6s, sin relación con lo que realmente pasaba). Ahora suena exactamente **una vez por
+cada idioma que se procesa durante el envío** — una vez al guardar la ficha en el idioma original, y
+una vez más por cada uno de los otros 3 idiomas en los que se genera el PDF automáticamente
+(`generarYSubirPdfsOtrosIdiomas`), para un total de 4 veces por envío, tal como pidió James.
+
+**Sincronización con el tiempo real de proceso:** para que la melodía (~2.2s) nunca quede cortada ni
+se empalme con la del siguiente idioma, cada iteración del ciclo de "otros idiomas" ahora espera lo
+que haga falta hasta completar esos 2.2 segundos antes de continuar con el siguiente idioma — pero
+solo si el procesamiento real (generar+subir el PDF) fue más rápido que la melodía; si ya tomó más
+tiempo por sí solo, no se agrega ninguna espera extra.
+
+**Verificación:** `node --check` limpio en los 3 archivos; con Playwright, contando la creación real
+de osciladores de audio, se confirmó que un sonido = 20 osciladores (5 armónicos × 4 notas) y que un
+envío completo dispara exactamente 80 (4 sonidos); se confirmó que el idioma se restaura al original
+al terminar; y se probaron dos escenarios de tiempos (procesamiento rápido y procesamiento ya más
+lento que la melodía) confirmando que el mínimo de 2.2s por idioma se respeta sin agregar espera de
+más cuando no hace falta.
+
 ## 17. Pendiente
 
 - Integración de pago real con ONVO Pay: **las renovaciones (punto 31) y todos los demás productos del carrito (punto 33), con las mejoras de claridad del punto 34, la corrección del flujo de regreso del punto 36, y las correcciones de folio/checkout/reporte de pago de los puntos 38 y 40, ya usan pago real en modo prueba, confirmado funcionando de punta a punta (ver punto 40).** Falta: (a) la siguiente fase, que marque automáticamente la ficha como renovada en S3 y active el bloqueo del visor público (`ver.js`) para fichas no pagadas; (b) cambiar de modo prueba a modo real (llaves `onvo_live_`) — **el usuario ya tiene las llaves de producción (2026-09-24, ver punto 63); falta que él mismo las coloque en las variables de entorno de Netlify**; (c) ~~actualizar o retirar la etiqueta "Mockup de checkout — solo demostración" del recuadro de pago~~ **hecho (punto 63, 2026-09-24)**; (d) ~~confirmar si el pago real por SINPE Móvil ya funciona o si la pestaña de esa opción debe ocultarse mientras tanto~~ **hecho (punto 68 y 71, 2026-09-24/26): SINPE Móvil ya está automatizado vía el Checkout hospedado de ONVO (habilitado en el panel de ONVO) — el mismo webhook confirma tarjeta y SINPE, y ambos ya se registran automáticamente en el Registro de Ingresos.**

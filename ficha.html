@@ -1702,9 +1702,18 @@ async function generatePdfBlob(){
 async function generarYSubirPdfsOtrosIdiomas(folio){
   const idiomaOriginal = LANG_FICHA;
   const otros = ['es','en','fr','pt'].filter(l => l !== idiomaOriginal);
+  // duración total de la melodía "Vidavitalllll" (Vi-da-vi-taaal): la última nota empieza a los
+  // 0.50s, dura 1.50s, más 0.05s de cola -- se redondea hacia arriba con margen a 2200ms para
+  // garantizar que nunca quede a medio sonar antes de pasar al siguiente idioma.
+  const DURACION_SONIDO_MARCA_MS = 2200;
+
   for (const lang of otros) {
+    const inicioProcesoIdioma = Date.now();
     try {
       aplicarIdiomaFicha(lang);
+      // sonido de marca: una vez por cada idioma adicional que se procesa aquí (a petición de
+      // James, 2026-09-26), para que se escuche una vez por cada uno de los 4 idiomas en total
+      if (window.sonarSonidoMarca) window.sonarSonidoMarca();
       // pequeña pausa para que el navegador termine de repintar el formulario en el nuevo
       // idioma antes de tomar la captura — sin esto, html2canvas puede alcanzar a capturar
       // texto todavía a medio traducir.
@@ -1718,6 +1727,16 @@ async function generarYSubirPdfsOtrosIdiomas(folio){
       });
     } catch (errIdioma) {
       console.error('No se pudo generar/subir el PDF en idioma "' + lang + '" (no crítico, se omite):', errIdioma);
+    }
+    // ---- si procesar este idioma (generar+subir el PDF) tomó menos tiempo que la melodía, se
+    // espera lo que falte antes de seguir con el siguiente idioma -- así el sonido de marca
+    // siempre suena completo, sin cortarse ni empalmarse con el del idioma siguiente (a petición
+    // de James, 2026-09-26). Si ya tomó más tiempo que la melodía, no se agrega ninguna espera
+    // extra. ----
+    const transcurridoIdioma = Date.now() - inicioProcesoIdioma;
+    const faltanteIdioma = DURACION_SONIDO_MARCA_MS - transcurridoIdioma;
+    if (faltanteIdioma > 0) {
+      await new Promise(r => setTimeout(r, faltanteIdioma));
     }
   }
   aplicarIdiomaFicha(idiomaOriginal);
@@ -2011,46 +2030,85 @@ function emailValido(str){
 (function () {
   var CtxProc = window.AudioContext || window.webkitAudioContext;
   var ctxProc = null;
-  var intervaloSonidoProcesando = null;
 
-  function tonoProcesando(freq, inicio, duracion, pico) {
+  // ---- tono estilo "piano": varios armonicos, cada uno con su propio decaimiento (los agudos se
+  // apagan mas rapido que el fundamental, igual que en un piano real), mas un pequeno "golpe" de
+  // ruido muy breve al inicio de cada nota que simula el martillo. Aprobado por James el
+  // 2026-09-26 junto con la melodia "Vidavitalllll" (Vi-da-vi-taaal) como sonido de marca. ----
+  function notaPiano(freq, inicio, duracion, pico) {
     if (!ctxProc) return;
     var now = ctxProc.currentTime;
-    var osc = ctxProc.createOscillator();
-    var gain = ctxProc.createGain();
-    osc.type = 'sine';
-    osc.frequency.value = freq;
-    gain.gain.setValueAtTime(0, now + inicio);
-    gain.gain.linearRampToValueAtTime(pico, now + inicio + 0.015);
-    gain.gain.exponentialRampToValueAtTime(0.001, now + inicio + duracion);
-    osc.connect(gain).connect(ctxProc.destination);
-    osc.start(now + inicio);
-    osc.stop(now + inicio + duracion + 0.05);
+    var armonicos = [
+      { mult: 1, amp: 1.00, decayMult: 1.4 },
+      { mult: 2, amp: 0.55, decayMult: 2.2 },
+      { mult: 3, amp: 0.30, decayMult: 3.2 },
+      { mult: 4, amp: 0.18, decayMult: 4.5 },
+      { mult: 5, amp: 0.10, decayMult: 6.0 },
+    ];
+    armonicos.forEach(function (h) {
+      var osc = ctxProc.createOscillator();
+      var gain = ctxProc.createGain();
+      osc.type = 'sine';
+      osc.frequency.value = freq * h.mult;
+      var picoArmonico = Math.max(pico * h.amp, 0.0001);
+      gain.gain.setValueAtTime(0.0001, now + inicio);
+      gain.gain.exponentialRampToValueAtTime(picoArmonico, now + inicio + 0.012);
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + inicio + duracion);
+      osc.connect(gain).connect(ctxProc.destination);
+      osc.start(now + inicio);
+      osc.stop(now + inicio + duracion + 0.05);
+    });
+    // golpe percusivo muy breve (ruido filtrado) que simula el martillo del piano -- es solo un
+    // detalle de textura, si falla el tono principal sigue sonando igual
+    try {
+      var hammerDur = 0.012;
+      var bufferSize = Math.max(1, Math.floor(ctxProc.sampleRate * hammerDur));
+      var buffer = ctxProc.createBuffer(1, bufferSize, ctxProc.sampleRate);
+      var data = buffer.getChannelData(0);
+      for (var i = 0; i < bufferSize; i++) {
+        data[i] = (Math.random() * 2 - 1) * Math.exp(-8 * i / bufferSize);
+      }
+      var noiseSrc = ctxProc.createBufferSource();
+      noiseSrc.buffer = buffer;
+      var noiseGain = ctxProc.createGain();
+      noiseGain.gain.value = pico * 0.22;
+      noiseSrc.connect(noiseGain).connect(ctxProc.destination);
+      noiseSrc.start(now + inicio);
+    } catch (eHammer) {}
   }
 
-  function sonarCampanitaProcesando() {
-    tonoProcesando(523.25, 0, 1.8, 0.18);
-    tonoProcesando(659.25, 0.1, 1.7, 0.14);
-    tonoProcesando(783.99, 0.22, 1.6, 0.16);
-    tonoProcesando(1046.5, 0.38, 1.3, 0.09);
+  // "Vidavitalllll" -- Vi-da-vi-taaaal (4 notas, la ultima sostenida), aprobado por James el
+  // 2026-09-26 como sonido de marca definitivo. Ya NO se repite con un intervalo de tiempo
+  // arbitrario: se reproduce UNA VEZ por cada idioma que se procesa durante el envio -- una vez
+  // al guardar la ficha en el idioma original (ver mas abajo, al iniciar el envio) y una vez mas
+  // por cada uno de los otros 3 idiomas en los que se genera el PDF automaticamente (ver
+  // generarYSubirPdfsOtrosIdiomas), para un total de 4 veces.
+  function sonarSonidoMarca() {
+    notaPiano(523.25, 0.00, 0.35, 0.55); // Vi     - C5
+    notaPiano(587.33, 0.16, 0.35, 0.50); // da     - D5
+    notaPiano(659.25, 0.32, 0.35, 0.55); // vi     - E5
+    notaPiano(783.99, 0.50, 1.50, 0.60); // taaaal - G5 (sostenida)
   }
 
   window.iniciarSonidoProcesando = function () {
-    if (!CtxProc || intervaloSonidoProcesando) return;
+    if (!CtxProc) return;
     try {
       if (!ctxProc) ctxProc = new CtxProc();
       if (ctxProc.state === 'suspended') { ctxProc.resume().catch(function () {}); }
-      sonarCampanitaProcesando();
-      // se repite cada 6s mientras dure el procesamiento -- se detiene con detenerSonidoProcesando()
-      intervaloSonidoProcesando = setInterval(sonarCampanitaProcesando, 6000);
+      sonarSonidoMarca();
     } catch (e) { /* si el navegador bloquea el audio, seguimos sin sonido, sin afectar el envío */ }
   };
 
-  window.detenerSonidoProcesando = function () {
-    if (intervaloSonidoProcesando) {
-      clearInterval(intervaloSonidoProcesando);
-      intervaloSonidoProcesando = null;
-    }
+  // ya no hay ningun intervalo que detener (el sonido ahora suena una vez por idioma procesado,
+  // no de forma continua) -- se deja como funcion vacia para no romper las llamadas ya existentes
+  // en el resto del archivo.
+  window.detenerSonidoProcesando = function () {};
+
+  // alias explicito: llamarlo una vez cada vez que se procesa un idioma adicional (ver
+  // generarYSubirPdfsOtrosIdiomas)
+  window.sonarSonidoMarca = function () {
+    if (!ctxProc) return;
+    try { sonarSonidoMarca(); } catch (e) {}
   };
 })();
 
