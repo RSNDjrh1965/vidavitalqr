@@ -17,3 +17,13 @@
 # documento "Política de vigencia y eliminación de fichas" del Proyecto ADJDATA. ----
 [functions."revisar-vigencia"]
   schedule = "0 13 * * *"
+
+# ---- Rewrite (no redirect: status 200) para acortar la URL pública que se codifica en el QR
+# grabado en las placas físicas. El QR llevaba ".netlify/functions/ver?folio=XXXX" (55+ caracteres),
+# lo que producía un QR demasiado denso para escanear de forma confiable en placas metálicas
+# pequeñas (16-20mm). Con esta regla, "/v/XXXX" sirve exactamente la misma función `ver.js` sin
+# cambiar en nada su lógica interna. ----
+[[redirects]]
+  from = "/v/*"
+  to = "/.netlify/functions/ver?folio=:splat"
+  status = 200

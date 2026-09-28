@@ -1057,6 +1057,154 @@ ZIP anterior confirma que `index.html` es el único archivo modificado; con Play
 el texto nuevo (`cxP4`) se traduce correctamente al cambiar entre los 4 idiomas del selector, sin
 errores de JavaScript.
 
+## 16.8. Código QR menos denso: URL corta vía rewrite de Netlify + nivel de corrección "M" (2026-09-28)
+
+**Contexto:** James reportó que los códigos QR grabados en las placas metálicas pequeñas (16-20mm)
+resultaban demasiado densos para escanear de forma confiable. La causa raíz: el QR codificaba la URL
+larga `https://vidavitalqr.com/.netlify/functions/ver?folio=XXXX` (69 caracteres con un folio típico)
+con nivel de corrección de errores `'H'` (el más alto, pensado originalmente para poder tapar el
+centro del QR con el texto "VIDAVITALQR"), lo que generaba una matriz de 49×49 módulos — demasiado
+fina para una placa tan pequeña.
+
+**Cambios (aprobados por James):**
+1. **`netlify.toml`** — se agregó una regla `[[redirects]]` de tipo *rewrite* (`status = 200`, no
+   redirección real) que mapea `/v/*` → `/.netlify/functions/ver?folio=:splat`. La función `ver.js`
+   (y su lógica de resolución de folio para personas/mascotas/objetos) queda intacta; solo cambia la
+   URL pública por la que se accede a ella. Se verificó que la sección `[build]` y los dos bloques
+   `[functions."..."]` existentes (con sus `schedule`) no se tocaron.
+2. **`netlify/functions/send-ficha.js`** (función `urlDelVisor`, antes línea 68) — ahora construye
+   `${SITE_URL}/v/${encodeURIComponent(folio)}` en vez de la ruta larga. Es la URL que se codifica en
+   el QR del PDF/SVG enviado por correo y usado para grabar las placas.
+3. **`ficha.html`** (función `generateTarjetaBlob`, antes línea 1751) — la "tarjeta Identificador QR"
+   que se genera en el navegador (solo para fichas de personas) usaba la misma URL larga hardcodeada;
+   se actualizó al mismo patrón corto `https://vidavitalqr.com/v/` + folio, y se corrigió el
+   comentario que la describía. Se revisó `ficha-mascota.html` y `ficha-objeto.html`: ninguna de las
+   dos genera su propio QR (esa tarjeta es exclusiva del formulario de personas), así que no
+   necesitaban cambios.
+4. **`netlify/functions/lib/qr-svg.js`** — se bajó `errorCorrectionLevel` de `'H'` a `'M'` en la
+   generación del QR del lado servidor (el que se envía por correo/PDF y se usa para grabar las
+   placas). El QR de la "tarjeta" en `ficha.html` ya usaba `'M'` desde antes, así que quedó igual.
+
+**Medición del efecto (con el mismo paquete `qrcode` usado en producción, folio de ejemplo
+`VVITALQR00000042`):**
+- Antes: URL larga (69 caracteres) + nivel `H` → matriz de **49×49 módulos**.
+- Después: URL corta (42 caracteres) + nivel `M` → matriz de **29×29 módulos**.
+- Esto reduce los módulos por lado en un ~41% (de 49 a 29), es decir cada módulo del QR resulta
+  considerablemente más grande a un tamaño físico de placa fijo — la mejora que se buscaba.
+
+**Verificación:**
+- Se respaldaron los 4 archivos modificados antes de editar
+  (`/home/claude/adjdata/backups_qr_corto/`).
+- `node --check` limpio en los 2 bloques `<script>` con contenido de `ficha.html` (los otros 2
+  bloques del archivo están vacíos/son referencias externas).
+- `netlify.toml` se verificó como TOML válido (se parseó con un parser TOML real) y su estructura
+  coincide exactamente con lo esperado: los bloques `[build]` y `[functions."..."]` intactos, más la
+  nueva regla `[[redirects]]`.
+- `diff -rq` (excluyendo `node_modules`) contra el último ZIP entregado
+  (`vidavitalqr_completo_20260928_notasinpe.zip`) confirma que los únicos archivos que cambiaron son
+  exactamente los 4 esperados: `netlify.toml`, `netlify/functions/send-ficha.js`,
+  `netlify/functions/lib/qr-svg.js` y `ficha.html`.
+- Se corrió la prueba Playwright existente de carrito/checkout (`scratch/test_carrito_checkout.js`)
+  contra `python3 -m http.server`, sin errores nuevos relacionados con el carrito o el checkout (los
+  únicos mensajes de consola son fallos de recursos externos propios del entorno de pruebas, ya
+  presentes antes de este cambio).
+- No se modificó en absoluto la lógica interna de `ver.js` que resuelve un folio a los datos de la
+  ficha, tal como se pidió.
+
+## 16.9. Corrección urgente: el cambio a nivel "M" del punto 16.8 dejaba el QR sin poder escanearse (2026-09-28)
+
+**Contexto:** James probó los archivos de prueba para grabado láser generados a partir del cambio del
+punto 16.8 y reportó que el código QR ya no podía escanearse en absoluto, incluso con el margen de
+silencio (quiet zone) correcto. Se verificó de forma objetiva con un decodificador real (librería
+`zbar`/`pyzbar`, no solo inspección visual) sobre el SVG generado exactamente por `qr-svg.js` sin
+ninguna edición adicional: **el QR con nivel `'M'` y el bloque central "VIDAVITALQR" superpuesto no
+decodifica (0 resultados)**. Al quitar únicamente el bloque central de la prueba, el mismo QR sí
+decodifica correctamente — confirmando que la causa es la combinación de ambos cambios: el nivel `'M'`
+(~15% de redundancia) no alcanza para tolerar el bloque central que tapa parte de los módulos, algo
+para lo que el nivel `'H'` (~30% de redundancia) sí estaba pensado originalmente.
+
+**Corrección:** en `netlify/functions/lib/qr-svg.js` se revirtió `errorCorrectionLevel` de `'M'` de
+vuelta a `'H'`. La URL corta (`/v/` + folio) del punto 16.8 se mantiene — sigue reduciendo bastante la
+densidad frente al esquema original (URL larga + nivel H). El QR de la "tarjeta" en `ficha.html`
+(`generateTarjetaBlob`) no se toca: no dibuja ningún bloque central sobre el QR, así que el nivel `'M'`
+ahí nunca fue un problema y no corría este riesgo.
+
+**Medición actualizada (mismo folio de ejemplo):**
+- URL larga + nivel `H` (esquema original): 49×49 módulos.
+- URL corta + nivel `M` (punto 16.8, defectuoso — no escaneaba con el bloque central): 29×29 módulos.
+- URL corta + nivel `H` (corregido, este punto): **37×37 módulos** — sigue siendo ~24% menos módulos
+  por lado que el esquema original (49→37), manteniendo el beneficio de la URL corta sin sacrificar la
+  capacidad de recuperación de errores que necesita el bloque central.
+
+**Verificación:**
+- Se respaldó `qr-svg.js` antes de editar (`qr-svg.js.bak_20260928204302`).
+- `node --check` limpio.
+- Se decodificó programáticamente (zbar/pyzbar) el SVG generado por la función ya corregida,
+  confirmando que decodifica a `https://vidavitalqr.com/v/VVITALQR00000118` correctamente.
+- Se regeneraron y decodificaron individualmente los 5 archivos de prueba para grabado láser (uno por
+  cada tamaño de placa de James), los 5 decodifican correctamente al tamaño real de cada placa.
+- **Este cambio no había llegado a producción** (el punto 16.8 seguía en la lista de "pendiente de
+  subir" de la sección 17), por lo que ningún correo real enviado a un cliente llevaba el QR
+  defectuoso — el problema solo se manifestó en los archivos de prueba para el láser.
+
+## 16.10. Generación automática, por cada ficha, del QR ya ajustado al tamaño de la placa elegida — subido directo a S3 (2026-09-28)
+
+**Contexto:** James señaló que le resultaba complicado tener que pedir, cada vez que un cliente
+compra una placa, que se le genere y ajuste a mano el archivo SVG del QR al tamaño físico exacto de
+esa placa (como se hizo hoy con los 5 archivos de prueba). Pidió que el sistema guarde
+automáticamente en S3, para cada ficha nueva, una versión del QR ya en el tamaño correcto según la
+placa que el cliente compró, para poder tomarla directamente de ahí sin depender de una sesión de
+Claude cada vez.
+
+**Cambios:**
+1. **`netlify/functions/lib/qr-svg.js`** — nueva función `buildQrSvgParaPlaca(targetUrl, placaEstilo)`:
+   - Genera el mismo QR (nivel `'H'`, igual que `buildQrSvg`), pero recortado en cuadrado exacto
+     (sin el espacio del folio debajo, que aquí no hace falta) y con `width`/`height` ya en
+     milímetros, según una tabla `MEDIDA_QR_MM_POR_PLACA` (clasica→18mm, llavero→20mm, ranuras→22mm,
+     dije→30mm — las mismas medidas que se acordaron hoy con James para cada una de las 4 placas
+     rectangulares de su catálogo).
+   - El texto "VIDAVITALQR" del centro se dibuja como trazado vectorial (`<path>`), no como
+     `<text>` — se confirmó hoy mismo (puntos anteriores de esta sesión) que LaserGRBL no
+     interpreta elementos `<text>` de SVG, así que un QR con `<text>` se graba sin ese texto. La
+     conversión usa la librería `opentype.js` (nueva dependencia) con la fuente `Liberation Sans
+     Bold` (metricamente compatible con Arial, de licencia libre), agregada en
+     `netlify/functions/lib/fonts/LiberationSans-Bold.ttf`. Se probó primero con DejaVu Sans Bold,
+     pero esa fuente usa tablas OpenType (GSUB) que la versión de `opentype.js` disponible no
+     soporta completamente y fallaba al generar el trazado — Liberation Sans Bold no tiene ese
+     problema.
+   - Si `placaEstilo` no viene o no tiene una medida definida en la tabla, la función devuelve
+     `null` sin lanzar error (por ejemplo, para la placa redonda de mascota o cualquier estilo
+     nuevo que se agregue más adelante sin haberle definido todavía una medida).
+2. **`netlify/functions/send-ficha.js`** (función `subirABuckets`) — nuevo paso 4.5: si la ficha
+   trae un `placaEstilo` reconocido, genera este QR ya dimensionado y lo sube a S3 al mismo bucket
+   de códigos QR (`BUCKET_QR`), en la ruta `<carpeta>/placas-laser/<folio>.svg` (junto a los demás
+   archivos de la ficha). La URL resultante (`qrPlacaUrl`) se agrega como una línea más en el correo
+   de aviso al administrador ("Código QR listo para grabar con láser (tamaño exacto de esta placa):
+   ...") y en las respuestas JSON de la función, igual que ya se hacía con `qrUrl`, `pdfUrl`, etc.
+3. **`package.json` / `package-lock.json`** — se agregó la dependencia `opentype.js` (versión
+   `^2.0.0`).
+
+**Verificación:**
+- `node --check` limpio en `qr-svg.js` y `send-ficha.js`.
+- Se generó (con la función real, sin mocks) un archivo por cada uno de los 4 estilos de placa
+  (clasica/llavero/ranuras/dije) para el folio de prueba `VVITALQR00000118`, y se decodificó cada
+  uno con un lector real (zbar/pyzbar) — los 4 decodifican correctamente a
+  `https://vidavitalqr.com/v/VVITALQR00000118`.
+- Se confirmó visualmente (captura de pantalla del SVG renderizado) que el texto "VIDAVITALQR" del
+  centro se ve correctamente como trazado vectorial, sin depender de que el visor tenga la fuente
+  Arial instalada.
+- Se confirmó que un `placaEstilo` no reconocido devuelve `null` de forma segura, sin interrumpir el
+  resto del guardado de la ficha (el mismo comportamiento que ya tenían `fotoUrl`/`tarjetaUrl`
+  cuando no aplican).
+- `diff -rq` (excluyendo `node_modules`) contra el ZIP de referencia de producción
+  (`vidavitalqr_completo_20260928_notasinpe.zip`, confirmado por James como igual a lo que está
+  publicado ahora mismo) muestra que los únicos cambios son los esperados: `ficha.html`,
+  `qr-svg.js`, `send-ficha.js`, `netlify.toml`, `package.json`, `package-lock.json`, y la carpeta
+  nueva `netlify/functions/lib/fonts/`.
+- **Pendiente de subir a producción**, igual que los puntos 16.8/16.9 (URL corta del QR) — este
+  cambio depende de que esos también se suban, ya que `buildQrSvgParaPlaca` usa `urlDelVisor(folio)`
+  (la misma URL corta `/v/...`).
+
 ## 17. Pendiente
 
 - Integración de pago real con ONVO Pay: **las renovaciones (punto 31) y todos los demás productos del carrito (punto 33), con las mejoras de claridad del punto 34, la corrección del flujo de regreso del punto 36, y las correcciones de folio/checkout/reporte de pago de los puntos 38 y 40, ya usan pago real en modo prueba, confirmado funcionando de punta a punta (ver punto 40).** Falta: (a) la siguiente fase, que marque automáticamente la ficha como renovada en S3 y active el bloqueo del visor público (`ver.js`) para fichas no pagadas; (b) cambiar de modo prueba a modo real (llaves `onvo_live_`) — **el usuario ya tiene las llaves de producción (2026-09-24, ver punto 63); falta que él mismo las coloque en las variables de entorno de Netlify**; (c) ~~actualizar o retirar la etiqueta "Mockup de checkout — solo demostración" del recuadro de pago~~ **hecho (punto 63, 2026-09-24)**; (d) ~~confirmar si el pago real por SINPE Móvil ya funciona o si la pestaña de esa opción debe ocultarse mientras tanto~~ **hecho (punto 68 y 71, 2026-09-24/26): SINPE Móvil ya está automatizado vía el Checkout hospedado de ONVO (habilitado en el panel de ONVO) — el mismo webhook confirma tarjeta y SINPE, y ambos ya se registran automáticamente en el Registro de Ingresos.**

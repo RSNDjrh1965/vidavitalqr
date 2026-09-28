@@ -1744,11 +1744,11 @@ async function generarYSubirPdfsOtrosIdiomas(folio){
 
 // ---- generar la tarjeta "Identificador QR" (foto + código QR real + identificador) como imagen PNG base64 ----
 // Solo para fichas de PERSONAS (ficha.html es el formulario exclusivo de personas). El QR
-// codifica la misma URL de acceso que usa el código físico (".../.netlify/functions/ver?folio=..."),
+// codifica la misma URL de acceso que usa el código físico (".../v/..."),
 // generado aquí mismo con la librería qrcode-generator embebida arriba, así que siempre
 // corresponde exactamente al folio de esta ficha.
 async function generateTarjetaBlob(folio, fotoBase64){
-  const qrTargetUrl = 'https://vidavitalqr.com/.netlify/functions/ver?folio=' + encodeURIComponent(folio);
+  const qrTargetUrl = 'https://vidavitalqr.com/v/' + encodeURIComponent(folio);
 
   const qr = qrcode(0, 'M');
   qr.addData(qrTargetUrl);
