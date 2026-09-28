@@ -19,7 +19,7 @@
 // S3_ACCESS_KEY_ID, S3_SECRET_ACCESS_KEY, S3_REGION.
 
 const { S3Client, PutObjectCommand, GetObjectCommand } = require('@aws-sdk/client-s3');
-const { buildQrSvg } = require('./lib/qr-svg');
+const { buildQrSvg, buildQrSvgParaPlaca } = require('./lib/qr-svg');
 const { actualizarResumenXlsx } = require('./lib/xlsx-resumen');
 const { generarPin, hashPin } = require('./lib/pin');
 const { fechaVencimiento } = require('./lib/vigencia');
@@ -65,7 +65,7 @@ function contentTypeFromDataUrl(dataUrl, fallback) {
 const SITE_URL = process.env.SITE_URL || 'https://vidavitalqr.com';
 
 function urlDelVisor(folio) {
-  return `${SITE_URL}/.netlify/functions/ver?folio=${encodeURIComponent(folio)}`;
+  return `${SITE_URL}/v/${encodeURIComponent(folio)}`;
 }
 
 function streamToString(stream) {
@@ -412,7 +412,28 @@ async function subirABuckets(s3, region, { folio, filename, pdfBase64, fotoBase6
   }));
   const qrUrl = publicUrlFor(BUCKET_QR, region_, qrKey);
 
-  return { pdfUrl, fotoUrl, qrUrl, qrSvg, tarjetaUrl };
+  // 4.5) Versión del QR ya ajustada al tamaño físico (en milímetros) de la placa que el cliente
+  // eligió, lista para importar directamente en el software del láser (LaserGRBL) sin tener que
+  // ajustarle el tamaño a mano cada vez — 2026-09-28, a pedido del usuario. El texto "VIDAVITALQR"
+  // del centro va como trazado vectorial (no como <text>) porque el software del láser no
+  // interpreta texto SVG. Solo se genera cuando el estilo de placa elegido tiene una medida
+  // definida (ver MEDIDA_QR_MM_POR_PLACA en lib/qr-svg.js); si no, se omite sin afectar el resto.
+  let qrPlacaUrl = '';
+  if (placaEstilo) {
+    const qrPlacaSvg = await buildQrSvgParaPlaca(urlDelVisor(folio), placaEstilo);
+    if (qrPlacaSvg) {
+      const qrPlacaKey = `${carpeta}/placas-laser/${folio}.svg`;
+      await s3.send(new PutObjectCommand({
+        Bucket: BUCKET_QR,
+        Key: qrPlacaKey,
+        Body: Buffer.from(qrPlacaSvg, 'utf-8'),
+        ContentType: 'image/svg+xml',
+      }));
+      qrPlacaUrl = publicUrlFor(BUCKET_QR, region_, qrPlacaKey);
+    }
+  }
+
+  return { pdfUrl, fotoUrl, qrUrl, qrSvg, tarjetaUrl, qrPlacaUrl };
 }
 
 // ---- Nombre legible del estilo de "Placa con código QR" elegido en la página principal ----
@@ -496,7 +517,7 @@ exports.handler = async (event) => {
 
   // ---- Paso 1: subir a S3 (PDF + foto + tarjeta Identificador QR + código QR), actualizar la
   // tabla resumen, y crear o actualizar el acceso con PIN para el panel de edición ----
-  let pdfUrl = '', fotoUrl = '', qrUrl = '', qrSvg = '', tarjetaUrl = '';
+  let pdfUrl = '', fotoUrl = '', qrUrl = '', qrSvg = '', tarjetaUrl = '', qrPlacaUrl = '';
   let s3Error = null;
   let pinNuevo = null;
   let codigoCorreoFallidos = [];
@@ -525,7 +546,7 @@ exports.handler = async (event) => {
     }
 
     const subido = await subirABuckets(s3, region, { folio, filename, pdfBase64, fotoBase64, tarjetaBase64, placaEstilo, nombreCompleto, tipo, contactos, datosVisor, idioma, creado: creadoActual });
-    pdfUrl = subido.pdfUrl; fotoUrl = subido.fotoUrl; qrUrl = subido.qrUrl; qrSvg = subido.qrSvg; tarjetaUrl = subido.tarjetaUrl;
+    pdfUrl = subido.pdfUrl; fotoUrl = subido.fotoUrl; qrUrl = subido.qrUrl; qrSvg = subido.qrSvg; tarjetaUrl = subido.tarjetaUrl; qrPlacaUrl = subido.qrPlacaUrl;
 
     // resumen.xlsx separado por tipo (personas/resumen.xlsx y mascotas/resumen.xlsx), para
     // poder revisarlos por separado. El resumen.xlsx combinado que ya existía en la raíz del
@@ -568,6 +589,7 @@ exports.handler = async (event) => {
   if (qrUrl) lineasExtra.push(`Código QR: ${qrUrl}`);
   if (tarjetaUrl) lineasExtra.push(`Tarjeta Identificador QR: ${tarjetaUrl}`);
   if (placaEstilo) lineasExtra.push(`Estilo de placa elegido: ${etiquetaPlacaEstilo(placaEstilo)}`);
+  if (qrPlacaUrl) lineasExtra.push(`Código QR listo para grabar con láser (tamaño exacto de esta placa): ${qrPlacaUrl}`);
   if (s3Error) lineasExtra.push(`(Aviso: no se pudo subir a S3 / actualizar el resumen — ${s3Error})`);
   if (codigoCorreoFallidos.length) {
     lineasExtra.push('(Aviso: el correo con el folio y el PIN NO se pudo enviar a los siguientes contactos:');
@@ -613,20 +635,20 @@ exports.handler = async (event) => {
       return {
         statusCode: resendResp.status,
         headers,
-        body: JSON.stringify({ error: 'Resend rechazó el envío.', detalle: resultado, s3Error, pdfUrl, fotoUrl, qrUrl, tarjetaUrl, placaEstilo: placaEstilo || '', pin: pinNuevo }),
+        body: JSON.stringify({ error: 'Resend rechazó el envío.', detalle: resultado, s3Error, pdfUrl, fotoUrl, qrUrl, tarjetaUrl, qrPlacaUrl, placaEstilo: placaEstilo || '', pin: pinNuevo }),
       };
     }
 
     return {
       statusCode: 200,
       headers,
-      body: JSON.stringify({ ok: true, id: resultado.id, s3Error, pdfUrl, fotoUrl, qrUrl, tarjetaUrl, placaEstilo: placaEstilo || '', pin: pinNuevo }),
+      body: JSON.stringify({ ok: true, id: resultado.id, s3Error, pdfUrl, fotoUrl, qrUrl, tarjetaUrl, qrPlacaUrl, placaEstilo: placaEstilo || '', pin: pinNuevo }),
     };
   } catch (err) {
     return {
       statusCode: 500,
       headers,
-      body: JSON.stringify({ error: 'Error al contactar a Resend.', detalle: String(err), s3Error, pdfUrl, fotoUrl, qrUrl, tarjetaUrl, placaEstilo: placaEstilo || '', pin: pinNuevo }),
+      body: JSON.stringify({ error: 'Error al contactar a Resend.', detalle: String(err), s3Error, pdfUrl, fotoUrl, qrUrl, tarjetaUrl, qrPlacaUrl, placaEstilo: placaEstilo || '', pin: pinNuevo }),
     };
   }
 };
