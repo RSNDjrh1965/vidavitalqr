@@ -373,27 +373,57 @@ function paginaVisor(datos) {
     var sonoConExito = false;
     var eventosGesto = ['click', 'touchstart', 'pointerdown', 'keydown'];
 
+    // ---- "single" de marca VidaVitalQR: mismo sonido de piano "Vidavitalllll" que se usa al
+    // procesar las fichas (ver ficha.html / ficha-mascota.html / ficha-objeto.html), para que la
+    // marca sonora sea una sola y consistente en todo el sitio. ----
+    function notaPiano(freq, inicio, duracion, pico) {
+      if (!ctx) return;
+      var now = ctx.currentTime;
+      var armonicos = [
+        { mult: 1, amp: 1.00, decayMult: 1.4 },
+        { mult: 2, amp: 0.55, decayMult: 2.2 },
+        { mult: 3, amp: 0.30, decayMult: 3.2 },
+        { mult: 4, amp: 0.18, decayMult: 4.5 },
+        { mult: 5, amp: 0.10, decayMult: 6.0 },
+      ];
+      armonicos.forEach(function (h) {
+        var osc = ctx.createOscillator();
+        var gain = ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.value = freq * h.mult;
+        var picoArmonico = Math.max(pico * h.amp, 0.0001);
+        gain.gain.setValueAtTime(0.0001, now + inicio);
+        gain.gain.exponentialRampToValueAtTime(picoArmonico, now + inicio + 0.012);
+        gain.gain.exponentialRampToValueAtTime(0.0001, now + inicio + duracion);
+        osc.connect(gain).connect(ctx.destination);
+        osc.start(now + inicio);
+        osc.stop(now + inicio + duracion + 0.05);
+      });
+      try {
+        var hammerDur = 0.012;
+        var bufferSize = Math.max(1, Math.floor(ctx.sampleRate * hammerDur));
+        var buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+        var data = buffer.getChannelData(0);
+        for (var i = 0; i < bufferSize; i++) {
+          data[i] = (Math.random() * 2 - 1) * Math.exp(-8 * i / bufferSize);
+        }
+        var noiseSrc = ctx.createBufferSource();
+        noiseSrc.buffer = buffer;
+        var noiseGain = ctx.createGain();
+        noiseGain.gain.value = pico * 0.22;
+        noiseSrc.connect(noiseGain).connect(ctx.destination);
+        noiseSrc.start(now + inicio);
+      } catch (eHammer) {}
+    }
+
     function tonos() {
       if (!ctx || sonoConExito) return; // evita que suene dos veces si hay más de un intento
       sonoConExito = true;
       quitarListenersGesto();
-      var now = ctx.currentTime;
-      function tono(freq, inicio, duracion, pico) {
-        var osc = ctx.createOscillator();
-        var gain = ctx.createGain();
-        osc.type = 'sine';
-        osc.frequency.value = freq;
-        gain.gain.setValueAtTime(0, now + inicio);
-        gain.gain.linearRampToValueAtTime(pico, now + inicio + 0.015);
-        gain.gain.exponentialRampToValueAtTime(0.001, now + inicio + duracion);
-        osc.connect(gain).connect(ctx.destination);
-        osc.start(now + inicio);
-        osc.stop(now + inicio + duracion + 0.05);
-      }
-      tono(523.25, 0, 1.8, 0.18);
-      tono(659.25, 0.1, 1.7, 0.14);
-      tono(783.99, 0.22, 1.6, 0.16);
-      tono(1046.5, 0.38, 1.3, 0.09);
+      notaPiano(523.25, 0.00, 0.35, 0.55); // Vi     - C5
+      notaPiano(587.33, 0.16, 0.35, 0.50); // da     - D5
+      notaPiano(659.25, 0.32, 0.35, 0.55); // vi     - E5
+      notaPiano(783.99, 0.50, 1.50, 0.60); // taaaal - G5 (sostenida)
     }
 
     function intentarSonido() {

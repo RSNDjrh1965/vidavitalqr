@@ -1006,6 +1006,57 @@ al terminar; y se probaron dos escenarios de tiempos (procesamiento rápido y pr
 lento que la melodía) confirmando que el mínimo de 2.2s por idioma se respeta sin agregar espera de
 más cuando no hace falta.
 
+## 16.6. Mismo sonido de marca "Vidavitalllll" también en la pantalla de logo al escanear el QR (2026-09-26)
+
+James pidió unificar la marca sonora: que el mismo "single" de piano usado en el procesamiento de
+fichas (punto 16.5) suene también en la pantalla de logo (`splashMarca`) que aparece al escanear el
+código QR y abrir la ficha pública (`netlify/functions/ver.js`), en vez del sonido anterior de 4
+tonos tipo campanita (sin timbre de piano, ver punto 62/64/66).
+
+**Cambio aplicado:** dentro del IIFE de `ver.js` que controla el splash del logo, se reemplazó la
+función `tono()` (oscilador simple) por la misma `notaPiano()` con armónicos + golpe percusivo de
+ruido filtrado usada en las fichas, y la secuencia de notas se cambió a la melodía final aprobada
+"Vi-da-vi-taaaal" (523.25 → 587.33 → 659.25 → 783.99 Hz), idéntica nota por nota a la de
+`ficha.html`/`ficha-mascota.html`/`ficha-objeto.html`. Toda la lógica que ya existía alrededor —el
+intento de reproducción inmediata al cargar, el reintento en el primer toque/clic/tecla por las
+restricciones de audio de los navegadores móviles al abrir un enlace de QR, y la protección para que
+suene una sola vez— se dejó exactamente igual, sin tocarla.
+
+**Sobre la consulta de James de si se podía evitar el paso de "elegir carpeta" al ver el PDF:** se
+confirmó que el enlace "Ver ficha completa (PDF)" ya está configurado para abrir directo en una
+pestaña nueva (`target="_blank"`), igual que antes; no se modificó nada de ese código. La pantalla de
+"No se puede usar esta carpeta" que le apareció es el propio selector de almacenamiento de Android,
+que solo se activa si la persona elige explícitamente "Descargar" (guardar) en vez de "Abrir" el PDF
+desde el menú del navegador — un comportamiento del teléfono, no del sitio.
+
+**Verificación:** `node --check` limpio en `ver.js`; con Playwright, sobre el fragmento de script del
+splash extraído tal cual queda en el archivo, se confirmó que la reproducción del logo dispara
+exactamente 20 osciladores + 4 golpes de percusión (igual proporción que en las fichas) una sola vez,
+incluso simulando varios toques/clics adicionales después del primero, y sin errores de consola.
+
+## 16.7. Nota aclaratoria sobre la demora de confirmación bancaria del SINPE Móvil (2026-09-28)
+
+**Contexto:** James hizo una prueba real de pago por SINPE Móvil y, aunque el banco ya le había hecho
+el rebajo, la notificación de confirmación a su celular no le llegó de inmediato — le llegó recién al
+darle clic al botón "Sí, he recibido la confirmación" en la página de ONVO. Escribió a soporte de
+ONVO para consultarlo: confirmaron que ese paso pregunta por la confirmación que envía el **banco
+emisor del cliente** (no ONVO) para que el cliente no confirme antes de haber transferido realmente;
+una vez que confirma, ONVO verifica del lado de ellos si el pago fue recibido. Es decir, el paso
+funciona como está diseñado — el problema real es que la notificación del banco puede demorar unos
+minutos, lo cual genera confusión si el cliente no lo sabe de antemano.
+
+**Corrección:** esa pantalla de confirmación es parte de la página hospedada por ONVO — no se puede
+modificar desde el código de VidaVitalQR. En su lugar, se agregó una nota aclaratoria nueva
+(`cxP4`) en el bloque de pago de `index.html`, justo debajo de la nota existente sobre elegir colones
+para SINPE Móvil (`cxP2`), en los 4 idiomas: avisa que la confirmación del banco puede tardar unos
+minutos en llegar y que, si ya hizo la transferencia, puede continuar con el pago aunque esa
+confirmación no le haya llegado todavía.
+
+**Verificación:** `node --check` limpio en los 4 bloques `<script>` de `index.html`; `diff` contra el
+ZIP anterior confirma que `index.html` es el único archivo modificado; con Playwright se confirmó que
+el texto nuevo (`cxP4`) se traduce correctamente al cambiar entre los 4 idiomas del selector, sin
+errores de JavaScript.
+
 ## 17. Pendiente
 
 - Integración de pago real con ONVO Pay: **las renovaciones (punto 31) y todos los demás productos del carrito (punto 33), con las mejoras de claridad del punto 34, la corrección del flujo de regreso del punto 36, y las correcciones de folio/checkout/reporte de pago de los puntos 38 y 40, ya usan pago real en modo prueba, confirmado funcionando de punta a punta (ver punto 40).** Falta: (a) la siguiente fase, que marque automáticamente la ficha como renovada en S3 y active el bloqueo del visor público (`ver.js`) para fichas no pagadas; (b) cambiar de modo prueba a modo real (llaves `onvo_live_`) — **el usuario ya tiene las llaves de producción (2026-09-24, ver punto 63); falta que él mismo las coloque en las variables de entorno de Netlify**; (c) ~~actualizar o retirar la etiqueta "Mockup de checkout — solo demostración" del recuadro de pago~~ **hecho (punto 63, 2026-09-24)**; (d) ~~confirmar si el pago real por SINPE Móvil ya funciona o si la pestaña de esa opción debe ocultarse mientras tanto~~ **hecho (punto 68 y 71, 2026-09-24/26): SINPE Móvil ya está automatizado vía el Checkout hospedado de ONVO (habilitado en el panel de ONVO) — el mismo webhook confirma tarjeta y SINPE, y ambos ya se registran automáticamente en el Registro de Ingresos.**
