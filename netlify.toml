@@ -22,8 +22,15 @@
 # grabado en las placas físicas. El QR llevaba ".netlify/functions/ver?folio=XXXX" (55+ caracteres),
 # lo que producía un QR demasiado denso para escanear de forma confiable en placas metálicas
 # pequeñas (16-20mm). Con esta regla, "/v/XXXX" sirve exactamente la misma función `ver.js` sin
-# cambiar en nada su lógica interna. ----
+# cambiar en nada su lógica interna.
+#
+# 2026-09-29: se cambió de pasar el folio como "?folio=:splat" (querystring) a pasarlo como parte
+# de la ruta ("/:splat", después del nombre de la función). Se confirmó en producción que, con el
+# patrón anterior, el folio llegaba VACÍO a la función de forma consistente (confirmado con
+# pruebas reales, no solo en teoría) — un problema conocido de Netlify con ese patrón específico
+# de reescritura hacia funciones. Pasarlo en la ruta es el patrón más confiable, y ver.js ya se
+# actualizó para leerlo así (con el formato anterior como respaldo). ----
 [[redirects]]
   from = "/v/*"
-  to = "/.netlify/functions/ver?folio=:splat"
+  to = "/.netlify/functions/ver/:splat"
   status = 200

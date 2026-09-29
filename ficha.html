@@ -99,6 +99,7 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
   .grid.cols3{grid-template-columns:repeat(3,1fr);}
   .grid.cols4{grid-template-columns:repeat(4,1fr);}
   @media(max-width:640px){.grid,.grid.cols3,.grid.cols4{grid-template-columns:1fr;}}
+  @media(min-width:641px) and (max-width:900px){.grid.cols4{grid-template-columns:repeat(2,1fr);}}
   .contact-rows{display:flex;flex-direction:column;gap:14px;margin-top:16px;padding-top:14px;border-top:1px dashed var(--line);}
   .field{display:flex;flex-direction:column;gap:5px;}
   .field.full{grid-column:1/-1;}
@@ -380,7 +381,7 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
 <!-- Datos generales -->
 <div class="section">
 <h2><em>2</em><span data-i18n="h2DatosGenerales">Datos generales</span></h2>
-<div class="grid cols3">
+<div class="grid cols4">
 <div class="field"><label data-i18n="lblPais">País</label><input type="text" id="pais" placeholder="Ej. Costa Rica" data-i18n-ph="paisPh"></div>
 <div class="field">
 <label data-i18n="lblProvincia">Provincia</label>
@@ -1364,6 +1365,7 @@ $('addMedRow').addEventListener('click', () => {
         cantonSelect.appendChild(opt);
       });
       cantonSelect.style.display = '';
+      ciudadInput.style.display = 'none';
       ciudadInput.setAttribute('readonly', 'readonly');
       ciudadInput.placeholder = 'Seleccione un cantón arriba ▾';
       const match = Array.from(cantonSelect.options).find(o => o.value === ciudadInput.value);
@@ -1373,11 +1375,13 @@ $('addMedRow').addEventListener('click', () => {
         cargarDistritos(opt.dataset.provinciaId, opt.dataset.cantonId);
       } else {
         distritoSelect.style.display = 'none';
+        distritoInput.style.display = '';
         distritoInput.removeAttribute('readonly');
       }
     } catch (err) {
       // Sin conexión con la API: se deja el cantón como texto libre para no bloquear el formulario.
       cantonSelect.style.display = 'none';
+      ciudadInput.style.display = '';
       ciudadInput.removeAttribute('readonly');
       ciudadInput.placeholder = 'Ej. San José';
     }
@@ -1397,6 +1401,7 @@ $('addMedRow').addEventListener('click', () => {
         distritoSelect.appendChild(opt);
       });
       distritoSelect.style.display = '';
+      distritoInput.style.display = 'none';
       distritoInput.setAttribute('readonly', 'readonly');
       distritoInput.placeholder = 'Seleccione un distrito arriba ▾';
       const match = Array.from(distritoSelect.options).find(o => o.value === distritoInput.value);
@@ -1404,6 +1409,7 @@ $('addMedRow').addEventListener('click', () => {
     } catch (err) {
       // Sin conexión con la API para este cantón: se deja "Distrito" como texto libre.
       distritoSelect.style.display = 'none';
+      distritoInput.style.display = '';
       distritoInput.removeAttribute('readonly');
       distritoInput.placeholder = 'Ej. Carmen';
     }
@@ -1433,6 +1439,7 @@ $('addMedRow').addEventListener('click', () => {
     if (esCostaRica()) {
       poblarProvincias();
       provinciaSelect.style.display = '';
+      provinciaInput.style.display = 'none';
       provinciaInput.setAttribute('readonly', 'readonly');
       provinciaInput.placeholder = 'Seleccione una provincia arriba ▾';
 
@@ -1455,17 +1462,22 @@ $('addMedRow').addEventListener('click', () => {
         await cargarCantonesDeProvincia(provinciaId);
       } else {
         cantonSelect.style.display = 'none';
+        ciudadInput.style.display = '';
         cantonSelect.innerHTML = '<option value="" data-i18n="optSeleccioneProvinciaPrimero">Seleccione una provincia primero…</option>';
         distritoSelect.style.display = 'none';
+        distritoInput.style.display = '';
       }
     } else {
       provinciaSelect.style.display = 'none';
+      provinciaInput.style.display = '';
       provinciaInput.removeAttribute('readonly');
       provinciaInput.placeholder = '';
       cantonSelect.style.display = 'none';
+      ciudadInput.style.display = '';
       ciudadInput.removeAttribute('readonly');
       ciudadInput.placeholder = '';
       distritoSelect.style.display = 'none';
+      distritoInput.style.display = '';
       distritoInput.removeAttribute('readonly');
       distritoInput.placeholder = 'Ej. Carmen';
     }
@@ -1476,11 +1488,13 @@ $('addMedRow').addEventListener('click', () => {
     ciudadInput.value = '';
     distritoInput.value = '';
     distritoSelect.style.display = 'none';
+    distritoInput.style.display = '';
     const opt = provinciaSelect.selectedOptions[0];
     if (opt && opt.dataset.provinciaId) {
       cargarCantonesDeProvincia(opt.dataset.provinciaId);
     } else {
       cantonSelect.style.display = 'none';
+      ciudadInput.style.display = '';
     }
     updatePreview();
   });
@@ -1493,6 +1507,7 @@ $('addMedRow').addEventListener('click', () => {
       cargarDistritos(opt.dataset.provinciaId, opt.dataset.cantonId);
     } else {
       distritoSelect.style.display = 'none';
+      distritoInput.style.display = '';
       distritoInput.removeAttribute('readonly');
     }
     updatePreview();
