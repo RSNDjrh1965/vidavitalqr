@@ -2727,6 +2727,12 @@
       // cuál exactamente hay que fabricar -- se lee en cada renderOrder() para que quede
       // actualizado aunque el comprador cambie de placa después de agregarla al carrito ----
       if (k === 'plate_personal') { entrada.placaEstilo = window.VVQR_PLACA_ESTILO || 'clasica'; }
+      // ---- la pulsera es un solo producto fijo (no tiene 4 estilos como "Placa con código QR"),
+      // así que no necesita el selector de miniaturas -- se le asigna directamente el código
+      // "pulsera", que ya tiene su medida (16 x 16 mm) en MEDIDA_QR_MM_POR_PLACA (lib/qr-svg.js)
+      // y su nombre legible en etiquetaPlacaEstilo() (send-ficha.js) -- 2026-09-29, dato del
+      // usuario ----
+      if (k === 'bracelet') { entrada.placaEstilo = 'pulsera'; }
       return entrada;
     });
 
@@ -2807,6 +2813,11 @@
         // código QR", antes de hacer clic en "Agregar a mi pago" -- se pasa aquí a la ficha para
         // que quede registrado cuál de las 4 placas eligió el comprador ----
         openFicha(esRenovacion, 'placaEstilo=' + encodeURIComponent(window.VVQR_PLACA_ESTILO || 'clasica'));
+      } else if (item === 'bracelet') {
+        // ---- mismo mecanismo que "plate_personal", pero con el código fijo "pulsera" (sin
+        // selector de estilo, ver comentario en la asignación de entrada.placaEstilo más abajo
+        // en este mismo archivo) -- 2026-09-29 ----
+        openFicha(esRenovacion, 'placaEstilo=pulsera');
       } else { openFicha(esRenovacion); }
     });
   });
