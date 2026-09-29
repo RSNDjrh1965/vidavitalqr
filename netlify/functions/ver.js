@@ -593,7 +593,19 @@ exports.handler = async (event) => {
     return { statusCode: 405, headers, body: paginaError('Método no permitido.') };
   }
 
-  const folio = (event.queryStringParameters && event.queryStringParameters.folio) || '';
+  // ---- 2026-09-29: el folio llega como parte de la propia dirección (por ejemplo
+  // /.netlify/functions/ver/VVITALQR00000118), que es a donde netlify.toml reescribe la URL
+  // corta "/v/VVITALQR00000118" grabada en las placas físicas. Se probó primero pasarlo como
+  // "?folio=..." en la reescritura, pero en producción llegaba vacío de forma consistente (bug
+  // confirmado de Netlify con ese patrón específico) — por eso ahora se lee directo del final de
+  // la ruta, que es más confiable. Se sigue aceptando también "?folio=..." como respaldo, por si
+  // quedó algún enlace viejo (correos, PDFs) que todavía use ese formato. ----
+  const partesRuta = (event.path || '').split('/').filter(Boolean);
+  const ultimaParte = partesRuta.length ? decodeURIComponent(partesRuta[partesRuta.length - 1]) : '';
+  // "ver" (nombre de la función) y "v" (prefijo de la URL corta, caso de "/v/" sin folio detrás)
+  // se excluyen para no confundirlos con un folio real.
+  const folioDeRuta = (ultimaParte && !['ver', 'v'].includes(ultimaParte.toLowerCase())) ? ultimaParte : '';
+  const folio = folioDeRuta || (event.queryStringParameters && event.queryStringParameters.folio) || '';
   if (!folio) {
     return { statusCode: 400, headers, body: paginaError('Falta el código de la ficha.') };
   }
@@ -602,12 +614,15 @@ exports.handler = async (event) => {
   // "VVITALQR" y el de mascota con "VVMASCOTA" — así que se busca directo en la carpeta que
   // corresponde. La ubicación antigua (sin carpeta, de antes de organizar por carpetas) se
   // revisa como respaldo, para las fichas que todavía no se han vuelto a guardar desde ese
-  // cambio.
+  // cambio. Se busca siempre en MAYÚSCULAS (folioMayus), porque el archivo se guarda así en la
+  // nube y el almacenamiento distingue mayúsculas de minúsculas — 2026-09-29: antes se buscaba
+  // con el folio tal cual llegaba, y si llegaba en minúsculas no encontraba la ficha aunque sí
+  // existiera. ----
   const folioMayus = folio.toUpperCase();
   const carpetaPreferida = folioMayus.startsWith('VVMASCOTA') ? 'mascotas' : (folioMayus.startsWith('VVOBJETO') ? 'objetos' : (folioMayus.startsWith('VVITALQR') ? 'personas' : null));
   const rutasPosibles = carpetaPreferida
-    ? [`${carpetaPreferida}/datos/${folio}.json`, `datos/${folio}.json`]
-    : [`datos/${folio}.json`, `personas/datos/${folio}.json`, `mascotas/datos/${folio}.json`, `objetos/datos/${folio}.json`]; // folio con formato desconocido — se revisan todas por si acaso
+    ? [`${carpetaPreferida}/datos/${folioMayus}.json`, `datos/${folioMayus}.json`]
+    : [`datos/${folioMayus}.json`, `personas/datos/${folioMayus}.json`, `mascotas/datos/${folioMayus}.json`, `objetos/datos/${folioMayus}.json`]; // folio con formato desconocido — se revisan todas por si acaso
 
   let datos;
   try {
@@ -626,7 +641,7 @@ exports.handler = async (event) => {
     }
     if (!encontrado) throw new Error('No encontrado en ninguna ubicación.');
     datos = JSON.parse(encontrado);
-    datos.folio = datos.folio || folio; // por si el JSON guardado no trae el folio explícito
+    datos.folio = datos.folio || folioMayus; // por si el JSON guardado no trae el folio explícito
   } catch (err) {
     return { statusCode: 404, headers, body: paginaError('No se encontró información para este código.') };
   }

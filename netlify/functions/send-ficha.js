@@ -304,6 +304,84 @@ async function enviarCodigoPorCorreo(contactos, { folio, pin, nombreCompleto, ti
   return { intentados: correos.length, fallidos };
 }
 
+// ---- 2026-09-29: correo de confirmación al titular cuando se ACTUALIZA una ficha ya existente
+// (no cuando se crea por primera vez, ni cuando es una renovación — esos casos ya tienen su
+// propio aviso). A pedido del usuario: sin este correo, el titular no tenía forma de saber si
+// los cambios que hizo se guardaron correctamente. Solo se envía si el formulario trae un
+// "correoTitular" — mejor esfuerzo, nunca bloquea ni interrumpe el resto del guardado. ----
+const TEXTOS_ACTUALIZACION_CORREO = {
+  es: {
+    asunto: (folio) => `Tu ficha VidaVitalQR fue actualizada — ${folio}`,
+    cuerpo: (nombreCompleto, folio) => [
+      `Hola${nombreCompleto ? ' ' + nombreCompleto : ''},`,
+      '',
+      `Te confirmamos que los datos de tu ficha VidaVitalQR (folio ${folio}) se actualizaron correctamente.`,
+      '',
+      'Si tú no hiciste este cambio, o algo no te parece correcto, escríbenos por WhatsApp desde vidavitalqr.com lo antes posible.',
+      '',
+      'Este es un correo automático de VidaVitalQR.',
+    ].join('\n'),
+  },
+  en: {
+    asunto: (folio) => `Your VidaVitalQR record was updated — ${folio}`,
+    cuerpo: (nombreCompleto, folio) => [
+      `Hello${nombreCompleto ? ' ' + nombreCompleto : ''},`,
+      '',
+      `This confirms that your VidaVitalQR record (folio ${folio}) was updated successfully.`,
+      '',
+      "If you didn't make this change, or something looks wrong, please contact us via WhatsApp from vidavitalqr.com as soon as possible.",
+      '',
+      'This is an automated email from VidaVitalQR.',
+    ].join('\n'),
+  },
+  fr: {
+    asunto: (folio) => `Votre fiche VidaVitalQR a été mise à jour — ${folio}`,
+    cuerpo: (nombreCompleto, folio) => [
+      `Bonjour${nombreCompleto ? ' ' + nombreCompleto : ''},`,
+      '',
+      `Nous vous confirmons que les données de votre fiche VidaVitalQR (numéro de dossier ${folio}) ont été mises à jour avec succès.`,
+      '',
+      "Si vous n'êtes pas à l'origine de cette modification, ou si quelque chose semble incorrect, contactez-nous via WhatsApp depuis vidavitalqr.com dès que possible.",
+      '',
+      'Ceci est un e-mail automatique de VidaVitalQR.',
+    ].join('\n'),
+  },
+  pt: {
+    asunto: (folio) => `Sua ficha VidaVitalQR foi atualizada — ${folio}`,
+    cuerpo: (nombreCompleto, folio) => [
+      `Olá${nombreCompleto ? ' ' + nombreCompleto : ''},`,
+      '',
+      `Confirmamos que os dados da sua ficha VidaVitalQR (folio ${folio}) foram atualizados com sucesso.`,
+      '',
+      'Se você não fez essa alteração, ou algo parece incorreto, entre em contato conosco pelo WhatsApp em vidavitalqr.com o quanto antes.',
+      '',
+      'Este é um e-mail automático do VidaVitalQR.',
+    ].join('\n'),
+  },
+};
+
+async function enviarConfirmacionActualizacion(correoTitular, { folio, nombreCompleto, idioma }) {
+  const apiKey = process.env.RESEND_API_KEY;
+  const email = correoTitular && String(correoTitular).trim();
+  if (!apiKey || !folio || !email) return;
+
+  const t = TEXTOS_ACTUALIZACION_CORREO[idioma] || TEXTOS_ACTUALIZACION_CORREO.es;
+  try {
+    const resp = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ from: REMITENTE, to: [email], subject: t.asunto(folio), text: t.cuerpo(nombreCompleto, folio) }),
+    });
+    if (!resp.ok) {
+      let detalle = '';
+      try { detalle = JSON.stringify(await resp.json()); } catch (e) { try { detalle = await resp.text(); } catch (e2) {} }
+      console.error('Resend rechazó el correo de confirmación de actualización para', email, '— status', resp.status, detalle);
+    }
+  } catch (err) {
+    console.error('No se pudo enviar el correo de confirmación de actualización a', email, err);
+  }
+}
+
 async function subirABuckets(s3, region, { folio, filename, pdfBase64, fotoBase64, tarjetaBase64, placaEstilo, nombreCompleto, tipo, contactos, datosVisor, idioma, creado }) {
   const region_ = region;
   const carpeta = carpetaTipo(tipo, folio);
@@ -542,6 +620,12 @@ exports.handler = async (event) => {
       const resultadoCodigo = await enviarCodigoPorCorreo(contactos, { folio, pin: pinActual, nombreCompleto, tipo, idioma });
       if (resultadoCodigo && resultadoCodigo.fallidos && resultadoCodigo.fallidos.length) {
         codigoCorreoFallidos = resultadoCodigo.fallidos;
+      }
+      // ---- correo de confirmación al titular SOLO cuando es una actualización de una ficha que
+      // ya existía (no en la primera creación, ni en una renovación de pago) — 2026-09-29, a
+      // pedido del usuario, para que el titular sepa que su cambio sí se guardó. ----
+      if (!login.esNuevo && esRenovacionPago !== true) {
+        await enviarConfirmacionActualizacion(correoTitular, { folio, nombreCompleto, idioma });
       }
     }
 
