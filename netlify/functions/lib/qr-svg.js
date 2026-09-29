@@ -45,6 +45,7 @@ const MEDIDA_QR_MM_POR_PLACA = {
   llavero: 20, // Placa 2, 40 x 22 mm
   ranuras: 22, // Placa 3, 45 x 25 mm
   dije: 30, // Placa 4, 40 x 40 mm
+  pulsera: 16, // Pulsera con placa QR, área grabable 16 x 16 mm (2026-09-29, dato del usuario)
 };
 
 async function buildQrSvg(targetUrl, folioText) {
