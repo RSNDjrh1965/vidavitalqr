@@ -526,6 +526,7 @@ function etiquetaPlacaEstilo(codigo) {
     llavero: 'Placa 2 — Llavero (con orificio), 40 x 22 mm',
     ranuras: 'Placa 3 — Con ranuras laterales, 45 x 25 mm',
     dije: 'Placa 4 — Dije / colgante (con argolla), 40 x 40 mm',
+    pulsera: 'Pulsera con placa QR, área grabable 16 x 16 mm',
   };
   return nombres[codigo] || codigo;
 }
