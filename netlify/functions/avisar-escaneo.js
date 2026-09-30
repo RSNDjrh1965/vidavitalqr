@@ -344,6 +344,17 @@ exports.handler = async (event) => {
     return { statusCode: 200, headers, body: JSON.stringify({ ok: true }) };
   }
 
+  // ---- 2026-09-30: esta función es un endpoint aparte del visor (ver.js) — se puede llamar
+  // directo por folio, sin pasar por la página del QR. Antes de esta fecha, ver.js ya bloqueaba
+  // la información para una ficha sin pago confirmado (datos.activo === false), pero esta función
+  // nunca revisaba eso, así que alguien podía seguir disparando el correo de "aviso de escaneo" a
+  // los contactos de emergencia de una ficha que nunca se llegó a pagar. Se responde 200 igual
+  // (mismo motivo que arriba: no revelar si el folio existe o no), pero ya no se envía ningún
+  // correo. ----
+  if (datos.activo === false) {
+    return { statusCode: 200, headers, body: JSON.stringify({ ok: true }) };
+  }
+
   // ---- arma los datos crudos de ubicación para el correo (tipo/url/etiqueta, sin traducir
   // todavía) — avisarContactos() arma el prefijo y la nota ya traducidos al idioma de la ficha
   // (datos.idioma), y también puede armar tanto la línea de texto plano como el <a href> real de

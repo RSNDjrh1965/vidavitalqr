@@ -111,7 +111,7 @@ function carpetaTipo(tipo, folio) {
 // — nunca se cambia solo, para no dejar al usuario sin acceso. Si el registro es de una versión
 // anterior que solo guardaba el hash (sin el texto plano), se genera un PIN nuevo esta vez, para
 // que a partir de ahora también quede recuperable.
-async function cargarOCrearLogin(s3, folio, datosFormulario, carpeta, resetCreado, correoTitular) {
+async function cargarOCrearLogin(s3, folio, datosFormulario, carpeta, resetCreado, correoTitular, producto, placaEstilo) {
   const key = `${carpeta}/login/${folio}.json`;
   const keyLegacy = `login/${folio}.json`;
   let registro = null;
@@ -139,6 +139,20 @@ async function cargarOCrearLogin(s3, folio, datosFormulario, carpeta, resetCread
   // generar (o regenerar) un PIN y mostrárselo al usuario en el modal.
   const esNuevo = !registro || !registro.pin;
   const pin = esNuevo ? generarPin() : registro.pin;
+
+  // ---- 2026-09-30: "activo" — corrige un problema grave detectado por James: la ficha (y su
+  // código QR, ya visible públicamente) se creaba y activaba por completo en el momento de
+  // "Enviar" el formulario, ANTES de que el cliente pagara. Si el cliente cancelaba el pago (o
+  // simplemente cerraba la pestaña de ONVO), la ficha quedaba de todas formas creada y accesible
+  // gratis. Ahora: una ficha COMPLETAMENTE NUEVA (folio que nunca había guardado un registro de
+  // login) arranca con activo=false — el visor público (ver.js) muestra "pago pendiente" en vez
+  // de la información real hasta que onvo-webhook.js confirme el pago y la active. Una ficha que
+  // YA EXISTÍA (actualización normal, o una renovación de pago de un cliente que ya estaba
+  // activo) conserva el valor de "activo" que ya tenía — nunca se apaga una ficha que ya estaba
+  // activa solo porque el cliente está actualizando sus datos o renovando. Un registro guardado
+  // ANTES de este cambio (sin el campo "activo" todavía) se trata como activo=true, para no
+  // desactivar de golpe ninguna ficha que ya estaba funcionando y pagada.
+  const activoFinal = !registro ? false : (registro.activo === false ? false : true);
 
   // "creado" marca el inicio de la vigencia anual (12 meses). Se conserva tal cual en una
   // actualización normal de datos; solo se reinicia a "ahora" cuando el envío viene marcado
@@ -172,6 +186,22 @@ async function cargarOCrearLogin(s3, folio, datosFormulario, carpeta, resetCread
     avisoFinal55: reiniciarAvisos ? false : !!avisosPrevios.avisoFinal55,
   };
 
+  // ---- 2026-09-30: "producto" — qué artículo del carrito de index.html eligió el cliente
+  // (renewal, qr_only_personal, plate_personal, bracelet, chain, idcard, etc.), guardado junto
+  // con el folio para poder usarlo más adelante en la pantalla de "continuar mi pago" (retomar
+  // el pago de una ficha pendiente sin tener que volver a elegir el producto ni escribir los
+  // datos otra vez — ver claude/limpieza-fichas-pago-pendiente-vidavitalqr.md). Se guarda solo si
+  // llegó un valor nuevo en este envío; si no llegó (por ejemplo, un reenvío del mismo
+  // formulario sin pasar por index.html, o una ficha guardada antes de este cambio), se conserva
+  // el que ya tuviera guardado, para no perderlo por accidente. A partir de este cambio, toda
+  // ficha nueva lo guarda automáticamente; las fichas creadas antes simplemente no lo tienen.
+  const productoFinal = (producto && String(producto).trim())
+    ? String(producto).trim()
+    : ((registro && registro.producto) || '');
+  const placaEstiloFinal = (placaEstilo && String(placaEstilo).trim())
+    ? String(placaEstilo).trim()
+    : ((registro && registro.placaEstilo) || '');
+
   const nuevoRegistro = {
     folio,
     pin,
@@ -179,6 +209,9 @@ async function cargarOCrearLogin(s3, folio, datosFormulario, carpeta, resetCread
     datosFormulario: datosFormulario && typeof datosFormulario === 'object' ? datosFormulario : {},
     correoTitular: correoTitularFinal,
     creado: creadoFinal,
+    activo: activoFinal,
+    producto: productoFinal,
+    placaEstilo: placaEstiloFinal,
     vigencia: { avisos },
     actualizado: new Date().toISOString(),
   };
@@ -193,7 +226,7 @@ async function cargarOCrearLogin(s3, folio, datosFormulario, carpeta, resetCread
   // "pin" siempre viene relleno (con el PIN actual, nuevo o ya existente) — se usa tanto para
   // mostrarlo en el modal (solo cuando esNuevo) como para registrarlo en la columna "PIN" de
   // resumen.xlsx (siempre, para que James pueda recuperarlo si el usuario escribe por WhatsApp).
-  return { esNuevo, pin, creado: creadoFinal };
+  return { esNuevo, pin, creado: creadoFinal, activo: activoFinal, producto: productoFinal, placaEstilo: placaEstiloFinal };
 }
 
 // ---- envía el código de acceso (folio + PIN) por correo a TODOS los contactos de emergencia
@@ -360,6 +393,148 @@ const TEXTOS_ACTUALIZACION_CORREO = {
   },
 };
 
+// ---- 2026-09-30: correo de "pago pendiente" enviado al TITULAR apenas se crea una ficha nueva
+// (todavía sin pagar — ver "activo" más arriba). Le avisa que tiene 8 días solares para completar
+// el pago antes de que la ficha se elimine por completo (a pedido explícito de James, para no
+// dejar fichas nunca pagadas acumulándose para siempre en el sistema — ver
+// claude/limpieza-fichas-pago-pendiente-vidavitalqr.md). El borrado real, pasados los 8 días, lo
+// hace revisar-vigencia.js (función programada diaria), que también envía el correo de
+// confirmación de que se eliminó. Este correo solo se envía UNA vez, en la creación original —
+// nunca se repite en un reenvío del mismo formulario todavía pendiente. ----
+// ---- 2026-09-30 (tarde): texto reescrito a pedido de James — más cálido e invitando a completar
+// el pago (en vez de sonar solo como una advertencia), con un enlace real de vuelta al pago. Texto
+// aprobado por James tal cual se le mostró antes de implementarlo. ----
+const TEXTOS_PAGO_PENDIENTE_CORREO = {
+  es: {
+    asunto: (folio) => `Ya casi está — complete el pago de su ficha VidaVitalQR (folio ${folio})`,
+    cuerpo: (nombreCompleto, folio, enlace) => [
+      `Hola${nombreCompleto ? ' ' + nombreCompleto : ''},`,
+      '',
+      `¡Gracias por crear su ficha de emergencia con VidaVitalQR! Ya guardamos toda su información (folio ${folio}) — solo falta un paso para dejarla activa: completar el pago.`,
+      '',
+      'En cuanto se confirme, su código QR mostrará al instante la información que puede marcar la diferencia en una emergencia real.',
+      '',
+      `Complete su pago aquí: ${enlace}`,
+      '',
+      'Le pediremos el PIN que le enviamos en el correo de "Código de acceso" (el mismo folio y PIN que usaría para renovar más adelante) — así no tiene que volver a escribir sus datos.',
+      '',
+      'Tiene 8 días solares desde hoy para hacerlo. Si no logramos confirmar el pago dentro de ese plazo, por seguridad eliminaremos la ficha junto con la información ingresada — pero no se preocupe, siempre puede volver a crearla cuando quiera.',
+      '',
+      '¿Tuvo algún inconveniente con el pago o tiene alguna duda? Escríbanos por WhatsApp desde vidavitalqr.com, con gusto le ayudamos.',
+      '',
+      'Si ya completó su pago, puede ignorar este mensaje — seguramente se cruzó con la confirmación.',
+      '',
+      'Un saludo,',
+      'El equipo de VidaVitalQR',
+    ].join('\n'),
+  },
+  en: {
+    asunto: (folio) => `Almost there — complete payment for your VidaVitalQR record (folio ${folio})`,
+    cuerpo: (nombreCompleto, folio, enlace) => [
+      `Hello${nombreCompleto ? ' ' + nombreCompleto : ''},`,
+      '',
+      `Thank you for creating your VidaVitalQR emergency record! We've already saved all your information (folio ${folio}) — there's just one step left to activate it: completing the payment.`,
+      '',
+      'As soon as it\'s confirmed, your QR code will instantly show the information that could make a real difference in an emergency.',
+      '',
+      `Complete your payment here: ${enlace}`,
+      '',
+      'We\'ll ask for the PIN we sent you in the "Access code" email (the same folio and PIN you\'d use to renew later on) — so you won\'t have to re-enter your information.',
+      '',
+      'You have 8 calendar days from today to do so. If we can\'t confirm the payment within that time, for security reasons we\'ll delete the record along with the information you entered — but don\'t worry, you can always create it again whenever you\'d like.',
+      '',
+      'Had trouble with the payment, or have a question? Message us on WhatsApp from vidavitalqr.com — we\'re happy to help.',
+      '',
+      'If you already completed your payment, you can ignore this message — it likely crossed paths with the confirmation.',
+      '',
+      'Best regards,',
+      'The VidaVitalQR team',
+    ].join('\n'),
+  },
+  fr: {
+    asunto: (folio) => `Il ne reste qu'une étape — finalisez le paiement de votre fiche VidaVitalQR (numéro ${folio})`,
+    cuerpo: (nombreCompleto, folio, enlace) => [
+      `Bonjour${nombreCompleto ? ' ' + nombreCompleto : ''},`,
+      '',
+      `Merci d'avoir créé votre fiche d'urgence VidaVitalQR ! Nous avons déjà enregistré toutes vos informations (numéro de dossier ${folio}) — il ne reste qu'une étape pour l'activer : finaliser le paiement.`,
+      '',
+      'Dès que le paiement sera confirmé, votre code QR affichera instantanément les informations qui peuvent faire toute la différence lors d\'une urgence réelle.',
+      '',
+      `Finalisez votre paiement ici : ${enlace}`,
+      '',
+      "Nous vous demanderons le code PIN envoyé dans l'e-mail « Code d'accès » (le même numéro de dossier et le même code PIN que vous utiliseriez pour renouveler plus tard) — vous n'aurez donc pas à ressaisir vos informations.",
+      '',
+      "Vous avez 8 jours calendaires à partir d'aujourd'hui pour le faire. Si nous ne parvenons pas à confirmer le paiement dans ce délai, par mesure de sécurité, nous supprimerons la fiche ainsi que les informations saisies — mais rassurez-vous, vous pourrez toujours la recréer quand vous le souhaitez.",
+      '',
+      "Un souci avec le paiement, ou une question ? Écrivez-nous sur WhatsApp depuis vidavitalqr.com, avec plaisir nous vous aiderons.",
+      '',
+      "Si vous avez déjà effectué votre paiement, vous pouvez ignorer ce message — il a probablement croisé la confirmation.",
+      '',
+      'Cordialement,',
+      "L'équipe VidaVitalQR",
+    ].join('\n'),
+  },
+  pt: {
+    asunto: (folio) => `Falta pouco — conclua o pagamento da sua ficha VidaVitalQR (folio ${folio})`,
+    cuerpo: (nombreCompleto, folio, enlace) => [
+      `Olá${nombreCompleto ? ' ' + nombreCompleto : ''},`,
+      '',
+      `Obrigado por criar sua ficha de emergência com a VidaVitalQR! Já salvamos todas as suas informações (folio ${folio}) — falta apenas um passo para ativá-la: concluir o pagamento.`,
+      '',
+      'Assim que for confirmado, seu código QR vai mostrar na hora as informações que podem fazer a diferença em uma emergência real.',
+      '',
+      `Conclua seu pagamento aqui: ${enlace}`,
+      '',
+      'Vamos pedir o PIN que enviamos no e-mail "Código de acesso" (o mesmo folio e PIN que você usaria para renovar mais tarde) — assim você não precisa digitar seus dados de novo.',
+      '',
+      'Você tem 8 dias corridos a partir de hoje para isso. Se não conseguirmos confirmar o pagamento nesse prazo, por segurança vamos excluir a ficha junto com as informações inseridas — mas fique tranquilo, você pode criá-la novamente quando quiser.',
+      '',
+      'Teve algum problema com o pagamento ou tem alguma dúvida? Escreva para nós pelo WhatsApp em vidavitalqr.com, será um prazer ajudar.',
+      '',
+      'Se você já concluiu o pagamento, pode ignorar esta mensagem — provavelmente ela cruzou com a confirmação.',
+      '',
+      'Um abraço,',
+      'Equipe VidaVitalQR',
+    ].join('\n'),
+  },
+};
+
+// ---- enlace de vuelta al pago: usa el mismo parámetro (?fichaId=/?fichaIdMascota=/
+// ?fichaIdObjeto=) que ya usa goToPayment() en ficha.html/ficha-mascota.html/ficha-objeto.html
+// para volver directo al recuadro de pago con el folio ya reconocido — 2026-09-30. ----
+// ---- 2026-09-30: se agrega "&reanudarPago=1" a este mismo enlace -- le indica a index.html que
+// debe mostrar el recuadro de "Continuar mi pago" (pide el PIN y, apenas se valida, agrega solo
+// el producto que el cliente ya había elegido, al precio real de ese producto -- nunca el de
+// renovación -- para completar el pago sin volver a llenar ningún dato ni elegir el producto de
+// nuevo -- ver claude/reanudar-pago-pendiente-vidavitalqr.md). ----
+function urlPagoPendiente(carpeta, folio) {
+  const parametro = carpeta === 'mascotas' ? 'fichaIdMascota' : (carpeta === 'objetos' ? 'fichaIdObjeto' : 'fichaId');
+  return `${SITE_URL}/index.html?${parametro}=${encodeURIComponent(folio)}&reanudarPago=1#pago-seguro`;
+}
+
+async function enviarAvisoPagoPendiente(correoTitular, { folio, nombreCompleto, idioma, carpeta }) {
+  const apiKey = process.env.RESEND_API_KEY;
+  const email = correoTitular && String(correoTitular).trim();
+  if (!apiKey || !folio || !email) return;
+
+  const t = TEXTOS_PAGO_PENDIENTE_CORREO[idioma] || TEXTOS_PAGO_PENDIENTE_CORREO.es;
+  const enlace = urlPagoPendiente(carpeta, folio);
+  try {
+    const resp = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ from: REMITENTE, to: [email], subject: t.asunto(folio), text: t.cuerpo(nombreCompleto, folio, enlace) }),
+    });
+    if (!resp.ok) {
+      let detalle = '';
+      try { detalle = JSON.stringify(await resp.json()); } catch (e) { try { detalle = await resp.text(); } catch (e2) {} }
+      console.error('Resend rechazó el correo de pago pendiente para', email, '— status', resp.status, detalle);
+    }
+  } catch (err) {
+    console.error('No se pudo enviar el correo de pago pendiente a', email, err);
+  }
+}
+
 async function enviarConfirmacionActualizacion(correoTitular, { folio, nombreCompleto, idioma }) {
   const apiKey = process.env.RESEND_API_KEY;
   const email = correoTitular && String(correoTitular).trim();
@@ -382,7 +557,7 @@ async function enviarConfirmacionActualizacion(correoTitular, { folio, nombreCom
   }
 }
 
-async function subirABuckets(s3, region, { folio, filename, pdfBase64, fotoBase64, tarjetaBase64, placaEstilo, nombreCompleto, tipo, contactos, datosVisor, idioma, creado }) {
+async function subirABuckets(s3, region, { folio, filename, pdfBase64, fotoBase64, tarjetaBase64, placaEstilo, nombreCompleto, tipo, contactos, datosVisor, idioma, creado, activo }) {
   const region_ = region;
   const carpeta = carpetaTipo(tipo, folio);
 
@@ -473,6 +648,13 @@ async function subirABuckets(s3, region, { folio, filename, pdfBase64, fotoBase6
       // privado — solo lo que ver.js necesita para calcular el estado de vigencia.
       creado: creado || null,
       fechaVencimiento: creado ? fechaVencimiento(creado).toISOString() : null,
+      // ---- 2026-09-30: "activo" — copiado aquí del registro privado de login (ver
+      // cargarOCrearLogin) para que ver.js (el visor público) pueda decidir si ya se confirmó el
+      // pago sin tener que leer el bucket privado de resumen. false = pago todavía pendiente:
+      // ver.js muestra un aviso de "pago pendiente" en vez de la información real. Si por algún
+      // motivo no se resolvió el login (folio vacío, caso que no debería darse en la práctica), se
+      // asume activo=true para no bloquear por accidente algo que ya funcionaba. ----
+      activo: typeof activo === 'boolean' ? activo : true,
       actualizado: new Date().toISOString(),
     }), 'utf-8'),
     ContentType: 'application/json',
@@ -580,7 +762,7 @@ exports.handler = async (event) => {
     return { statusCode: 400, headers, body: JSON.stringify({ error: 'JSON inválido.' }) };
   }
 
-  const { folio, filename, pdfBase64, nombreCompleto, tipo, fotoBase64, tarjetaBase64, placaEstilo, contactos, datosVisor, datosFormulario, esRenovacionPago, correoTitular } = payload;
+  const { folio, filename, pdfBase64, nombreCompleto, tipo, fotoBase64, tarjetaBase64, placaEstilo, contactos, datosVisor, datosFormulario, esRenovacionPago, correoTitular, producto } = payload;
   // ---- idioma elegido por quien llenó la ficha (ES/EN/FR/PT) — se guarda junto con la ficha
   // para que los correos automáticos que lleguen después (código de acceso aquí mismo, y el
   // aviso de escaneo en avisar-escaneo.js) puedan enviarse en ese mismo idioma. Solo se aceptan
@@ -613,10 +795,12 @@ exports.handler = async (event) => {
     // y el PIN vigente en la columna "PIN" de resumen.xlsx, todo en el mismo guardado.
     let pinActual = '';
     let creadoActual = null;
+    let activoActual = true;
     if (folio) {
-      const login = await cargarOCrearLogin(s3, folio, datosFormulario, carpeta, esRenovacionPago === true, correoTitular);
+      const login = await cargarOCrearLogin(s3, folio, datosFormulario, carpeta, esRenovacionPago === true, correoTitular, producto, placaEstilo);
       pinActual = login.pin || '';
       creadoActual = login.creado || null;
+      activoActual = login.activo !== false;
       if (login.esNuevo) pinNuevo = login.pin;
       // se envía en cada guardado (ficha nueva o actualización), no solo cuando el PIN es nuevo,
       // para que los contactos de emergencia siempre tengan a la mano el folio y el PIN vigentes
@@ -631,9 +815,15 @@ exports.handler = async (event) => {
       if (!login.esNuevo && esRenovacionPago !== true) {
         await enviarConfirmacionActualizacion(correoTitular, { folio, nombreCompleto, idioma });
       }
+      // ---- 2026-09-30: aviso de "pago pendiente" (8 días solares) — solo en la creación
+      // original de una ficha nueva que quedó sin activar. No se repite si el mismo formulario,
+      // todavía pendiente, se vuelve a enviar (login.esNuevo ya sería false la segunda vez). ----
+      if (login.esNuevo && activoActual === false) {
+        await enviarAvisoPagoPendiente(correoTitular, { folio, nombreCompleto, idioma, carpeta });
+      }
     }
 
-    const subido = await subirABuckets(s3, region, { folio, filename, pdfBase64, fotoBase64, tarjetaBase64, placaEstilo, nombreCompleto, tipo, contactos, datosVisor, idioma, creado: creadoActual });
+    const subido = await subirABuckets(s3, region, { folio, filename, pdfBase64, fotoBase64, tarjetaBase64, placaEstilo, nombreCompleto, tipo, contactos, datosVisor, idioma, creado: creadoActual, activo: activoActual });
     pdfUrl = subido.pdfUrl; fotoUrl = subido.fotoUrl; qrUrl = subido.qrUrl; qrSvg = subido.qrSvg; tarjetaUrl = subido.tarjetaUrl; qrPlacaUrl = subido.qrPlacaUrl;
 
     // resumen.xlsx separado por tipo (personas/resumen.xlsx y mascotas/resumen.xlsx), para

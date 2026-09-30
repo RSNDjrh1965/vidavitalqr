@@ -88,6 +88,9 @@ const TEXTOS = {
     // emergencia real por falta de pago. Se oculta solo la fotografía y la ficha completa en PDF.
     bannerVencida: '⚠️ Esta ficha está vencida. La información esencial de emergencia (contactos y datos médicos) se sigue mostrando, pero la foto y la ficha completa en PDF quedan ocultas hasta que el titular la renueve — y se eliminará por completo si no se renueva a tiempo.',
     noEncontradoEliminada: 'Esta ficha ya no existe: se eliminó por falta de renovación.',
+    pagoPendienteTitulo: 'Pago pendiente',
+    pagoPendienteTexto: 'Esta ficha todavía no se ha activado porque no se ha confirmado el pago. Si usted acaba de pagar, esta página se actualizará sola en unos minutos — puede volver a intentarlo más tarde. Si el cobro no se llegó a completar, puede volver al sitio para terminar su compra.',
+    pagoPendienteFolio: 'Código',
   },
   en: {
     tituloPersona: 'Emergency information',
@@ -120,6 +123,9 @@ const TEXTOS = {
     btnUbicNo: 'No, use approximate only',
     bannerVencida: '⚠️ This record has expired. Essential emergency information (contacts and medical data) is still shown, but the photo and the full PDF record are hidden until the owner renews it — and it will be permanently deleted if not renewed in time.',
     noEncontradoEliminada: 'This record no longer exists: it was deleted for lack of renewal.',
+    pagoPendienteTitulo: 'Payment pending',
+    pagoPendienteTexto: 'This record has not been activated yet because payment has not been confirmed. If you just paid, this page will update on its own within a few minutes — you can try again later. If the payment was not completed, you can return to the site to finish your purchase.',
+    pagoPendienteFolio: 'Code',
   },
   fr: {
     tituloPersona: "Informations d'urgence",
@@ -152,6 +158,9 @@ const TEXTOS = {
     btnUbicNo: 'Non, utiliser seulement l\'approximative',
     bannerVencida: "⚠️ Cette fiche a expiré. Les informations d'urgence essentielles (contacts et données médicales) restent affichées, mais la photo et la fiche complète en PDF sont masquées jusqu'à ce que le titulaire la renouvelle — elle sera définitivement supprimée si elle n'est pas renouvelée à temps.",
     noEncontradoEliminada: "Cette fiche n'existe plus : elle a été supprimée faute de renouvellement.",
+    pagoPendienteTitulo: 'Paiement en attente',
+    pagoPendienteTexto: "Cette fiche n'a pas encore été activée car le paiement n'a pas été confirmé. Si vous venez de payer, cette page se mettra à jour automatiquement dans quelques minutes — vous pouvez réessayer plus tard. Si le paiement n'a pas été finalisé, vous pouvez retourner sur le site pour terminer votre achat.",
+    pagoPendienteFolio: 'Code',
   },
   pt: {
     tituloPersona: 'Informações de emergência',
@@ -184,6 +193,9 @@ const TEXTOS = {
     btnUbicNo: 'Não, usar apenas a aproximada',
     bannerVencida: '⚠️ Esta ficha está vencida. As informações essenciais de emergência (contatos e dados médicos) continuam sendo exibidas, mas a foto e a ficha completa em PDF ficam ocultas até que o titular a renove — e será excluída definitivamente se não for renovada a tempo.',
     noEncontradoEliminada: 'Esta ficha não existe mais: foi excluída por falta de renovação.',
+    pagoPendienteTitulo: 'Pagamento pendente',
+    pagoPendienteTexto: 'Esta ficha ainda não foi ativada porque o pagamento não foi confirmado. Se você acabou de pagar, esta página vai se atualizar sozinha em alguns minutos — você pode tentar novamente mais tarde. Se o pagamento não foi concluído, você pode voltar ao site para terminar sua compra.',
+    pagoPendienteFolio: 'Código',
   },
 };
 
@@ -214,6 +226,31 @@ function paginaError(mensaje) {
 <style>body{font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:#F7F4EE;color:#12282B;display:flex;min-height:100vh;align-items:center;justify-content:center;margin:0;padding:24px;text-align:center;}
 .box{max-width:420px;}h1{font-size:1.3rem;}</style></head>
 <body><div class="box"><h1>VidaVitalQR</h1><p>${escapeHtml(mensaje)}</p></div></body></html>`;
+}
+
+// ---- 2026-09-30: página que se muestra cuando la ficha todavía no tiene el pago confirmado
+// (datos.activo === false, ver send-ficha.js/onvo-webhook.js). Nunca se muestra información
+// personal aquí (ni foto, ni contactos, ni datos médicos) — solo el folio, para que la persona
+// pueda identificar de cuál compra se trata si escribe pidiendo ayuda. En cuanto ONVO Pay
+// confirma el pago, onvo-webhook.js activa la ficha automáticamente y esta misma página, al
+// volver a abrirse, ya muestra la información real. ----
+function paginaPagoPendiente(datos) {
+  const idioma = TEXTOS[datos.idioma] ? datos.idioma : 'es';
+  const t = TEXTOS[idioma];
+  return `<!doctype html><html lang="${escapeHtml(idioma)}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>VidaVitalQR — ${escapeHtml(t.pagoPendienteTitulo)}</title>
+<style>
+  body{font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:#F7F4EE;color:#12282B;display:flex;min-height:100vh;align-items:center;justify-content:center;margin:0;padding:24px;text-align:center;}
+  .box{max-width:440px;background:#FFFFFF;border:1px solid #DAD3C4;border-radius:14px;padding:32px 26px;}
+  h1{font-size:1.25rem;margin:0 0 14px;color:#1F4448;}
+  p{line-height:1.5;margin:0 0 10px;}
+  .folio{font-family:monospace;font-size:0.95rem;color:#6C7A76;}
+</style></head>
+<body><div class="box">
+<h1>⏳ ${escapeHtml(t.pagoPendienteTitulo)}</h1>
+<p>${escapeHtml(t.pagoPendienteTexto)}</p>
+<p class="folio">${escapeHtml(t.pagoPendienteFolio)}: ${escapeHtml(datos.folio || '')}</p>
+</div></body></html>`;
 }
 
 function paginaVisor(datos) {
@@ -654,6 +691,16 @@ exports.handler = async (event) => {
   // página (que solo lee). ----
   if (calcularEstado(datos.creado) === 'eliminada') {
     return { statusCode: 404, headers, body: paginaError('Esta ficha ya no existe: se eliminó por falta de renovación.') };
+  }
+
+  // ---- 2026-09-30: corrige un problema grave — antes la ficha (y su código QR, ya público)
+  // quedaba activa apenas se hacía clic en "Enviar", sin importar si el pago se llegaba a
+  // completar o no. "datos.activo" lo escribe send-ficha.js (false = ficha nueva, recién creada,
+  // pago todavía sin confirmar) y lo cambia a true onvo-webhook.js en cuanto ONVO Pay confirma el
+  // pago real. Una ficha de antes de este cambio (sin el campo "activo" todavía) se trata como
+  // activa, para no desactivar de golpe nada que ya estaba funcionando y pagado. ----
+  if (datos.activo === false) {
+    return { statusCode: 200, headers, body: paginaPagoPendiente(datos) };
   }
 
   // El aviso a los contactos ya no se envía desde aquí: se dispara desde el navegador de quien

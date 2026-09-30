@@ -150,6 +150,15 @@ exports.handler = async (event) => {
       if (!folio) {
         return { statusCode: 400, body: JSON.stringify({ error: 'Falta el folio de la ficha para: ' + catalogo.label }) };
       }
+    } else {
+      // ---- 2026-09-30: para un producto que NO es renovación (código QR, placa, pulsera,
+      // cadena, Identificador QR — es decir, una compra/ficha nueva), el folio no es obligatorio
+      // aquí (el pago se puede seguir creando aunque por algún motivo no llegue), pero SÍ se
+      // acepta y se pasa a metadata cuando el navegador lo manda — lo necesita
+      // onvo-webhook.js para activar automáticamente esa ficha en cuanto el pago se confirme (ver
+      // claude/correccion-activacion-pago-vidavitalqr.md). Antes de ese cambio esta rama nunca
+      // guardaba el folio porque no hacía falta para nada más.
+      folio = String(entrada.folio || '').trim();
     }
     // ---- estilo de placa elegido (solo aplica a "plate_personal" -- ver bitácora punto 39):
     // se acepta únicamente si es uno de los 4 valores reales, para que el aviso de pago al

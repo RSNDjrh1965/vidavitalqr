@@ -39,6 +39,7 @@
 
 const { S3Client, ListObjectsV2Command, GetObjectCommand, PutObjectCommand, DeleteObjectCommand } = require('@aws-sdk/client-s3');
 const { fechaVencimiento, finGracia, calcularEstado, diasEntre } = require('./lib/vigencia');
+const { marcarFilaComoEliminada } = require('./lib/xlsx-resumen');
 
 const BUCKET_FICHAS = process.env.S3_BUCKET_FICHAS || 'vidavitalqr';
 const BUCKET_QR = process.env.S3_BUCKET_QR || 'vidavitalqr-qr';
@@ -47,6 +48,10 @@ const REMITENTE = 'VidaVitalQR <ficha@vidavitalqr.com>';
 const SITE_URL = process.env.SITE_URL || 'https://vidavitalqr.com';
 const CARPETAS = ['personas', 'mascotas', 'objetos'];
 const IDIOMAS_PDF = ['en', 'fr', 'pt']; // "es" es el PDF por defecto (folio.pdf); los demás llevan sufijo
+// ---- mismo nombre de archivo que usa send-ficha.js (un resumen.xlsx separado por carpeta) —
+// 2026-09-30, para poder marcar la fila como "Eliminada" con texto fijo apenas se borra la ficha
+// real, en vez de dejar que la fórmula de fecha de esa columna la alcance sola más adelante ----
+const RESUMEN_KEY = 'resumen.xlsx';
 
 function getS3Client() {
   const region = process.env.S3_REGION || 'us-east-1';
@@ -113,6 +118,16 @@ function urlRenovacion(carpeta) {
   return `${SITE_URL}/${pagina}?renovar=1`;
 }
 
+// ---- 2026-09-30: enlace de vuelta al pago para el recordatorio de "pago pendiente" — mismo
+// parámetro (?fichaId=/?fichaIdMascota=/?fichaIdObjeto=) que ya usa goToPayment() en
+// ficha.html/ficha-mascota.html/ficha-objeto.html, y el mismo que usa el correo de creación en
+// send-ficha.js (urlPagoPendiente allá) — para volver directo al recuadro de pago con el folio ya
+// reconocido. ----
+function urlPagoPendiente(carpeta, folio) {
+  const parametro = carpeta === 'mascotas' ? 'fichaIdMascota' : (carpeta === 'objetos' ? 'fichaIdObjeto' : 'fichaId');
+  return `${SITE_URL}/index.html?${parametro}=${encodeURIComponent(folio)}&reanudarPago=1#pago-seguro`;
+}
+
 function tipoFichaTexto(carpeta) {
   return carpeta === 'mascotas' ? 'ficha de mascota' : (carpeta === 'objetos' ? 'ficha de objeto' : 'ficha médica');
 }
@@ -169,6 +184,26 @@ function correoEliminada(nombre, tipo, folio, enlaceSitio) {
   return {
     asunto: 'Su ficha VidaVitalQR fue eliminada',
     texto: `Hola ${nombre},\n\nComo le informamos previamente, su ficha (${tipo} — folio ${folio}) se eliminó hoy por falta de renovación durante el período de gracia.\n\nSi desea volver a contar con VidaVitalQR, puede crear una ficha nueva cuando quiera aquí: ${enlaceSitio}\n\nGracias por haber sido parte de VidaVitalQR.`,
+  };
+}
+// ---- 2026-09-30: recordatorio a 1 día de cumplirse el plazo (día 7 de 8) para una ficha nunca
+// pagada — texto cálido, invitando a completar el pago, aprobado por James tal cual se le mostró
+// antes de implementarlo. Solo se envía una vez por ficha (bandera "recordatorioPagoPendiente" en
+// vigencia.avisos, mismo patrón que los demás avisos de esta cronología). ----
+function correoRecordatorioPagoPendiente(nombre, tipo, folio, enlace) {
+  return {
+    asunto: `Último día para completar el pago de su ficha VidaVitalQR — mañana se elimina (folio ${folio})`,
+    texto: `Hola ${nombre},\n\nLe escribimos porque mañana se cumple el plazo para completar el pago de su ficha VidaVitalQR (${tipo} — folio ${folio}). Si no logramos confirmar el pago antes de esa fecha, lamentablemente tendremos que eliminar la ficha junto con toda la información que ingresó.\n\nTodavía está a tiempo — complete su pago aquí: ${enlace}\n\nLe pediremos el PIN que le enviamos en el correo de "Código de acceso" — no tendrá que volver a escribir sus datos.\n\nEs rápido, y en cuanto se confirme, su código QR queda activo de inmediato, con toda la información lista para una emergencia real.\n\n¿Tuvo algún inconveniente con el pago? Escríbanos por WhatsApp desde vidavitalqr.com y con gusto le ayudamos a resolverlo.\n\nSi ya completó su pago, puede ignorar este mensaje.\n\nUn saludo,\nEl equipo de VidaVitalQR`,
+  };
+}
+// ---- 2026-09-30: correo final para una ficha que NUNCA se pagó (activo=false) y se elimina a
+// los 8 días solares sin pago — a diferencia de correoEliminada() (que es para una ficha que SÍ
+// se pagó alguna vez y luego venció sin renovar), acá nunca hubo ningún pago de por medio. Ver
+// claude/limpieza-fichas-pago-pendiente-vidavitalqr.md. ----
+function correoEliminadaPagoPendiente(nombre, tipo, folio, enlaceSitio) {
+  return {
+    asunto: 'Su ficha VidaVitalQR fue eliminada — no se completó el pago',
+    texto: `Hola ${nombre},\n\nLe habíamos avisado que su ficha (${tipo} — folio ${folio}) quedaba pendiente de pago. Como no se confirmó el pago dentro de los 8 días solares, la ficha —y toda la información que había ingresado— se eliminó por completo de nuestro sistema.\n\nSi desea volver a intentarlo, puede crear una ficha nueva y completar el pago aquí: ${enlaceSitio}\n\nGracias por su interés en VidaVitalQR.`,
   };
 }
 
@@ -248,6 +283,69 @@ async function procesarFicha(s3, apiKey, ahora, carpeta, key, contadores) {
   const creado = registro.creado;
   if (!creado) return; // ficha sin fecha de vigencia registrada (de antes de este cambio) — no se procesa
 
+  // ---- 2026-09-30: ficha NUNCA pagada (activo === false, ver send-ficha.js/onvo-webhook.js) —
+  // sigue un conteo aparte, de 8 días solares desde "creado", nada que ver con los 12 meses de
+  // vigencia de una ficha que sí se pagó. send-ficha.js ya le avisó al titular, al crearla, que
+  // tenía 8 días para pagar; aquí se revisa (a) si ya está en el día 7 (un día antes del plazo)
+  // para mandar un recordatorio, y (b) si ya se cumplieron los 8 días para borrarla del todo y
+  // avisarle que se eliminó — nunca entra a la lógica de vigente/vencida/eliminada de abajo, que
+  // es solo para fichas que sí llegaron a activarse alguna vez. ----
+  if (registro.activo === false) {
+    const avisosPagoPendiente = (registro.vigencia && registro.vigencia.avisos) || {};
+    if (avisosPagoPendiente.eliminadaPagoPendiente) return; // ya se procesó antes (no debería quedar el login si ya se borró, pero por si acaso)
+    const diasSinPagar = diasEntre(new Date(creado), ahora);
+
+    // ---- recordatorio a 1 día del plazo (día 7 de 8) — texto cálido aprobado por James, invita
+    // a completar el pago antes de que se elimine mañana. Se envía una sola vez por ficha. ----
+    if (diasSinPagar >= 7 && diasSinPagar < 8 && !avisosPagoPendiente.recordatorioPagoPendiente) {
+      const nombreRec = nombreDesdeDatosFormulario(registro.datosFormulario, carpeta);
+      const tipoRec = tipoFichaTexto(carpeta);
+      const correoDestinoRec = (registro.correoTitular && String(registro.correoTitular).trim())
+        || (registro.datosFormulario && registro.datosFormulario.emailcontacto1)
+        || '';
+      const enlaceRec = urlPagoPendiente(carpeta, folio);
+      const enviadoRec = correoDestinoRec ? await enviarCorreo(apiKey, correoDestinoRec, correoRecordatorioPagoPendiente(nombreRec, tipoRec, folio, enlaceRec)) : true;
+      if (enviadoRec) {
+        const nuevoRegistroRec = { ...registro, vigencia: { avisos: { ...avisosPagoPendiente, recordatorioPagoPendiente: true } } };
+        try {
+          await s3.send(new PutObjectCommand({
+            Bucket: BUCKET_RESUMEN,
+            Key: key,
+            Body: Buffer.from(JSON.stringify(nuevoRegistroRec), 'utf-8'),
+            ContentType: 'application/json',
+          }));
+        } catch (err) {
+          console.error('revisar-vigencia: no se pudo guardar la bandera del recordatorio de pago pendiente para', folio, err);
+        }
+        if (contadores) contadores.recordatorioPagoPendiente = (contadores.recordatorioPagoPendiente || 0) + 1;
+      }
+    }
+
+    if (diasSinPagar < 8) return; // todavía dentro del plazo — nada más que hacer hoy
+    const nombre = nombreDesdeDatosFormulario(registro.datosFormulario, carpeta);
+    const tipo = tipoFichaTexto(carpeta);
+    const correoDestinoPendiente = (registro.correoTitular && String(registro.correoTitular).trim())
+      || (registro.datosFormulario && registro.datosFormulario.emailcontacto1)
+      || '';
+    const confirmado = correoDestinoPendiente ? await enviarCorreo(apiKey, correoDestinoPendiente, correoEliminadaPagoPendiente(nombre, tipo, folio, SITE_URL)) : true;
+    if (!confirmado) return; // se reintenta mañana, igual que con una ficha vencida normal
+    let datosPublicosPendiente = null;
+    try {
+      const resp = await s3.send(new GetObjectCommand({ Bucket: BUCKET_FICHAS, Key: `${carpeta}/datos/${folio}.json` }));
+      datosPublicosPendiente = JSON.parse(await streamToString(resp.Body));
+    } catch (err) {
+      if (!esNoExiste(err)) console.error('revisar-vigencia: no se pudo leer el JSON público antes de borrar (pago pendiente)', folio, err);
+    }
+    await borrarFichaCompleta(s3, carpeta, folio, datosPublicosPendiente);
+    try {
+      await marcarFilaComoEliminada(s3, BUCKET_RESUMEN, `${carpeta}/${RESUMEN_KEY}`, folio, 'Eliminada (pago pendiente)');
+    } catch (err) {
+      console.error('revisar-vigencia: no se pudo marcar en el Excel la fila eliminada (pago pendiente) de', folio, err);
+    }
+    if (contadores) contadores.eliminadasPagoPendiente = (contadores.eliminadasPagoPendiente || 0) + 1;
+    return;
+  }
+
   const venc = fechaVencimiento(creado);
   const gracia = finGracia(creado);
   if (!venc || !gracia) return;
@@ -314,6 +412,11 @@ async function procesarFicha(s3, apiKey, ahora, carpeta, key, contadores) {
     }
 
     await borrarFichaCompleta(s3, carpeta, folio, datosPublicos);
+    try {
+      await marcarFilaComoEliminada(s3, BUCKET_RESUMEN, `${carpeta}/${RESUMEN_KEY}`, folio, 'Eliminada');
+    } catch (err) {
+      console.error('revisar-vigencia: no se pudo marcar en el Excel la fila eliminada de', folio, err);
+    }
     if (contadores) contadores.eliminadas = (contadores.eliminadas || 0) + 1;
     return; // el registro de login ya se borró — no hay nada más que guardar
   }

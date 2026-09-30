@@ -20,8 +20,11 @@
 // ONVO) se reconocen y se responden con 200 para que ONVO no los reintente, pero tampoco disparan
 // nada — son solo pasos intermedios antes de que llegue (o no) el "succeeded" definitivo.
 //
-// Sigue pendiente (ver bitácora): marcar cada ficha como renovada/pagada en S3 y activar el
-// bloqueo del visor público para fichas no pagadas (ver.js).
+// 2026-09-30: al confirmarse "payment-intent.succeeded", además de lo anterior, esta función
+// ahora también activa (datos.activo = true) cada ficha con folio incluida en el pago — corrige
+// un problema grave: antes la ficha (y su código QR, ya público) quedaba activa desde el momento
+// de "Enviar" el formulario, sin importar si el pago se completaba o no. Ver la función
+// activarFichasPagadas() más abajo.
 //
 // Requiere dos variables de entorno en Netlify (Project configuration → Environment variables):
 //   - ONVO_SECRET_KEY: la misma llave secreta usada en crear-pago.js (se usa aquí solo para
@@ -32,7 +35,7 @@
 // Ninguna de las dos debe escribirse en este archivo ni en ningún otro que se suba al repositorio.
 
 const { S3Client } = require('@aws-sdk/client-s3');
-const { GetObjectCommand } = require('@aws-sdk/client-s3');
+const { GetObjectCommand, PutObjectCommand } = require('@aws-sdk/client-s3');
 const { agregarIngreso } = require('./lib/ingresos');
 
 const ONVO_API_BASE = 'https://api.onvopay.com/v1';
@@ -45,6 +48,10 @@ const REMITENTE = 'VidaVitalQR <ficha@vidavitalqr.com>';
 // ---- bucket/llave del Registro de Ingresos (mismo bucket privado que resumen.xlsx) ----
 const BUCKET_RESUMEN = process.env.S3_BUCKET_RESUMEN || 'resumen-vidavitalqr';
 const REGISTRO_INGRESOS_KEY = 'registro-ingresos.xlsx';
+// ---- mismo bucket público de fichas que usa send-ficha.js/ver.js (donde vive el JSON que lee
+// el visor público, en "<carpeta>/datos/<folio>.json") — 2026-09-30, para poder activar la ficha
+// aquí en cuanto el pago se confirma de verdad ----
+const BUCKET_FICHAS = process.env.S3_BUCKET_FICHAS || 'vidavitalqr';
 
 function getS3Client() {
   const region = process.env.S3_REGION || 'us-east-1';
@@ -235,15 +242,113 @@ exports.handler = async (event) => {
     }
   }
 
-  // TODO (próxima fase): marcar cada ficha (según folio/tipo en "items") como renovada/pagada en
-  // S3 (reiniciar su fecha "creado", igual que hace send-ficha.js cuando se envía con
-  // esRenovacionPago), y activar el bloqueo del visor público para fichas no pagadas (ver.js) —
-  // ambos pendientes según el punto 17 de la bitácora. Los productos físicos/digitales sin folio
-  // (placa, pulsera, cadena, Identificador QR, código QR solo digital) no requieren esa marca —
-  // su ficha se crea y envía por separado desde el formulario de ficha correspondiente.
+  // ---- 4) Activar cada ficha pagada (2026-09-30) ----
+  // Corrige un problema grave que James detectó: la ficha (y su código QR, ya público) se
+  // activaba por completo en el momento de "Enviar" el formulario, sin importar si el pago se
+  // llegaba a completar o no — si el cliente cancelaba el pago, la ficha quedaba creada y
+  // accesible gratis igual. Ahora send-ficha.js crea toda ficha NUEVA con activo=false, y recién
+  // aquí, cuando ONVO Pay confirma "payment-intent.succeeded" de verdad, se marca como activa —
+  // tanto en el registro privado de login como en el JSON público que lee ver.js. Un fallo aquí
+  // nunca debe impedir que el webhook responda 200 (el pago ya está confirmado y registrado
+  // arriba); si algo falla, queda este log para activarla a mano y diagnosticar.
+  //
+  // Sigue pendiente (fuera de alcance de este cambio, ya señalado y aceptado con James el
+  // 2026-09-25 en la política de vigencia): reiniciar la fecha "creado" de una renovación pagada
+  // recién en este webhook en vez de al momento de "Enviar" — por ahora una renovación conserva
+  // el mismo comportamiento que ya tenía.
+  try {
+    const s3Activacion = getS3Client();
+    await activarFichasPagadas(s3Activacion, items);
+  } catch (err) {
+    console.error('onvo-webhook: no se pudieron activar las fichas pagadas —', err);
+  }
 
   return { statusCode: 200, body: 'ok' };
 };
+
+// ---- activa (datos.activo = true) cada ficha con folio que vino en el pago confirmado — ver
+// nota arriba. Nunca lanza el error hacia arriba: cada folio se intenta por separado, así que si
+// uno falla (por ejemplo, un folio mal formado) los demás igual se activan. ----
+async function activarFichasPagadas(s3, items) {
+  const foliosUnicos = Array.from(new Set((items || []).filter((it) => it && it.folio).map((it) => String(it.folio).toUpperCase())));
+  for (const folio of foliosUnicos) {
+    try {
+      await activarUnaFicha(s3, folio);
+      console.log('onvo-webhook: ficha', folio, 'activada (pago confirmado).');
+    } catch (err) {
+      console.error('onvo-webhook: no se pudo activar la ficha', folio, '—', err);
+    }
+  }
+}
+
+async function activarUnaFicha(s3, folioMayus) {
+  const carpeta = carpetaDesdeFolio(folioMayus);
+
+  // 1) registro privado de acceso (login) — mismo patrón de "carpeta nueva, con respaldo en la
+  // ubicación antigua sin carpeta" que usa el resto del proyecto (ver cargarOCrearLogin en
+  // send-ficha.js y resolverNombreCliente más abajo en este mismo archivo)
+  const loginKeyNuevo = `${carpeta}/login/${folioMayus}.json`;
+  const loginKeyLegacy = `login/${folioMayus}.json`;
+  let loginTexto = null;
+  let loginKeyUsada = loginKeyNuevo;
+  try {
+    const resp = await s3.send(new GetObjectCommand({ Bucket: BUCKET_RESUMEN, Key: loginKeyNuevo }));
+    loginTexto = await streamToString(resp.Body);
+  } catch (err) {
+    try {
+      const resp2 = await s3.send(new GetObjectCommand({ Bucket: BUCKET_RESUMEN, Key: loginKeyLegacy }));
+      loginTexto = await streamToString(resp2.Body);
+      loginKeyUsada = loginKeyLegacy;
+    } catch (err2) {
+      console.error('onvo-webhook: no se encontró el registro de login de', folioMayus, '— no se pudo activar (¿folio incorrecto?).');
+    }
+  }
+  if (loginTexto) {
+    const registro = JSON.parse(loginTexto);
+    if (registro.activo !== true) {
+      registro.activo = true;
+      registro.actualizado = new Date().toISOString();
+      await s3.send(new PutObjectCommand({
+        Bucket: BUCKET_RESUMEN,
+        Key: loginKeyUsada,
+        Body: Buffer.from(JSON.stringify(registro), 'utf-8'),
+        ContentType: 'application/json',
+      }));
+    }
+  }
+
+  // 2) JSON público que lee ver.js — es el que realmente decide si el visor muestra la
+  // información o el aviso de "pago pendiente"
+  const datosKeyNuevo = `${carpeta}/datos/${folioMayus}.json`;
+  const datosKeyLegacy = `datos/${folioMayus}.json`;
+  let datosTexto = null;
+  let datosKeyUsada = datosKeyNuevo;
+  try {
+    const resp = await s3.send(new GetObjectCommand({ Bucket: BUCKET_FICHAS, Key: datosKeyNuevo }));
+    datosTexto = await streamToString(resp.Body);
+  } catch (err) {
+    try {
+      const resp2 = await s3.send(new GetObjectCommand({ Bucket: BUCKET_FICHAS, Key: datosKeyLegacy }));
+      datosTexto = await streamToString(resp2.Body);
+      datosKeyUsada = datosKeyLegacy;
+    } catch (err2) {
+      console.error('onvo-webhook: no se encontró la ficha pública de', folioMayus, '— no se pudo activar (¿send-ficha.js todavía no terminó de subirla?).');
+    }
+  }
+  if (datosTexto) {
+    const datos = JSON.parse(datosTexto);
+    if (datos.activo !== true) {
+      datos.activo = true;
+      datos.actualizado = new Date().toISOString();
+      await s3.send(new PutObjectCommand({
+        Bucket: BUCKET_FICHAS,
+        Key: datosKeyUsada,
+        Body: Buffer.from(JSON.stringify(datos), 'utf-8'),
+        ContentType: 'application/json',
+      }));
+    }
+  }
+}
 
 // ---- consulta a ONVO qué tipo de método de pago se usó (tarjeta o SINPE Móvil) ----
 // Nunca lanza un error hacia arriba: si la consulta falla o el tipo no se reconoce, devuelve

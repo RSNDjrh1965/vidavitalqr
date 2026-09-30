@@ -100,7 +100,21 @@ exports.handler = async (event) => {
       // actualizaciones y solo se reinicia cuando se paga una renovación) — la usa el frontend
       // para saber si ya pasaron los 12 meses y bloquear la actualización gratuita hasta que se
       // renueve el pago.
-      body: JSON.stringify({ ok: true, folio, datosFormulario: registro.datosFormulario || {}, creado: registro.creado || null }),
+      // "activo", "producto" y "placaEstilo" se agregan 2026-09-30 para la pantalla de
+      // "continuar mi pago" (index.html): si la ficha sigue pendiente de pago (activo === false),
+      // el frontend usa "producto" (y "placaEstilo" si aplica) para agregar automáticamente al
+      // carrito el mismo producto que el cliente ya había elegido, al precio real de ese
+      // producto, sin que tenga que elegirlo de nuevo. Una ficha creada antes de este cambio
+      // simplemente no tendrá "producto" guardado (queda como cadena vacía).
+      body: JSON.stringify({
+        ok: true,
+        folio,
+        datosFormulario: registro.datosFormulario || {},
+        creado: registro.creado || null,
+        activo: registro.activo !== false,
+        producto: registro.producto || '',
+        placaEstilo: registro.placaEstilo || '',
+      }),
     };
   } catch (err) {
     const noExiste = err.name === 'NoSuchKey' || err.Code === 'NoSuchKey' || err.$metadata?.httpStatusCode === 404;
