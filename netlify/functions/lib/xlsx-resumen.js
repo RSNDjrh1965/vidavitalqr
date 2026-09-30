@@ -532,4 +532,60 @@ async function actualizarResumenXlsx(s3, bucket, key, fila) {
   }));
 }
 
-module.exports = { actualizarResumenXlsx };
+// ---- 2026-09-30: marca la fila de una ficha como eliminada con un texto FIJO (no fórmula) en la
+// columna "Estado" — a pedido de James, para que el Excel refleje con certeza que esa ficha ya no
+// existe en S3, sin depender de que la fórmula de fecha (IF(TODAY()<...)) "adivine" el estado
+// correcto. Antes de este cambio, la columna "Estado" siempre quedaba como fórmula, así que una
+// fila cuya ficha real ya se había borrado (por revisar-vigencia.js) podía seguir mostrando
+// "Vigente" o "Vencida" en el Excel durante meses, hasta que la fecha calculada por la fórmula
+// alcanzara el mismo punto — esto se notó especialmente con las fichas que nunca se pagaron
+// (borradas a los 8 días, mucho antes de que la fórmula de 12 meses las marcara solas). Se usa
+// tanto para esas fichas nunca pagadas como para las que sí se pagaron y se eliminaron por falta
+// de renovación (los 12 meses + 2 de gracia de siempre) — en ambos casos, apenas
+// revisar-vigencia.js borra los datos reales, esta función dice la verdad en el Excel de una vez,
+// en lugar de dejarlo a que la fórmula lo alcance sola más adelante.
+//
+// También limpia los enlaces de "Ver PDF" / "Ver código QR" (dejan de servir nada útil — el
+// archivo real ya no existe) para que no quede un enlace roto en el Excel.
+//
+// Nunca lanza error hacia arriba: si la fila no se encuentra (por ejemplo, el Excel nunca llegó a
+// tener esa fila, o el archivo resumen.xlsx no existe todavía), simplemente no hace nada — no es
+// motivo para interrumpir el borrado real de la ficha, que ya ocurrió antes de llamar a esto.
+async function marcarFilaComoEliminada(s3, bucket, key, contador, textoEstado) {
+  let workbook, sheet;
+  try {
+    ({ workbook, sheet } = await cargarOCrearLibro(s3, bucket, key));
+  } catch (err) {
+    console.error('xlsx-resumen: no se pudo abrir el libro para marcar como eliminada la fila de', contador, err);
+    return;
+  }
+
+  const rowNumber = buscarFilaPorContador(sheet, contador);
+  if (!rowNumber) return; // no había fila que marcar — nada que hacer
+
+  const row = sheet.getRow(rowNumber);
+  row.getCell(COL_ESTADO).value = textoEstado || 'Eliminada';
+  row.getCell(COL_ESTADO).font = { bold: true, color: { argb: 'FFB42318' } };
+  row.getCell(COL_ESTADO).alignment = { vertical: 'middle', horizontal: 'center' };
+
+  const celdaPdf = row.getCell(COL_PDF);
+  if (celdaPdf.value) celdaPdf.value = '(eliminado)';
+  const celdaQr = row.getCell(COL_QR);
+  if (celdaQr.value) celdaQr.value = '(eliminado)';
+
+  row.commit();
+
+  try {
+    const buffer = await workbook.xlsx.writeBuffer();
+    await s3.send(new PutObjectCommand({
+      Bucket: bucket,
+      Key: key,
+      Body: buffer,
+      ContentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    }));
+  } catch (err) {
+    console.error('xlsx-resumen: no se pudo guardar el libro tras marcar como eliminada la fila de', contador, err);
+  }
+}
+
+module.exports = { actualizarResumenXlsx, marcarFilaComoEliminada };
