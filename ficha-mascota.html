@@ -475,6 +475,12 @@
 <script>
 const $ = id => document.getElementById(id);
 
+// ---- 2026-09-30: producto elegido en la página principal (llega como ?producto=<item> en la
+//      URL, ej. "qr_only_personal" no aplica aquí, pero sí "renewal_mascota" o "plate_mascota").
+//      Se guarda junto con la ficha para poder usarlo después en la pantalla de "continuar mi
+//      pago" — ver el mismo comentario, más detallado, en ficha.html. ----
+const productoElegido = new URLSearchParams(window.location.search).get('producto') || '';
+
 // ---- ¿Es una renovación pagada (?renovar=1)? Declarada aquí, en el ámbito global del script,
 //      porque se usa al enviar el formulario (fuera del IIFE del contador/renovación donde
 //      antes vivía solo esta variable — eso causaba "esRenovacion is not defined" al hacer
@@ -2097,7 +2103,7 @@ $('btnEmail').addEventListener('click', async () => {
     const resp = await fetch('/.netlify/functions/send-ficha', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({ folio, filename, pdfBase64, nombreCompleto, tipo: 'Mascota', fotoBase64, contactos, datosVisor, datosFormulario, esRenovacionPago: esRenovacion, idioma: LANG_FICHA, correoTitular: $('correoTitular').value || '' })
+      body: JSON.stringify({ folio, filename, pdfBase64, nombreCompleto, tipo: 'Mascota', fotoBase64, producto: productoElegido, contactos, datosVisor, datosFormulario, esRenovacionPago: esRenovacion, idioma: LANG_FICHA, correoTitular: $('correoTitular').value || '' })
     });
 
     if(!resp.ok){
