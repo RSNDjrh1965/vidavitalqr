@@ -279,7 +279,7 @@
 <!-- Aviso de renovación/actualización: solo se muestra si se llega con ?renovar=1 o ?actualizar=1 en la URL -->
 <div class="section no-print" id="renewalGate" style="display:none; border:2px solid var(--red,#c0392b); background:#fff6f0;">
 <h2 style="margin-top:0;" id="renewalGateTitle" data-i18n="renewH2">🔄 Renovación de ficha existente</h2>
-<p style="margin:0 0 14px;" id="renewalGateIntro" data-i18n-html="renewIntro">Ingresa el código que aparece debajo del código QR de tu ficha actual (ejemplo: <b>VVOBJETO00000012</b>). Si además ingresas el PIN de acceso (te lo mostramos la primera vez que guardaste la ficha), precargamos automáticamente los datos para que solo edites lo que cambió — si no lo tienes a mano, puedes continuar sin PIN y llenar el formulario de nuevo.</p>
+<p style="margin:0 0 14px;" id="renewalGateIntro" data-i18n-html="renewIntro">Ingresa el código que aparece debajo del código QR de tu ficha actual (ejemplo: <b>VVOBJETO00000012</b>). Si además ingresas el PIN de acceso (te lo mostramos la primera vez que guardaste la ficha), precargamos automáticamente los datos para que solo edites lo que cambió. El PIN es obligatorio para poder actualizar o renovar — si no lo tienes a mano, puedes recuperarlo más abajo.</p>
 <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:flex-end;">
 <div class="field" style="flex:1; min-width:220px; margin:0;">
 <label data-i18n="renewCodeLabel">Código de tu ficha</label>
@@ -291,7 +291,7 @@
 </div>
 <button type="button" id="renewalConfirmBtn" class="select-btn" style="white-space:nowrap;" data-i18n="btnContinuar">Continuar</button>
 </div>
-<p id="renewalPinError" style="display:none; margin:14px 0 0; color:#c0392b; font-weight:600;" data-i18n="renewPinError">✘ Folio o PIN incorrectos. Verifica ambos, o continúa dejando el PIN en blanco para llenar el formulario de nuevo.</p>
+<p id="renewalPinError" style="display:none; margin:14px 0 0; color:#c0392b; font-weight:600;" data-i18n="renewPinError">✘ Folio o PIN incorrectos. Verifica ambos e inténtalo de nuevo.</p>
 <p id="renewalVencidoNotice" style="display:none; margin:14px 0 0; padding:12px 14px; background:#fff0ee; border:1px solid #c0392b; border-radius:10px; color:#7a2418; font-weight:600;">⚠ Esta ficha lleva más de 12 meses desde su último pago, así que ya no se puede actualizar gratis. Para editar sus datos primero debe renovar el pago — use el botón "Renovar" en la página principal (vidavitalqr.com) para ponerla al día.</p>
 <p id="renewalFechaInicio" style="display:none; margin:8px 0 0; font-size:0.9rem; color:#3a352b;">📅 Fecha de inicio de vigencia de esta ficha: <strong id="renewalFechaInicioValor"></strong></p>
 <p style="margin:10px 0 0; font-size:0.85rem; color:#6b6558;" data-i18n-html="renewForgotPin">¿Olvidaste tu PIN? <a href="#" id="recuperarPinToggle" style="color:var(--teal-deep,#1F4448); font-weight:600;">Recupéralo con la descripción y la fecha de registro del objeto</a>, o escríbenos por el botón de WhatsApp en vidavitalqr.com indicando tu código de ficha.</p>
@@ -458,6 +458,13 @@ let esRenovacion = false;
 //      actualizada" en vez de llevar al cliente al mockup de pago. ----
 let esActualizacion = false;
 
+// ---- 2026-10-02: PIN ya validado contra el folio (por login-ficha.js) en el recuadro de
+//      renovación/actualización de arriba — se guarda aquí, en el ámbito global del script, por
+//      el mismo motivo que esRenovacion/esActualizacion: se necesita de nuevo al enviar el
+//      formulario, para que send-ficha.js (que ahora también exige y verifica este PIN del lado
+//      del servidor) pueda confirmarlo. Vacío para una ficha completamente nueva, donde no aplica. ----
+let pinConfirmadoFicha = '';
+
 // ============================================================
 // ---- Sistema de idiomas (mismo esquema que ficha.html y ficha-mascota.html: se sincroniza
 // automáticamente con el idioma elegido en vidavitalqr.com porque esta ficha se abre en una
@@ -473,11 +480,11 @@ const TEXTOS_FICHA = {
     tipoPlaceholder: '— TIPO DE OBJETO —',
     photoHint: '📷 Foto<br>Clic para subir',
     renewH2: '🔄 Renovación de ficha existente',
-    renewIntro: 'Ingresa el código que aparece debajo del código QR de tu ficha actual (ejemplo: <b>VVOBJETO00000012</b>). Si además ingresas el PIN de acceso (te lo mostramos la primera vez que guardaste la ficha), precargamos automáticamente los datos para que solo edites lo que cambió — si no lo tienes a mano, puedes continuar sin PIN y llenar el formulario de nuevo.',
+    renewIntro: 'Ingresa el código que aparece debajo del código QR de tu ficha actual (ejemplo: <b>VVOBJETO00000012</b>). Si además ingresas el PIN de acceso (te lo mostramos la primera vez que guardaste la ficha), precargamos automáticamente los datos para que solo edites lo que cambió. El PIN es obligatorio para poder actualizar o renovar — si no lo tienes a mano, puedes recuperarlo más abajo.',
     renewCodeLabel: 'Código de tu ficha',
     renewPinLabel: 'PIN de acceso (opcional)',
     btnContinuar: 'Continuar',
-    renewPinError: '✘ Folio o PIN incorrectos. Verifica ambos, o continúa dejando el PIN en blanco para llenar el formulario de nuevo.',
+    renewPinError: '✘ Folio o PIN incorrectos. Verifica ambos e inténtalo de nuevo.',
     renewForgotPin: '¿Olvidaste tu PIN? <a href="#" id="recuperarPinToggle" style="color:var(--teal-deep,#1F4448); font-weight:600;">Recupéralo con la descripción y la fecha de registro del objeto</a>, o escríbenos por el botón de WhatsApp en vidavitalqr.com indicando tu código de ficha.',
     recuperarIntro: 'Para verificar que la ficha corresponde a tu objeto, escribe primero el código de la ficha arriba y luego la descripción y la fecha de registro tal como las escribiste al crearla.',
     recuperarNombreLabel: 'Nombre o descripción del objeto',
@@ -562,11 +569,11 @@ const TEXTOS_FICHA = {
     tipoPlaceholder: '— ITEM TYPE —',
     photoHint: '📷 Photo<br>Click to upload',
     renewH2: '🔄 Renew an existing card',
-    renewIntro: 'Enter the code shown below the QR code on your current card (example: <b>VVOBJETO00000012</b>). If you also enter the access PIN (shown to you the first time you saved the card), we\'ll automatically preload the data so you only need to edit what changed — if you don\'t have it handy, you can continue without a PIN and fill out the form again.',
+    renewIntro: 'Enter the code shown below the QR code on your current card (example: <b>VVOBJETO00000012</b>). If you also enter the access PIN (shown to you the first time you saved the card), we\'ll automatically preload the data so you only need to edit what changed. The PIN is required to update or renew — if you don\'t have it handy, you can recover it below.',
     renewCodeLabel: 'Your card code',
     renewPinLabel: 'Access PIN (optional)',
     btnContinuar: 'Continue',
-    renewPinError: '✘ Incorrect code or PIN. Check both, or continue leaving the PIN blank to fill out the form again.',
+    renewPinError: '✘ Incorrect code or PIN. Please check both and try again.',
     renewForgotPin: 'Forgot your PIN? <a href="#" id="recuperarPinToggle" style="color:var(--teal-deep,#1F4448); font-weight:600;">Recover it with the item\'s description and registration date</a>, or write to us via the WhatsApp button on vidavitalqr.com with your card code.',
     recuperarIntro: 'To verify this card belongs to your item, first type the card code above, then the description and registration date exactly as entered when you created it.',
     recuperarNombreLabel: 'Item name or description',
@@ -650,11 +657,11 @@ const TEXTOS_FICHA = {
     tipoPlaceholder: '— TYPE D\'OBJET —',
     photoHint: '📷 Photo<br>Cliquez pour téléverser',
     renewH2: '🔄 Renouvellement d\'une fiche existante',
-    renewIntro: 'Entrez le code affiché sous le code QR de votre fiche actuelle (exemple : <b>VVOBJETO00000012</b>). Si vous entrez aussi le code PIN d\'accès (affiché la première fois que vous avez enregistré la fiche), nous préchargeons automatiquement les données pour que vous n\'ayez qu\'à modifier ce qui a changé — si vous ne l\'avez pas sous la main, vous pouvez continuer sans PIN et remplir le formulaire à nouveau.',
+    renewIntro: 'Entrez le code affiché sous le code QR de votre fiche actuelle (exemple : <b>VVOBJETO00000012</b>). Si vous entrez aussi le code PIN d\'accès (affiché la première fois que vous avez enregistré la fiche), nous préchargeons automatiquement les données pour que vous n\'ayez qu\'à modifier ce qui a changé. Le code PIN est obligatoire pour mettre à jour ou renouveler — si vous ne l\'avez pas sous la main, vous pouvez le récupérer ci-dessous.',
     renewCodeLabel: 'Code de votre fiche',
     renewPinLabel: 'Code PIN d\'accès (facultatif)',
     btnContinuar: 'Continuer',
-    renewPinError: '✘ Code ou PIN incorrect. Vérifiez les deux, ou continuez en laissant le PIN vide pour remplir le formulaire à nouveau.',
+    renewPinError: '✘ Code ou PIN incorrect. Vérifiez les deux et réessayez.',
     renewForgotPin: 'PIN oublié ? <a href="#" id="recuperarPinToggle" style="color:var(--teal-deep,#1F4448); font-weight:600;">Récupérez-le avec la description et la date d\'enregistrement de l\'objet</a>, ou écrivez-nous via le bouton WhatsApp sur vidavitalqr.com en indiquant le code de votre fiche.',
     recuperarIntro: 'Pour vérifier que la fiche correspond à votre objet, entrez d\'abord le code de la fiche ci-dessus, puis la description et la date d\'enregistrement telles que saisies lors de la création.',
     recuperarNombreLabel: 'Nom ou description de l\'objet',
@@ -738,11 +745,11 @@ const TEXTOS_FICHA = {
     tipoPlaceholder: '— TIPO DE OBJETO —',
     photoHint: '📷 Foto<br>Clique para enviar',
     renewH2: '🔄 Renovação de ficha existente',
-    renewIntro: 'Digite o código que aparece abaixo do código QR da sua ficha atual (exemplo: <b>VVOBJETO00000012</b>). Se você também digitar o PIN de acesso (mostrado a primeira vez que salvou a ficha), pré-carregamos os dados automaticamente para que só edite o que mudou — se não tiver em mãos, pode continuar sem PIN e preencher o formulário novamente.',
+    renewIntro: 'Digite o código que aparece abaixo do código QR da sua ficha atual (exemplo: <b>VVOBJETO00000012</b>). Se você também digitar o PIN de acesso (mostrado a primeira vez que salvou a ficha), pré-carregamos os dados automaticamente para que só edite o que mudou. O PIN é obrigatório para atualizar ou renovar — se não tiver em mãos, pode recuperá-lo abaixo.',
     renewCodeLabel: 'Código da sua ficha',
     renewPinLabel: 'PIN de acesso (opcional)',
     btnContinuar: 'Continuar',
-    renewPinError: '✘ Código ou PIN incorretos. Verifique ambos, ou continue deixando o PIN em branco para preencher o formulário novamente.',
+    renewPinError: '✘ Código ou PIN incorretos. Verifique ambos e tente novamente.',
     renewForgotPin: 'Esqueceu seu PIN? <a href="#" id="recuperarPinToggle" style="color:var(--teal-deep,#1F4448); font-weight:600;">Recupere-o com a descrição e a data de registro do objeto</a>, ou escreva-nos pelo botão do WhatsApp em vidavitalqr.com indicando o código da sua ficha.',
     recuperarIntro: 'Para verificar que a ficha corresponde ao seu objeto, digite primeiro o código da ficha acima e depois a descrição e a data de registro exatamente como você digitou ao criá-la.',
     recuperarNombreLabel: 'Nome ou descrição do objeto',
@@ -997,14 +1004,21 @@ $('photoRemove').addEventListener('click', e => {
     if (esActualizacion) {
       $('renewalGateTitle').textContent = '✏️ Actualización de ficha existente';
       $('renewalGateIntro').innerHTML = 'Ingresa el código de la ficha actual y el PIN de acceso (te lo mostramos la primera vez que la guardaste) para poder editar los datos. El PIN es obligatorio aquí, porque necesitamos verificar que la membresía anual siga vigente antes de dejarte actualizar gratis.';
-      $('renewalPinLabel').textContent = 'PIN de acceso (obligatorio)';
+    } else if (esRenovacion) {
+      // ---- 2026-10-02: el PIN ahora también es obligatorio para renovar (antes era opcional
+      // aquí) — a petición de James, para que nadie pueda renovar (ni reiniciar la vigencia de)
+      // una ficha ajena solo con saber el folio, que es público. Ver send-ficha.js, que ahora
+      // también exige y verifica este mismo PIN del lado del servidor. ----
+      $('renewalGateIntro').innerHTML = 'Ingresa el código de la ficha actual y el PIN de acceso (te lo mostramos la primera vez que la guardaste) para poder renovarla. El PIN es obligatorio aquí, para confirmar que quien renueva es el dueño real de la ficha.';
     }
+    // "obligatorio" aplica en los dos modos (actualizar y renovar) desde este cambio.
+    $('renewalPinLabel').textContent = 'PIN de acceso (obligatorio)';
 
     $('renewalConfirmBtn').addEventListener('click', async () => {
       const codigo = $('renewalCodeInput').value.trim().toUpperCase();
       const pin = $('renewalPinInput').value.trim().toUpperCase();
       if (!codigo) { alert(T().alertIngresaCodigo); return; }
-      if (esActualizacion && !pin) { alert('Para actualizar los datos también necesitas ingresar el PIN de acceso.'); return; }
+      if (!pin) { alert('Para continuar necesitas ingresar también tu PIN de acceso.'); return; }
 
       $('renewalPinError').style.display = 'none';
       $('renewalVencidoNotice').style.display = 'none';
@@ -1028,6 +1042,10 @@ $('photoRemove').addEventListener('click', e => {
             return;
           }
           const data = await resp.json();
+
+          // el PIN quedó validado contra este folio por login-ficha.js arriba — se guarda para
+          // mandarlo también con el guardado final (ver el comentario junto a su declaración)
+          pinConfirmadoFicha = pin;
 
           mostrarFechaInicio(data.creado);
 
@@ -1975,7 +1993,7 @@ $('btnEmail').addEventListener('click', async () => {
     const resp = await fetch('/.netlify/functions/send-ficha', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({ folio, filename, pdfBase64, nombreCompleto, tipo: 'Objeto', fotoBase64, producto: productoElegido, contactos, datosVisor, datosFormulario, esRenovacionPago: esRenovacion, idioma: LANG_FICHA, correoTitular: $('correoTitular').value || '' })
+      body: JSON.stringify({ folio, filename, pdfBase64, nombreCompleto, tipo: 'Objeto', fotoBase64, producto: productoElegido, contactos, datosVisor, datosFormulario, esRenovacionPago: esRenovacion, idioma: LANG_FICHA, correoTitular: $('correoTitular').value || '', pin: pinConfirmadoFicha })
     });
 
     if(!resp.ok){

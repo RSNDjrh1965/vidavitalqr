@@ -46,3 +46,12 @@
   to = "/.netlify/functions/ver/:folio"
   status = 200
   force = true
+
+# ---- Rewrite para la página "Mi código QR" del producto "Código QR (solo digital)" (2026-10-02,
+# ver netlify/functions/qr-digital.js). Mismo patrón ya probado y funcionando en producción que la
+# regla de "/v/:folio" de arriba — el folio se lee del final de la ruta, no de un querystring. ----
+[[redirects]]
+  from = "/qr/:folio"
+  to = "/.netlify/functions/qr-digital/:folio"
+  status = 200
+  force = true
