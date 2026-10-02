@@ -21,7 +21,7 @@
 const { S3Client, PutObjectCommand, GetObjectCommand } = require('@aws-sdk/client-s3');
 const { buildQrSvg, buildQrSvgParaPlaca } = require('./lib/qr-svg');
 const { actualizarResumenXlsx } = require('./lib/xlsx-resumen');
-const { generarPin, hashPin } = require('./lib/pin');
+const { generarPin, hashPin, pinValido } = require('./lib/pin');
 const { fechaVencimiento } = require('./lib/vigencia');
 
 const DESTINATARIO = 'vidavitalqr@zohomail.com';
@@ -111,7 +111,7 @@ function carpetaTipo(tipo, folio) {
 // — nunca se cambia solo, para no dejar al usuario sin acceso. Si el registro es de una versión
 // anterior que solo guardaba el hash (sin el texto plano), se genera un PIN nuevo esta vez, para
 // que a partir de ahora también quede recuperable.
-async function cargarOCrearLogin(s3, folio, datosFormulario, carpeta, resetCreado, correoTitular, producto, placaEstilo) {
+async function cargarOCrearLogin(s3, folio, datosFormulario, carpeta, resetCreado, correoTitular, producto, placaEstilo, pinProvisto) {
   const key = `${carpeta}/login/${folio}.json`;
   const keyLegacy = `login/${folio}.json`;
   let registro = null;
@@ -138,6 +138,27 @@ async function cargarOCrearLogin(s3, folio, datosFormulario, carpeta, resetCread
   // anterior que no guardaba el PIN en texto plano (solo el hash) — en ambos casos hay que
   // generar (o regenerar) un PIN y mostrárselo al usuario en el modal.
   const esNuevo = !registro || !registro.pin;
+
+  // ---- 2026-10-02: verificación OBLIGATORIA del PIN para actualizar o renovar una ficha que YA
+  // EXISTE (tiene un PIN guardado) — a petición de James, después de detectar que este endpoint
+  // nunca revisaba el PIN: la pantalla del formulario (ficha.html / ficha-mascota.html /
+  // ficha-objeto.html) sí lo pedía y lo validaba contra login-ficha.js, pero ese paso era solo
+  // para "precargar" los datos en pantalla — este archivo, que es el que realmente guarda los
+  // cambios, aceptaba cualquier folio sin preguntar nada más. Como el folio es público (va
+  // impreso en la placa física y en la URL del propio código QR), cualquiera que lo conociera
+  // podía sobrescribir los datos de otra persona, o "renovar" sin pagar, sin necesitar el PIN.
+  // Ahora se exige el mismo PIN que ya se le pide al usuario en pantalla, verificado aquí con el
+  // mismo método de hash en tiempo constante que usa login-ficha.js (pinValido, lib/pin.js).
+  // Una ficha COMPLETAMENTE NUEVA (folio sin ningún registro previo) no se ve afectada: ahí
+  // todavía no existe ningún PIN con el cual comparar, así que se sigue creando igual que antes.
+  if (!esNuevo) {
+    if (!pinValido(pinProvisto, registro.pinHash)) {
+      const errorPin = new Error('PIN incorrecto o faltante — no se guardó ningún cambio.');
+      errorPin.pinInvalido = true;
+      throw errorPin;
+    }
+  }
+
   const pin = esNuevo ? generarPin() : registro.pin;
 
   // ---- 2026-09-30: "activo" — corrige un problema grave detectado por James: la ficha (y su
@@ -762,7 +783,7 @@ exports.handler = async (event) => {
     return { statusCode: 400, headers, body: JSON.stringify({ error: 'JSON inválido.' }) };
   }
 
-  const { folio, filename, pdfBase64, nombreCompleto, tipo, fotoBase64, tarjetaBase64, placaEstilo, contactos, datosVisor, datosFormulario, esRenovacionPago, correoTitular, producto } = payload;
+  const { folio, filename, pdfBase64, nombreCompleto, tipo, fotoBase64, tarjetaBase64, placaEstilo, contactos, datosVisor, datosFormulario, esRenovacionPago, correoTitular, producto, pin: pinRecibido } = payload;
   // ---- idioma elegido por quien llenó la ficha (ES/EN/FR/PT) — se guarda junto con la ficha
   // para que los correos automáticos que lleguen después (código de acceso aquí mismo, y el
   // aviso de escaneo en avisar-escaneo.js) puedan enviarse en ese mismo idioma. Solo se aceptan
@@ -797,7 +818,7 @@ exports.handler = async (event) => {
     let creadoActual = null;
     let activoActual = true;
     if (folio) {
-      const login = await cargarOCrearLogin(s3, folio, datosFormulario, carpeta, esRenovacionPago === true, correoTitular, producto, placaEstilo);
+      const login = await cargarOCrearLogin(s3, folio, datosFormulario, carpeta, esRenovacionPago === true, correoTitular, producto, placaEstilo, pinRecibido);
       pinActual = login.pin || '';
       creadoActual = login.creado || null;
       activoActual = login.activo !== false;
@@ -847,6 +868,19 @@ exports.handler = async (event) => {
       creadoVigencia: creadoActual ? new Date(creadoActual) : null,
     });
   } catch (err) {
+    // ---- 2026-10-02: PIN incorrecto o faltante al actualizar/renovar una ficha existente — a
+    // diferencia de cualquier otro error de esta sección (que no bloquea el envío del correo,
+    // ver el comentario de abajo), este caso corta aquí mismo de inmediato: no se sube nada a S3
+    // (ya no se subió — cargarOCrearLogin es lo primero que corre), no se manda el correo de
+    // aviso al administrador, y no se actualiza el cuadro resumen. Responde 401 sin revelar si el
+    // folio existe o no, igual que ya hace login-ficha.js. ----
+    if (err && err.pinInvalido) {
+      return {
+        statusCode: 401,
+        headers,
+        body: JSON.stringify({ error: 'PIN incorrecto o faltante. No se guardó ningún cambio.' }),
+      };
+    }
     // No bloqueamos el envío del correo si falla la parte de S3 — se reporta en la respuesta
     // para poder diagnosticarlo, pero la ficha igual llega por correo.
     s3Error = String(err && err.message ? err.message : err);

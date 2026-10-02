@@ -183,6 +183,10 @@ exports.handler = async (event) => {
   // algún producto físico) — se reporta aparte en el correo para que quede claro que ese monto
   // adicional es el envío y no un producto más ----
   const envio = meta.envio ? parseFloat(meta.envio) : 0;
+  // ---- 2026-10-02: "retiro en persona" (agregado por crear-pago.js en metadata.retiroPersona) —
+  // para que el correo de aviso le quede clarísimo a James que este pedido NO hay que enviarlo
+  // por correo postal, el cliente pasa a recogerlo directamente. ----
+  const retiroPersona = meta.retiroPersona === 'si';
   // ---- pago en colones (agregado 2026-09-23, ver crear-pago.js): si el pedido se cobró en CRC,
   // meta.moneda/tipoCambioUsado/totalUSD lo indican, para que el aviso al administrador muestre
   // ambos montos y el tipo de cambio real que se usó en ese pedido específico ----
@@ -203,7 +207,7 @@ exports.handler = async (event) => {
   console.log('onvo-webhook: pago CONFIRMADO —', items.length, 'producto(s), folios:', folios || '(ninguno)', '— payment intent', paymentIntentId, '— modo', modo, '— moneda', moneda, '— monto', montoBrutoReal);
 
   // ---- 2) Avisar por correo al administrador (mismo destinatario que ya recibe los demás avisos) ----
-  await avisarAdministrador({ items, folios, sessionId: paymentIntentId, modo, envio, moneda, tipoCambioUsado, totalUSDReportado, totalCRCInformativo });
+  await avisarAdministrador({ items, folios, sessionId: paymentIntentId, modo, envio, retiroPersona, moneda, tipoCambioUsado, totalUSDReportado, totalCRCInformativo });
 
   // ---- 3) Registrar el ingreso, solo para pagos reales (nunca los de prueba, para no ensuciar
   // el Registro de Ingresos con cifras que no son dinero real) ----
@@ -263,8 +267,79 @@ exports.handler = async (event) => {
     console.error('onvo-webhook: no se pudieron activar las fichas pagadas —', err);
   }
 
+  // ---- 5) Avisar por correo al CLIENTE cuando compró el producto "Código QR (solo digital)"
+  // (2026-10-02, a pedido de James). Antes este producto no enviaba nada automáticamente (el
+  // cliente tenía que pedirlo aparte) — ver comentario histórico en index.html junto a PRECIOS.
+  // Nunca toca nada de lo de arriba (aviso al administrador, Registro de Ingresos, activación de
+  // fichas): es puramente aditivo y, si falla, nunca impide que el webhook responda 200.
+  try {
+    await avisarClienteQrDigital(items, meta.correoCliente || '');
+  } catch (err) {
+    console.error('onvo-webhook: no se pudo avisar al cliente del QR digital —', err);
+  }
+
   return { statusCode: 200, body: 'ok' };
 };
+
+// ---- envía al correo del comprador el enlace a su página "Mi código QR" (/qr/:folio, ver
+// qr-digital.js) — solo para los items "qr_only_personal"/"qr_only_objeto" del pago confirmado,
+// y solo si hay un correo de cliente y un folio asociados a ese item. Un carrito puede traer más
+// de un "Código QR (solo digital)" (por ejemplo, uno Personal y uno de Objeto en el mismo pago);
+// en ese caso se envía un correo por cada folio, cada uno con su propio enlace. ----
+const PRODUCTOS_QR_DIGITAL = ['qr_only_personal', 'qr_only_objeto'];
+
+async function avisarClienteQrDigital(items, correoCliente) {
+  const apiKey = process.env.RESEND_API_KEY;
+  if (!apiKey) {
+    console.error('onvo-webhook: falta RESEND_API_KEY — no se pudo avisar al cliente del QR digital.');
+    return;
+  }
+  if (!correoCliente) {
+    console.log('onvo-webhook: no hay correo de cliente en esta compra — no se avisa del QR digital (¿pago de antes de este cambio?).');
+    return;
+  }
+
+  const foliosQrDigital = Array.from(new Set(
+    (items || [])
+      .filter((it) => it && it.folio && PRODUCTOS_QR_DIGITAL.indexOf(it.item) !== -1)
+      .map((it) => String(it.folio).toUpperCase())
+  ));
+  if (!foliosQrDigital.length) return; // esta compra no incluyó "Código QR (solo digital)"
+
+  const siteUrl = process.env.SITE_URL || 'https://vidavitalqr.com';
+
+  for (const folio of foliosQrDigital) {
+    const enlace = `${siteUrl}/qr/${encodeURIComponent(folio)}`;
+    const asunto = `Su código QR VidaVitalQR ya está listo — ${folio}`;
+    const cuerpo = [
+      'Gracias por su compra en VidaVitalQR.',
+      '',
+      `Su código QR (folio ${folio}) ya está listo. Puede verlo, descargarlo como imagen o como PDF en este enlace:`,
+      enlace,
+      '',
+      'Puede volver a abrir este mismo enlace cuando quiera — su código QR siempre va a estar disponible ahí.',
+      '',
+      'Este es un correo automático de VidaVitalQR.',
+    ].join('\n');
+
+    try {
+      const resp = await fetch('https://api.resend.com/emails', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ from: REMITENTE, to: [correoCliente], subject: asunto, text: cuerpo }),
+      });
+      if (!resp.ok) {
+        let detalle = '';
+        try { detalle = JSON.stringify(await resp.json()); } catch (e) { try { detalle = await resp.text(); } catch (e2) {} }
+        console.error('onvo-webhook: Resend rechazó el correo del QR digital para', correoCliente, '— status', resp.status, detalle);
+      } else {
+        console.log('onvo-webhook: correo del QR digital enviado a', correoCliente, '— folio', folio);
+      }
+    } catch (err) {
+      console.error('onvo-webhook: error de red enviando el correo del QR digital para', correoCliente, '—', err);
+    }
+  }
+}
 
 // ---- activa (datos.activo = true) cada ficha con folio que vino en el pago confirmado — ver
 // nota arriba. Nunca lanza el error hacia arriba: cada folio se intenta por separado, así que si
@@ -407,7 +482,7 @@ async function resolverNombreCliente(folio) {
   }
 }
 
-async function avisarAdministrador({ items, folios, sessionId, modo, envio, moneda, tipoCambioUsado, totalUSDReportado, totalCRCInformativo }) {
+async function avisarAdministrador({ items, folios, sessionId, modo, envio, retiroPersona, moneda, tipoCambioUsado, totalUSDReportado, totalCRCInformativo }) {
   const apiKey = process.env.RESEND_API_KEY;
   if (!apiKey) {
     console.error('onvo-webhook: falta RESEND_API_KEY — no se pudo avisar por correo del pago confirmado.');
@@ -417,7 +492,9 @@ async function avisarAdministrador({ items, folios, sessionId, modo, envio, mone
   const listaItems = items.length
     ? items.map((it) => '  - ' + descripcionItem(it) + (it.folio ? ' (folio: ' + it.folio + ')' : '')).join('\n')
     : '  (sin detalle de productos)';
-  const lineaEnvio = envio > 0 ? '  - Envío: $' + envio.toFixed(2) + '\n' : '';
+  const lineaEnvio = envio > 0
+    ? '  - Envío: $' + envio.toFixed(2) + '\n'
+    : (retiroPersona ? '  - ⚠ RETIRO EN PERSONA — el cliente pasa a recogerlo, NO enviar por correo postal\n' : '');
   // ---- línea de moneda: si el pedido se cobró en colones, muestra el equivalente en dólares; si
   // se cobró en dólares (la gran mayoría), muestra el equivalente informativo en colones al tipo
   // de cambio del día (agregado 2026-09-23, a pedido del usuario) — en ambos casos nunca es el
@@ -451,7 +528,10 @@ async function avisarAdministrador({ items, folios, sessionId, modo, envio, mone
         '<li style="margin-bottom:6px;"><strong style="color:#0a7d3c;font-size:15px;">' + escaparHtml(descripcionItem(it)) + '</strong>' +
         (it.folio ? ' &nbsp;<span style="color:#555;">(folio: ' + escaparHtml(it.folio) + ')</span>' : '') +
         '</li>'
-      ).join('') + (envio > 0 ? '<li style="margin-bottom:6px;"><strong style="color:#555;font-size:15px;">Envío</strong> &nbsp;<span style="color:#555;">$' + envio.toFixed(2) + '</span></li>' : '') + '</ul>'
+      ).join('') + (envio > 0
+        ? '<li style="margin-bottom:6px;"><strong style="color:#555;font-size:15px;">Envío</strong> &nbsp;<span style="color:#555;">$' + envio.toFixed(2) + '</span></li>'
+        : (retiroPersona ? '<li style="margin-bottom:6px;"><strong style="color:#b30000;font-size:15px;">⚠ RETIRO EN PERSONA</strong> &nbsp;<span style="color:#b30000;">el cliente pasa a recogerlo — NO enviar por correo postal</span></li>' : '')
+      ) + '</ul>'
     : '<p style="color:#555;">(sin detalle de productos)</p>';
   const cuerpoHtml = [
     '<div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;color:#222;line-height:1.5;">',

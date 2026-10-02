@@ -64,11 +64,21 @@ exports.handler = async (event) => {
   const senas = String(datosEnvio.senas || '').trim();
   const telefono = String(datosEnvio.telefono || '').trim();
   const correo = String(datosEnvio.correo || '').trim();
+  // ---- 2026-10-02: "retiro en persona" — a pedido de James (un vecino que prefiere pasar a
+  // recoger su placa en vez de que se le envíe por correo, y sin pagar el cargo de envío). Cuando
+  // viene marcado, ya no se piden provincia/cantón/distrito (no hay a dónde enviar nada); solo
+  // nombre y teléfono, para que James pueda coordinar la entrega directamente. Ver también
+  // crear-pago.js, que con esta misma bandera deja de cobrar el cargo de $8.50. ----
+  const retiroPersona = datosEnvio.retiroPersona === true;
 
   if (!folio) {
     return { statusCode: 400, body: JSON.stringify({ error: 'Falta el folio.' }) };
   }
-  if (!nombreEnvio || !provincia || !canton || !distrito || !telefono) {
+  if (retiroPersona) {
+    if (!nombreEnvio || !telefono) {
+      return { statusCode: 400, body: JSON.stringify({ error: 'Faltan datos obligatorios para el retiro en persona (nombre y teléfono).' }) };
+    }
+  } else if (!nombreEnvio || !provincia || !canton || !distrito || !telefono) {
     return { statusCode: 400, body: JSON.stringify({ error: 'Faltan datos obligatorios de la dirección de envío (nombre, provincia, cantón, distrito o teléfono).' }) };
   }
 
@@ -83,11 +93,12 @@ exports.handler = async (event) => {
       Body: Buffer.from(JSON.stringify({
         folio,
         tipo: tipo || '',
+        retiroPersona,
         nombreEnvio,
-        provincia,
-        canton,
-        distrito,
-        senas,
+        provincia: retiroPersona ? '' : provincia,
+        canton: retiroPersona ? '' : canton,
+        distrito: retiroPersona ? '' : distrito,
+        senas: retiroPersona ? '' : senas,
         telefono,
         correo,
         actualizado: new Date().toISOString(),

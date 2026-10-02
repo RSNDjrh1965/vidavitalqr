@@ -174,7 +174,14 @@ exports.handler = async (event) => {
   // ---- costo de envío: se agrega una sola vez si el pedido incluye algún producto físico,
   // nunca por separado por cada uno (cubre hasta 5 productos físicos por dirección) ----
   const incluyeFisico = items.some((it) => ITEMS_FISICOS.indexOf(it.itemId) !== -1);
-  const envio = incluyeFisico ? SHIPPING_COST : 0;
+  // ---- 2026-10-02: "retiro en persona" — a pedido de James. El mismo modal de "Dirección de
+  // envío" de index.html, cuando el cliente marca que va a retirar en persona, manda esta
+  // bandera aquí también (además de guardarla en guardar-envio.js) para que no se le cobre el
+  // cargo de envío. No es un monto que mande el navegador (eso sigue sin aceptarse nunca) — es
+  // solo un sí/no entre los dos precios de envío ya fijos de este archivo (0 u 8.50), igual de
+  // confiable que cualquier otro identificador de producto que ya se valida aquí mismo. ----
+  const retiroPersona = data.retiroPersona === true;
+  const envio = (incluyeFisico && !retiroPersona) ? SHIPPING_COST : 0;
 
   const subtotalProductos = items.reduce((sum, it) => sum + it.price, 0);
   const subtotal = subtotalProductos + envio;
@@ -236,7 +243,8 @@ exports.handler = async (event) => {
   // para que el monto cobrado por ONVO coincida exactamente con el que se le mostró al cliente en
   // la página — el desglose de qué se compró va en la descripción y en metadata, no en líneas
   // separadas (evita diferencias de centavos por redondeo si se combinan varios productos) ----
-  const descripcion = items.map((it) => it.label).join(' + ') + (envio > 0 ? ' + Envío' : '');
+  const descripcion = items.map((it) => it.label).join(' + ')
+    + (envio > 0 ? ' + Envío' : (incluyeFisico && retiroPersona ? ' + Retiro en persona (sin envío)' : ''));
   const folios = items.filter((it) => it.folio).map((it) => it.folio);
 
   const base = sitioBase();
@@ -267,7 +275,18 @@ exports.handler = async (event) => {
       totalUSD: totalUSD.toFixed(2),
       folios: folios.join(','),
       envio: envio > 0 ? envio.toFixed(2) : '',
+      // 2026-10-02: para que el correo de aviso al administrador (onvo-webhook.js) deje claro
+      // que este pedido NO hay que mandarlo por correo — el cliente pasa a recogerlo en persona.
+      retiroPersona: (incluyeFisico && retiroPersona) ? 'si' : '',
       origen: 'vidavitalqr-carrito',
+      // 2026-10-02: se agrega también aquí (además del campo "customerEmail" de arriba, que es
+      // el que usa ONVO para su propia confirmación) porque no está documentado con certeza que
+      // ONVO reenvíe "customerEmail" dentro del evento "payment-intent.succeeded" que recibe
+      // onvo-webhook.js — "metadata" sí se confirma que vuelve completa en ese evento (es lo que
+      // ya usan "items"/"folios"/etc. arriba), así que es la fuente confiable para poder avisarle
+      // al cliente por correo cuando compra el "Código QR (solo digital)" (ver
+      // avisarClienteQrDigital en onvo-webhook.js).
+      correoCliente: email,
     },
   };
 
