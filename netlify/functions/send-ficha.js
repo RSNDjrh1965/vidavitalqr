@@ -696,15 +696,16 @@ async function subirABuckets(s3, region, { folio, filename, pdfBase64, fotoBase6
   // 4.5) Versión del QR ya ajustada al tamaño físico (en milímetros) de la placa que el cliente
   // eligió, lista para importar directamente en el software del láser (LaserGRBL) sin tener que
   // ajustarle el tamaño a mano cada vez — 2026-09-28, a pedido del usuario. El QR queda centrado
-  // dentro del alto real de la placa, con el folio grabado en el espacio libre de abajo —
-  // 2026-09-29, con las medidas exactas de cada placa (ver ALTURA_TOTAL_MM_POR_PLACA en
-  // lib/qr-svg.js). Tanto "VIDAVITALQR" como el folio van como trazado vectorial (no como <text>)
-  // porque el software del láser no interpreta texto SVG. Solo se genera cuando el estilo de
-  // placa elegido tiene una medida definida (ver MEDIDA_QR_MM_POR_PLACA en lib/qr-svg.js); si no,
-  // se omite sin afectar el resto.
+  // dentro del alto real de la placa, con el texto del dominio (vidavitalqr.com) grabado en el
+  // espacio libre de abajo (ver ALTURA_TOTAL_MM_POR_PLACA en lib/qr-svg.js). 2026-10-02, a pedido
+  // de James: ya NO se graba el folio (antes iba debajo del QR) — se quitó por completo, el
+  // dominio es el único texto y ahora tiene todo ese espacio para él solo. Va como trazado
+  // vectorial (no como <text>) porque el software del láser no interpreta texto SVG. Solo se
+  // genera cuando el estilo de placa elegido tiene una medida definida (ver
+  // MEDIDA_QR_MM_POR_PLACA en lib/qr-svg.js); si no, se omite sin afectar el resto.
   let qrPlacaUrl = '';
   if (placaEstilo) {
-    const qrPlacaSvg = await buildQrSvgParaPlaca(urlDelVisor(folio), placaEstilo, folio);
+    const qrPlacaSvg = await buildQrSvgParaPlaca(urlDelVisor(folio), placaEstilo);
     if (qrPlacaSvg) {
       const qrPlacaKey = `${carpeta}/placas-laser/${folio}.svg`;
       await s3.send(new PutObjectCommand({
