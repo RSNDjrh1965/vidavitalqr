@@ -43,27 +43,48 @@ function textoComoPath(text, cx, cy, fontSize, targetWidth, maxScaleX) {
 }
 
 // ---- Tamaño de QR (en mm) recomendado para cada estilo de placa física, calculado a partir de
-// las medidas reales de cada placa del catálogo del usuario (ver bitácora, punto de 2026-09-28) ----
+// las medidas reales de cada placa del catálogo del usuario (ver bitácora, punto de 2026-09-28).
+//
+// 2026-10-02: catálogo actualizado a pedido de James —
+//  - "dije" ya NO es 40x40mm, ahora es 30x30mm (corrigió la medida; antes el QR era de 30mm,
+//    ahora baja a 18mm para dejar margen libre para el texto del dominio).
+//  - "pulsera" ya NO es 20x30mm, ahora es 20x28mm (el QR de 16mm se mantiene igual).
+//  - se agregan 2 piezas nuevas de la cadena: "cadenaRect" (rectangular, 22x32mm, QR 18mm según
+//    dato del usuario) y "cadenaCirc" (circular, Ø20mm). cadenaCirc NO tiene entrada en
+//    ALTURA_TOTAL_MM_POR_PLACA a propósito (ver más abajo): es la pieza más chica de todas, y un
+//    QR es siempre una cuadrícula cuadrada — el máximo cuadrado que cabe completo dentro de un
+//    círculo de 20mm de diámetro es de ~14mm (diagonal = diámetro), así que se deja en 13mm con
+//    margen de seguridad. A pedido de James, esta placa NO lleva ningún texto, solo el QR — no
+//    hay espacio real para nada más a ese tamaño (sin probar físico todavía, igual que pasó en su
+//    momento con la pulsera de 16mm: confirmar con una grabación de prueba antes de usarla en
+//    producción). IMPORTANTE: por ahora "cadenaRect"/"cadenaCirc" no están conectadas a ningún
+//    producto comprable en index.html (a pedido de James, 2026-10-02) — solo existen aquí para
+//    cuando él las genere manualmente. ----
 const MEDIDA_QR_MM_POR_PLACA = {
   clasica: 18, // Placa 1, 40 x 20 mm
   llavero: 20, // Placa 2, 40 x 22 mm
   ranuras: 22, // Placa 3, 45 x 25 mm
-  dije: 30, // Placa 4, 40 x 40 mm
+  dije: 18, // Placa 4, 30 x 30 mm (corregido 2026-10-02, antes 40x40 con QR 30mm)
   pulsera: 16, // Pulsera con placa QR, área grabable 16 x 16 mm (2026-09-29, dato del usuario)
+  cadenaRect: 18, // Cadena rectangular, 22 x 32 mm (2026-10-02, dato del usuario)
+  cadenaCirc: 13, // Cadena circular, Ø20 mm — máximo cuadrado seguro dentro del círculo (2026-10-02)
 };
 
-// ---- Dimensión mayor real de cada placa física (2026-09-29, dato del usuario) — se usa como
-// alto total del diseño para láser: el QR va centrado dentro de ese alto, y el espacio libre que
-// queda arriba/abajo (dimensión mayor menos el tamaño del QR, dividido entre 2) se usa para
-// grabar el folio debajo del QR, sin agrandar el QR ni salirse del área física de la placa.
-// Ejemplo dado por el usuario: placa clásica 40mm de largo, QR de 18mm → 40-18=22mm libres →
-// centrado, quedan 11mm arriba y 11mm abajo; el folio se graba en esos 11mm de abajo. ----
+// ---- Dimensión mayor real de cada placa física — se usa como alto total del diseño para láser:
+// el QR va centrado dentro de ese alto, y el espacio libre que queda arriba/abajo (dimensión
+// mayor menos el tamaño del QR, dividido entre 2) se usa para grabar el texto del dominio debajo
+// del QR, sin agrandar el QR ni salirse del área física de la placa.
+//
+// 2026-10-02, a pedido de James: se quita el folio del grabado por completo (ver comentario en
+// buildQrSvgParaPlaca). cadenaCirc no tiene entrada aquí a propósito: sin alto total definido, la
+// función deja esa placa solo con el QR, sin texto. ----
 const ALTURA_TOTAL_MM_POR_PLACA = {
   clasica: 40, // 40 x 20 mm → 11mm libres arriba/abajo del QR de 18mm
   llavero: 40, // 40 x 22 mm → 10mm libres arriba/abajo del QR de 20mm
   ranuras: 45, // 45 x 25 mm → 11.5mm libres arriba/abajo del QR de 22mm
-  dije: 40, // 40 x 40 mm → 5mm libres arriba/abajo del QR de 30mm
-  pulsera: 30, // placa de 20 x 30 mm → 7mm libres arriba/abajo del QR de 16mm
+  dije: 30, // 30 x 30 mm (corregido 2026-10-02) → 6mm libres arriba/abajo del QR de 18mm
+  pulsera: 28, // placa de 20 x 28 mm (corregido 2026-10-02) → 6mm libres arriba/abajo del QR de 16mm
+  cadenaRect: 32, // 22 x 32 mm → 7mm libres arriba/abajo del QR de 18mm
 };
 
 async function buildQrSvg(targetUrl, folioText) {
@@ -170,7 +191,22 @@ async function buildQrSvg(targetUrl, folioText) {
 // signifique perder el texto de marca en el centro del QR en todas. Por eso ya NO hay ninguna
 // condición: ninguna placa dibuja el recuadro central, y todas usan nivel 'L' (el más compacto),
 // sin ningún riesgo de ilegibilidad porque ya no hay ninguna obstrucción que tolerar.
-async function buildQrSvgParaPlaca(targetUrl, placaEstilo, folioText) {
+// 2026-10-02, a pedido de James: se quita el folio del grabado por completo (antes de esto, el
+// número de folio de cada ficha se grababa debajo del QR). Motivo: evitar los problemas de
+// espacio/legibilidad que daba el folio (texto de largo variable, distinto en cada ficha) y
+// dejar en su lugar un texto fijo y corto del dominio (vidavitalqr.com) en una sola línea.
+//
+// Se probó también partir ese texto en varias líneas (p. ej. "VIDA" / "VITAL" / "QR.com"),
+// pensando que cada palabra podría verse más grande al no tener que compartir el ancho — pero
+// una comparación real de tamaños (mm de alto de letra) en las 6 placas con texto mostró lo
+// contrario: el margen disponible debajo del QR es angosto en ALTO, no en ancho, así que varias
+// líneas compiten por ese poco alto y cada una queda más chica que una sola línea completa (hasta
+// 3 veces más chica en algunos casos). Por eso se mantiene en una sola línea.
+//
+// La placa circular de cadena (cadenaCirc, Ø20mm) no tiene entrada en ALTURA_TOTAL_MM_POR_PLACA
+// a propósito: a pedido de James, esa placa no lleva ningún texto, solo el QR — es la pieza más
+// chica del catálogo y no hay margen real para nada más.
+async function buildQrSvgParaPlaca(targetUrl, placaEstilo) {
   const sizeMm = MEDIDA_QR_MM_POR_PLACA[placaEstilo];
   if (!sizeMm) return null; // estilo de placa no reconocido o sin medida definida
 
@@ -202,12 +238,12 @@ async function buildQrSvgParaPlaca(targetUrl, placaEstilo, folioText) {
 
   // ---- Alto total de la placa (mm) y margen libre arriba/abajo del QR, convertidos a la misma
   // escala de píxeles que usa el QR (qrPixelSize px = sizeMm mm, así que 1mm = qrPixelSize/sizeMm
-  // px). Si no hay alto total definido para esta placa, o no llegó folio, se mantiene el
-  // comportamiento anterior (solo el cuadrado del QR, sin folio). ----
+  // px). Si no hay alto total definido para esta placa (caso de cadenaCirc), se deja solo el
+  // cuadrado del QR, sin ningún texto. ----
   const alturaTotalMm = ALTURA_TOTAL_MM_POR_PLACA[placaEstilo];
   const pxPorMm = qrPixelSize / sizeMm;
 
-  if (!alturaTotalMm || !folioText) {
+  if (!alturaTotalMm) {
     return `<?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" width="${sizeMm}mm" height="${sizeMm}mm" viewBox="0 0 ${qrPixelSize} ${qrPixelSize}">
   <rect x="0" y="0" width="${qrPixelSize}" height="${qrPixelSize}" fill="#F9F6EF"/>
@@ -220,100 +256,43 @@ async function buildQrSvgParaPlaca(targetUrl, placaEstilo, folioText) {
   const margenPx = margenMm * pxPorMm;
   const totalHeightPx = qrPixelSize + margenPx * 2;
 
-  // Tamaño de letra del folio: 2026-09-29, corregido después de que James mandó una foto de la
-  // placa impresa y el folio se veía "muy alargado". Causa real: el tamaño de letra se elegía
-  // SOLO en función del alto disponible (el margen), sin mirar el ancho — y como el QR ahora es
-  // mucho más chico que antes (se le quitó el recuadro central y bajó a nivel 'L', ver arriba),
-  // ese tamaño de letra resultaba enorme comparado con el ancho real de la placa, y había que
-  // comprimirlo muchísimo de ancho para que cupiera — eso es lo que se veía "alargado"/deformado
-  // (letras muy angostas y altas). Corrección: el tamaño de letra se calcula primero para que el
-  // folio quepa de ANCHO de forma natural (sin comprimir ni estirar nada), y ESE tamaño se limita
-  // además a no pasarse del alto disponible. Solo si un folio fuera tan largo que ni reduciendo la
-  // letra al mínimo legible cupiera, ahí sí se comprime un poco de ancho como último recurso.
-  //
-  // 2026-09-29 (más tarde): James mostró una muestra física vieja (otro producto, "adidata.com")
-  // donde sintió que el texto se veía muy pequeño, y pidió que el folio se vea más grande — y, si
-  // cabe, agregar también el dominio debajo (como en esa muestra: número arriba, dominio abajo).
-  // Cambios: (1) el tope por altura del folio sube de 0.55 a 0.88 del margen disponible — antes
-  // dejaba el folio innecesariamente chico incluso cuando sobraba espacio vertical; (2) el ancho
-  // objetivo sube de 0.88 a 0.92 del ancho del QR; (3) el dominio ("vidavitalqr.com") se agrega
-  // como una segunda línea, más chica, SOLO si sobra suficiente alto debajo del folio ya
-  // agrandado como para que quede legible (mínimo ~1.1mm reales de alto) — nunca a costa de
-  // achicar el folio, que es lo prioritario. Si no cabe, se omite y el folio usa todo el alto
-  // disponible igual que antes.
-  const textoFolio = String(folioText || '');
+  // Texto fijo del dominio, en una sola línea — ocupa todo el margen disponible (ya no lo
+  // comparte con ningún folio). El tamaño de letra se calcula primero para que quepa de ANCHO de
+  // forma natural (sin comprimir ni estirar), y ese tamaño se limita además a no pasarse del alto
+  // disponible. Solo si hiciera falta (no debería pasar con un texto fijo y corto como este) se
+  // comprime un poco de ancho como último recurso, nunca se estira más allá de su proporción
+  // natural.
   const textoDominio = 'vidavitalqr.com';
   const fontTmp = getFont();
   const opcionesFuente = { kerning: false, features: { liga: false, rlig: false } };
-  const folioTargetWidth = qrPixelSize * 0.92;
+  const dominioTargetWidth = qrPixelSize * 0.92;
   const altoDisponible = margenPx * 0.88; // tope por altura, para no salirse del margen
 
-  // Ancho que ocuparía el folio a un tamaño de referencia (100px) — el ancho escala de forma
-  // lineal con el tamaño de letra, así que de ahí se despeja el tamaño exacto que llena el ancho
-  // disponible sin deformar nada.
-  const anchoAReferencia = fontTmp.getAdvanceWidth(textoFolio, 100, opcionesFuente) || 1;
-  const folioFontSizePorAncho = (folioTargetWidth / anchoAReferencia) * 100;
+  const anchoAReferencia = fontTmp.getAdvanceWidth(textoDominio, 100, opcionesFuente) || 1;
+  const dominioFontSizePorAncho = (dominioTargetWidth / anchoAReferencia) * 100;
 
-  let folioFontSize = Math.min(folioFontSizePorAncho, altoDisponible);
-  let folioStretch = null; // null = sin estirar/comprimir (proporción natural de la fuente)
+  let dominioFontSize = Math.min(dominioFontSizePorAncho, altoDisponible);
+  let dominioStretch = null; // null = sin estirar/comprimir (proporción natural de la fuente)
 
-  // Con el tamaño ya elegido, se revisa si de verdad cabe de ancho (debería, salvo un folio
-  // excepcionalmente largo en una placa con margen muy angosto) — si no cabe, se comprime un
-  // poco como último recurso, nunca se estira más allá de su proporción natural.
-  const anchoFinal = fontTmp.getAdvanceWidth(textoFolio, folioFontSize, opcionesFuente);
-  if (anchoFinal > folioTargetWidth) {
-    folioStretch = folioTargetWidth / anchoFinal;
+  const anchoFinal = fontTmp.getAdvanceWidth(textoDominio, dominioFontSize, opcionesFuente);
+  if (anchoFinal > dominioTargetWidth) {
+    dominioStretch = dominioTargetWidth / anchoFinal;
   }
 
-  // Espacio que le queda al dominio debajo del folio ya agrandado.
-  const alturaTextoFolio = (fontTmp.ascender - fontTmp.descender) * (folioFontSize / fontTmp.unitsPerEm);
-  const separacionLineas = folioFontSize * 0.15;
-  const altoRestante = altoDisponible - alturaTextoFolio - separacionLineas;
-  const tamanoMinimoDominioPx = 1.1 * pxPorMm; // ~1.1mm reales, mínimo para que se pueda grabar/leer
-
-  let mostrarDominio = false;
-  let dominioFontSize = 0;
-  let dominioStretch = null;
-  if (altoRestante >= tamanoMinimoDominioPx) {
-    const anchoRefDominio = fontTmp.getAdvanceWidth(textoDominio, 100, opcionesFuente) || 1;
-    const dominioFontSizePorAncho = (folioTargetWidth / anchoRefDominio) * 100;
-    dominioFontSize = Math.min(dominioFontSizePorAncho, altoRestante);
-    if (dominioFontSize >= tamanoMinimoDominioPx) {
-      mostrarDominio = true;
-      const anchoFinalDominio = fontTmp.getAdvanceWidth(textoDominio, dominioFontSize, opcionesFuente);
-      if (anchoFinalDominio > folioTargetWidth) {
-        dominioStretch = folioTargetWidth / anchoFinalDominio;
-      }
-    }
-  }
-
-  // 2026-09-29 (más tarde): James pidió acercar el texto al QR (moverlo hacia arriba) en vez de
-  // centrarlo en todo el margen libre — antes quedaba centrado entre el QR y el borde de la
-  // placa, dejando un espacio grande arriba del texto. Ahora el bloque de texto arranca justo
-  // debajo del QR, con un espacio chico fijo (12% del margen) en vez de repartirlo por igual
-  // arriba y abajo; el espacio que sobra queda abajo, hacia el borde de la placa.
+  // El texto arranca justo debajo del QR, con un espacio chico fijo (5% del margen) en vez de
+  // centrarlo en todo el margen libre — el espacio que sobra queda abajo, hacia el borde de la
+  // placa (mismo criterio que ya se usaba para el folio).
+  const alturaTextoDominio = (fontTmp.ascender - fontTmp.descender) * (dominioFontSize / fontTmp.unitsPerEm);
   const gapSuperior = margenPx * 0.05;
-  let folioCenterY;
-  let dominioCenterY = 0;
-  if (mostrarDominio) {
-    const inicioBloque = margenPx + qrPixelSize + gapSuperior;
-    folioCenterY = inicioBloque + alturaTextoFolio / 2;
-    dominioCenterY = inicioBloque + alturaTextoFolio + separacionLineas + dominioFontSize / 2;
-  } else {
-    folioCenterY = margenPx + qrPixelSize + gapSuperior + alturaTextoFolio / 2;
-  }
+  const dominioCenterY = margenPx + qrPixelSize + gapSuperior + alturaTextoDominio / 2;
 
-  const folioLabel = textoComoPath(
-    textoFolio,
+  const dominioLabel = textoComoPath(
+    textoDominio,
     qrPixelSize / 2,
-    folioCenterY,
-    folioFontSize,
-    folioStretch ? folioTargetWidth : null
+    dominioCenterY,
+    dominioFontSize,
+    dominioStretch ? dominioTargetWidth : null
   );
-
-  const dominioLabel = mostrarDominio
-    ? textoComoPath(textoDominio, qrPixelSize / 2, dominioCenterY, dominioFontSize, dominioStretch ? folioTargetWidth : null)
-    : '';
 
   return `<?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" width="${sizeMm}mm" height="${alturaTotalMm}mm" viewBox="0 0 ${qrPixelSize} ${totalHeightPx}">
@@ -322,7 +301,6 @@ async function buildQrSvgParaPlaca(targetUrl, placaEstilo, folioText) {
     <g>${modulesSvg}</g>
     ${centerLabel}
   </g>
-  ${folioLabel}
   ${dominioLabel}
 </svg>`;
 }
