@@ -1,0 +1,47 @@
+
+on:
+  schedule:
+    - cron: "0 4 * * *"
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+env:
+  BUCKET: resumen-vidavitalqr
+  CARPETA: actualizacion-vidavitalqr
+  AWS_DEFAULT_REGION: ${{ secrets.S3_REGION }}
+  AWS_ACCESS_KEY_ID: ${{ secrets.BACKUP_AWS_ACCESS_KEY_ID }}
+  AWS_SECRET_ACCESS_KEY: ${{ secrets.BACKUP_AWS_SECRET_ACCESS_KEY }}
+
+jobs:
+  respaldo:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Descargar el repositorio
+        uses: actions/checkout@v4
+
+      - name: Revisar si hubo cambios desde el último respaldo
+        id: cambios
+        run: |
+          SHA=$(git rev-parse HEAD)
+          echo "sha=$SHA" >> "$GITHUB_OUTPUT"
+          ULTIMO=$(aws s3 cp "s3://$BUCKET/$CARPETA/ultimo-respaldo.txt" - 2>/dev/null || echo "")
+          if [ "$ULTIMO" = "$SHA" ]; then
+            echo "Sin cambios desde el último respaldo ($SHA). No se sube nada."
+            echo "hay=no" >> "$GITHUB_OUTPUT"
+          else
+            echo "Hay cambios (último respaldo: ${ULTIMO:-ninguno}; actual: $SHA)."
+            echo "hay=si" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Crear el ZIP y subirlo a S3
+        if: steps.cambios.outputs.hay == 'si'
+        run: |
+          FECHA=$(TZ=America/Costa_Rica date +%Y-%m-%d_%H%M)
+          CORTO=$(echo "${{ steps.cambios.outputs.sha }}" | cut -c1-7)
+          ZIP="vidavitalqr-respaldo-$FECHA-$CORTO.zip"
+          git archive --format=zip -o "$ZIP" HEAD
+          aws s3 cp "$ZIP" "s3://$BUCKET/$CARPETA/$ZIP"
+          printf "%s" "${{ steps.cambios.outputs.sha }}" | aws s3 cp - "s3://$BUCKET/$CARPETA/ultimo-respaldo.txt"
+          echo "Respaldo subido: $CARPETA/$ZIP"
