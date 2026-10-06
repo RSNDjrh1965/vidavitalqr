@@ -10,7 +10,7 @@ permissions:
 env:
   BUCKET: resumen-vidavitalqr
   CARPETA: actualizacion-vidavitalqr
-  AWS_DEFAULT_REGION: ${{ secrets.S3_REGION }}
+  AWS_DEFAULT_REGION: us-east-1
   AWS_ACCESS_KEY_ID: ${{ secrets.BACKUP_AWS_ACCESS_KEY_ID }}
   AWS_SECRET_ACCESS_KEY: ${{ secrets.BACKUP_AWS_SECRET_ACCESS_KEY }}
 
