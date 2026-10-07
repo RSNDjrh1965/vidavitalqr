@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="description" content="Blog de VidaVitalQR: datos con fuente, consejos y videos cortos sobre seguridad y prevención para personas, mascotas y objetos.">
+<title>Blog | VidaVitalQR</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Zilla+Slab:wght@400;500;600;700&family=Source+Sans+3:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ink:#12282B; --ink-soft:#2C4247; --paper:#F7F4EE; --paper-dim:#EFEAE0; --card:#FFFFFF;
+    --teal:#3A6B70; --teal-deep:#1F4448; --sage:#8FAFA6; --signal:#C1552F; --signal-soft:#F0DACD;
+    --line:#DAD3C4; --muted:#6C7A76; --shadow:0 20px 50px -25px rgba(18,40,43,0.35);
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --ink:#EFE9DD; --ink-soft:#C9C2B2; --paper:#14282A; --paper-dim:#193033; --card:#1B3538;
+      --teal:#8FBBB8; --teal-deep:#B7DAD5; --sage:#6E938A; --signal:#E5875D; --signal-soft:#3A2A20;
+      --line:#2E4749; --muted:#9FB0AC; --shadow:0 20px 50px -20px rgba(0,0,0,0.55);
+    }
+  }
+  *{box-sizing:border-box;}
+  html{-webkit-text-size-adjust:100%;}
+  body{margin:0;background:var(--paper);color:var(--ink);font-family:"Source Sans 3",ui-sans-serif,system-ui,sans-serif;font-size:17px;line-height:1.6;-webkit-font-smoothing:antialiased;}
+  a{color:inherit;}
+  img{max-width:100%;display:block;}
+  h1,h2,h3{font-family:"Zilla Slab",Georgia,serif;font-weight:600;line-height:1.15;margin:0;text-wrap:balance;}
+  .wrap{max-width:1120px;margin:0 auto;padding-left:24px;padding-right:24px;}
+  @media (max-width:640px){ .wrap{padding-left:20px;padding-right:20px;} body{font-size:16px;} }
+  .eyebrow{font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:0.78rem;letter-spacing:0.14em;text-transform:uppercase;color:var(--teal);font-weight:500;}
+
+  header.site{position:sticky;top:0;z-index:40;background:color-mix(in srgb,var(--paper) 88%,transparent);backdrop-filter:blur(10px);border-bottom:1px solid var(--line);}
+  .nav{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;padding:16px 24px;max-width:1120px;margin:0 auto;}
+  .brand{display:flex;align-items:center;gap:10px;font-family:"Zilla Slab",serif;font-weight:700;font-size:1.25rem;text-decoration:none;}
+  .nav-right{display:flex;align-items:center;gap:12px;flex-wrap:wrap;}
+  .langbar{display:flex;gap:4px;}
+  .langbar button{font-family:"IBM Plex Mono",monospace;font-size:0.76rem;letter-spacing:0.04em;background:transparent;color:var(--ink-soft);border:1px solid var(--line);padding:7px 11px;border-radius:100px;cursor:pointer;}
+  .langbar button:hover{border-color:var(--teal-deep);color:var(--teal-deep);}
+  .langbar button.activo{background:var(--ink);color:var(--paper);border-color:var(--ink);}
+  .nav-cta{font-family:"IBM Plex Mono",monospace;font-size:0.82rem;letter-spacing:0.03em;background:var(--ink);color:var(--paper);padding:10px 18px;border-radius:100px;text-decoration:none;white-space:nowrap;}
+
+  .blog-hero{padding:64px 0 28px;}
+  .blog-hero h1{font-size:clamp(2.1rem,4.4vw,3.1rem);margin-top:14px;}
+  .blog-hero p{margin:18px 0 0;max-width:62ch;color:var(--ink-soft);font-size:1.1rem;}
+
+  .posts{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:28px;padding:36px 0 72px;}
+  .post{background:var(--card);border:1px solid var(--line);border-radius:20px;overflow:hidden;box-shadow:var(--shadow);display:flex;flex-direction:column;}
+  .post .thumb{background:var(--paper-dim);aspect-ratio:3/4;overflow:hidden;}
+  .post .thumb img{width:100%;height:100%;object-fit:cover;}
+  .post .body{padding:22px 22px 24px;display:flex;flex-direction:column;gap:12px;flex:1;}
+  .post .meta{font-family:"IBM Plex Mono",monospace;font-size:0.74rem;letter-spacing:0.08em;text-transform:uppercase;color:var(--muted);}
+  .post h2{font-size:1.4rem;}
+  .post p{margin:0;color:var(--ink-soft);font-size:0.98rem;}
+  .post .fuente{font-size:0.84rem;color:var(--muted);border-top:1px dashed var(--line);padding-top:10px;}
+  .post .actions{display:flex;flex-wrap:wrap;gap:10px;margin-top:auto;padding-top:6px;}
+  .btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;font-family:"Source Sans 3",sans-serif;font-weight:600;font-size:0.92rem;text-decoration:none;padding:10px 18px;border-radius:100px;border:1.5px solid var(--line);color:var(--ink);background:transparent;}
+  .btn:hover{border-color:var(--teal-deep);color:var(--teal-deep);}
+  .btn.primary{background:var(--signal);border-color:var(--signal);color:#FFF9F4;}
+  .btn.primary:hover{opacity:0.92;color:#FFF9F4;}
+  .btn svg{width:16px;height:16px;flex:none;}
+
+  .cta-band{background:var(--teal-deep);color:var(--paper);border-radius:22px;padding:40px 36px;margin:0 0 72px;text-align:center;}
+  .cta-band h2{color:var(--paper);font-size:1.6rem;}
+  .cta-band p{margin:12px auto 22px;max-width:52ch;opacity:0.9;}
+  .cta-band .btn{background:var(--paper);border-color:var(--paper);color:var(--teal-deep);}
+
+  footer{border-top:1px solid var(--line);padding:36px 0;}
+  .foot-row{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:14px;}
+  footer .fine{font-size:0.8rem;color:var(--muted);}
+</style>
+</head>
+<body>
+<header class="site">
+  <div class="nav">
+    <a class="brand" href="/">VidaVitalQR</a>
+    <div class="nav-right">
+      <div class="langbar" role="group" aria-label="Idioma / Language">
+        <button type="button" data-lang="es">ES</button>
+        <button type="button" data-lang="en">EN</button>
+        <button type="button" data-lang="fr">FR</button>
+        <button type="button" data-lang="pt">PT</button>
+      </div>
+      <a class="nav-cta" href="/" data-i18n="volver">Volver al inicio</a>
+    </div>
+  </div>
+</header>
+
+<main class="wrap">
+  <section class="blog-hero">
+    <span class="eyebrow" data-i18n="eyebrow">Blog</span>
+    <h1 data-i18n="h1">Datos, prevención y videos cortos</h1>
+    <p data-i18n="heroP">Aquí reunimos las publicaciones de VidaVitalQR: cifras con su fuente, ideas de prevención y los videos que compartimos en Instagram y Facebook, para personas, mascotas y objetos.</p>
+  </section>
+
+  <section class="posts" aria-label="Publicaciones">
+
+    <!-- ============ POST 3 (más reciente primero) ============ -->
+    <article class="post">
+      <div class="thumb"><img src="blog/post3_mascotas.png" data-i18n-alt="p3alt" alt="¿Y si se pierde? Quien la encuentre puede escanear su placa. Código QR de VidaVitalQR para mascotas" loading="lazy"></div>
+      <div class="body">
+        <div class="meta" data-i18n="p3meta">7 de octubre de 2026 · Mascotas</div>
+        <h2 data-i18n="p3t">¿Y si su mascota se pierde?</h2>
+        <p data-i18n="p3p">Quien la encuentre puede escanear la placa con código QR del collar y ver al instante los datos de la mascota, los datos del dueño y cómo llamarle. Puede ayudar a que vuelva a casa.</p>
+        <div class="actions">
+          <a class="btn primary" href="https://www.instagram.com/reel/DeM2xcrReor/" target="_blank" rel="noopener" data-i18n="btnIg">Ver en Instagram</a>
+          <a class="btn" href="https://www.facebook.com/share/r/19R2iaAoEU/" target="_blank" rel="noopener" data-i18n="btnFb">Ver en Facebook</a>
+        </div>
+      </div>
+    </article>
+
+    <!-- ============ POST 2 ============ -->
+    <article class="post">
+      <div class="thumb"><img src="blog/post2_35_adultos_mayores.png" data-i18n-alt="p2alt" alt="35 % de los mayores de 65 años sufre al menos una caída al año. Fuente: CCSS, 2017" loading="lazy"></div>
+      <div class="body">
+        <div class="meta" data-i18n="p2meta">7 de octubre de 2026 · Adultos mayores</div>
+        <h2 data-i18n="p2t">Alrededor del 35 % de los mayores de 65 años sufre al menos una caída al año</h2>
+        <p data-i18n="p2p">Una caída puede ocurrir en cualquier momento, y tener a mano la información fundamental de la persona ayuda a quien la asiste. Con VidaVitalQR basta escanear el código para encontrarla al instante.</p>
+        <div class="fuente" data-i18n="p2f">Fuente: Caja Costarricense de Seguro Social (CCSS), Programa de Atención al Adulto Mayor, 2017.</div>
+        <div class="actions">
+          <a class="btn primary" href="https://www.instagram.com/reel/DeMwc_NRL3W/" target="_blank" rel="noopener" data-i18n="btnIg">Ver en Instagram</a>
+          <a class="btn" href="https://www.facebook.com/share/r/19uUSByty3/" target="_blank" rel="noopener" data-i18n="btnFb">Ver en Facebook</a>
+        </div>
+      </div>
+    </article>
+
+    <!-- ============ POST 1 ============ -->
+    <article class="post">
+      <div class="thumb"><img src="blog/post1_43_ciclistas.png" data-i18n-alt="p1alt" alt="43 ciclistas murieron en las carreteras de Costa Rica en 2025. Fuente: COSEVI, cifras preliminares de 2025" loading="lazy"></div>
+      <div class="body">
+        <div class="meta" data-i18n="p1meta">6 de octubre de 2026 · Seguridad vial</div>
+        <h2 data-i18n="p1t">43 ciclistas murieron en las carreteras de Costa Rica en 2025</h2>
+        <p data-i18n="p1p">Escanee el código QR y encuentre al instante la información fundamental. Puede ayudar a salvar una vida.</p>
+        <div class="fuente" data-i18n="p1f">Fuente: Consejo de Seguridad Vial (COSEVI), cifras preliminares de 2025.</div>
+        <div class="actions">
+          <a class="btn primary" href="https://www.instagram.com/reel/DeK6JMWpa4w/" target="_blank" rel="noopener" data-i18n="btnIg">Ver en Instagram</a>
+          <a class="btn" href="https://www.facebook.com/share/r/1Dhe8bxzZf/" target="_blank" rel="noopener" data-i18n="btnFb">Ver en Facebook</a>
+        </div>
+      </div>
+    </article>
+
+  </section>
+
+  <section class="cta-band">
+    <h2 data-i18n="ctaH">Su información, al alcance de un escaneo</h2>
+    <p data-i18n="ctaP">VidaVitalQR genera un código QR con la información esencial de una persona, una mascota o un objeto, disponible cuando más se necesita.</p>
+    <a class="btn" href="/" data-i18n="ctaBtn">Conozca VidaVitalQR</a>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap foot-row">
+    <a class="brand" href="/">VidaVitalQR</a>
+    <div class="fine"><span>vidavitalqr.com</span> · <span data-i18n="foot">Información esencial, disponible cuando más se necesita.</span></div>
+  </div>
+</footer>
+<script>
+  var TEXTOS_BLOG = {"es": {}, "en": {"volver": "Back to home", "h1": "Facts, prevention and short videos", "heroP": "Here we gather VidaVitalQR's posts: figures with their source, prevention ideas and the videos we share on Instagram and Facebook, for people, pets and objects.", "p3meta": "October 7, 2026 · Pets", "p3t": "What if your pet gets lost?", "p3p": "Whoever finds it can scan the QR code tag on the collar and instantly see the pet's details, the owner's details and how to call them. It can help bring it back home.", "p2meta": "October 7, 2026 · Older adults", "p2t": "About 35% of people over 65 suffer at least one fall a year", "p2p": "A fall can happen at any time, and having the person's essential information at hand helps whoever assists them. With VidaVitalQR, simply scan the code to find it instantly.", "p2f": "Source: Caja Costarricense de Seguro Social (CCSS), Older Adult Care Program, 2017.", "p1meta": "October 6, 2026 · Road safety", "p1t": "43 cyclists died on Costa Rica's roads in 2025", "p1p": "Scan the QR code and instantly find the essential information. It can help save a life.", "p1f": "Source: Road Safety Council (COSEVI), preliminary 2025 figures.", "btnIg": "View on Instagram", "btnFb": "View on Facebook", "p3alt": "What if it gets lost? Whoever finds it can scan its tag. VidaVitalQR QR code for pets", "p2alt": "35% of people over 65 suffer at least one fall a year. Source: CCSS, 2017", "p1alt": "43 cyclists died on Costa Rica's roads in 2025. Source: COSEVI, preliminary 2025 figures", "ctaH": "Your information, one scan away", "ctaP": "VidaVitalQR creates a QR code with the essential information of a person, a pet or an object, available when it is needed most.", "ctaBtn": "Discover VidaVitalQR", "foot": "Essential information, available when it is needed most.", "title": "Blog | VidaVitalQR", "desc": "VidaVitalQR blog: sourced facts, tips and short videos about safety and prevention for people, pets and objects."}, "fr": {"volver": "Retour à l'accueil", "h1": "Données, prévention et vidéos courtes", "heroP": "Nous réunissons ici les publications de VidaVitalQR : des chiffres avec leur source, des idées de prévention et les vidéos que nous partageons sur Instagram et Facebook, pour les personnes, les animaux et les objets.", "p3meta": "7 octobre 2026 · Animaux de compagnie", "p3t": "Et si votre animal se perd ?", "p3p": "Celui qui le retrouve peut scanner la plaque à code QR du collier et voir aussitôt les données de l'animal, celles du propriétaire et comment l'appeler. Cela peut aider à ce qu'il rentre à la maison.", "p2meta": "7 octobre 2026 · Personnes âgées", "p2t": "Environ 35 % des personnes de plus de 65 ans font au moins une chute par an", "p2p": "Une chute peut survenir à tout moment, et avoir sous la main les informations essentielles de la personne aide celui qui lui porte secours. Avec VidaVitalQR, il suffit de scanner le code pour les trouver aussitôt.", "p2f": "Source : Caja Costarricense de Seguro Social (CCSS), Programme de soins aux personnes âgées, 2017.", "p1meta": "6 octobre 2026 · Sécurité routière", "p1t": "43 cyclistes sont morts sur les routes du Costa Rica en 2025", "p1p": "Scannez le code QR et trouvez aussitôt les informations essentielles. Cela peut aider à sauver une vie.", "p1f": "Source : Conseil de sécurité routière (COSEVI), chiffres préliminaires de 2025.", "btnIg": "Voir sur Instagram", "btnFb": "Voir sur Facebook", "p3alt": "Et s'il se perd ? Celui qui le retrouve peut scanner sa plaque. Code QR VidaVitalQR pour animaux", "p2alt": "35 % des personnes de plus de 65 ans font au moins une chute par an. Source : CCSS, 2017", "p1alt": "43 cyclistes sont morts sur les routes du Costa Rica en 2025. Source : COSEVI, chiffres préliminaires de 2025", "ctaH": "Vos informations, à un scan de distance", "ctaP": "VidaVitalQR génère un code QR avec les informations essentielles d'une personne, d'un animal ou d'un objet, disponible quand on en a le plus besoin.", "ctaBtn": "Découvrir VidaVitalQR", "foot": "Informations essentielles, disponibles quand on en a le plus besoin.", "title": "Blog | VidaVitalQR", "desc": "Blog de VidaVitalQR : données sourcées, conseils et vidéos courtes sur la sécurité et la prévention pour les personnes, les animaux et les objets."}, "pt": {"volver": "Voltar ao início", "h1": "Dados, prevenção e vídeos curtos", "heroP": "Aqui reunimos as publicações da VidaVitalQR: números com a fonte, ideias de prevenção e os vídeos que compartilhamos no Instagram e no Facebook, para pessoas, animais e objetos.", "p3meta": "7 de outubro de 2026 · Animais de estimação", "p3t": "E se o seu animal de estimação se perder?", "p3p": "Quem o encontrar pode escanear a placa com código QR da coleira e ver na hora os dados do animal, os dados do dono e como ligar para ele. Pode ajudar a que volte para casa.", "p2meta": "7 de outubro de 2026 · Idosos", "p2t": "Cerca de 35% das pessoas com mais de 65 anos sofrem pelo menos uma queda por ano", "p2p": "Uma queda pode acontecer a qualquer momento, e ter à mão as informações essenciais da pessoa ajuda quem a socorre. Com a VidaVitalQR, basta escanear o código para encontrá-las na hora.", "p2f": "Fonte: Caja Costarricense de Seguro Social (CCSS), Programa de Atenção ao Idoso, 2017.", "p1meta": "6 de outubro de 2026 · Segurança viária", "p1t": "43 ciclistas morreram nas estradas da Costa Rica em 2025", "p1p": "Escaneie o código QR e encontre na hora as informações essenciais. Pode ajudar a salvar uma vida.", "p1f": "Fonte: Conselho de Segurança Viária (COSEVI), números preliminares de 2025.", "btnIg": "Ver no Instagram", "btnFb": "Ver no Facebook", "p3alt": "E se ele se perder? Quem o encontrar pode escanear a placa. Código QR da VidaVitalQR para animais", "p2alt": "35% das pessoas com mais de 65 anos sofrem pelo menos uma queda por ano. Fonte: CCSS, 2017", "p1alt": "43 ciclistas morreram nas estradas da Costa Rica em 2025. Fonte: COSEVI, números preliminares de 2025", "ctaH": "Suas informações, a um escaneamento de distância", "ctaP": "A VidaVitalQR gera um código QR com as informações essenciais de uma pessoa, um animal ou um objeto, disponível quando mais se precisa.", "ctaBtn": "Conheça a VidaVitalQR", "foot": "Informações essenciais, disponíveis quando mais se precisa.", "title": "Blog | VidaVitalQR", "desc": "Blog da VidaVitalQR: dados com fonte, dicas e vídeos curtos sobre segurança e prevenção para pessoas, animais e objetos."}};
+  var ES_DEFAULT = {};
+  function aplicarIdiomaBlog(lang){
+    var dic = TEXTOS_BLOG[lang] || {};
+    document.querySelectorAll('[data-i18n]').forEach(function(el){
+      var k = el.getAttribute('data-i18n');
+      if (ES_DEFAULT['t_'+k] === undefined) ES_DEFAULT['t_'+k] = el.textContent;
+      el.textContent = (dic[k] !== undefined) ? dic[k] : ES_DEFAULT['t_'+k];
+    });
+    document.querySelectorAll('[data-i18n-alt]').forEach(function(el){
+      var k = el.getAttribute('data-i18n-alt');
+      if (ES_DEFAULT['a_'+k] === undefined) ES_DEFAULT['a_'+k] = el.getAttribute('alt');
+      el.setAttribute('alt', (dic[k] !== undefined) ? dic[k] : ES_DEFAULT['a_'+k]);
+    });
+    if (dic.title) document.title = dic.title;
+    var md = document.querySelector('meta[name="description"]');
+    if (md && dic.desc) md.setAttribute('content', dic.desc);
+    document.documentElement.lang = lang;
+    document.querySelectorAll('.langbar button').forEach(function(b){
+      b.classList.toggle('activo', b.getAttribute('data-lang') === lang);
+    });
+    try { localStorage.setItem('vidavitalqr_lang', lang); } catch(e){}
+  }
+  document.querySelectorAll('.langbar button').forEach(function(b){
+    b.addEventListener('click', function(){ aplicarIdiomaBlog(b.getAttribute('data-lang')); });
+  });
+  (function(){
+    var preferido = 'es';
+    try {
+      var g = localStorage.getItem('vidavitalqr_lang');
+      if (g && TEXTOS_BLOG[g]) preferido = g;
+    } catch(e){}
+    aplicarIdiomaBlog(preferido);
+  })();
+</script>
+</body>
+</html>
