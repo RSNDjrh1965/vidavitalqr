@@ -1,0 +1,376 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="description" content="VidaVitalQR, un acompañante para sus hijos, sus seres queridos y sus mascotas: la información esencial a mano cuando se necesita.">
+<title>Un acompañante para los suyos | VidaVitalQR</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Zilla+Slab:wght@400;500;600;700&family=Source+Sans+3:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ink:#12282B; --ink-soft:#2C4247; --paper:#F7F4EE; --paper-dim:#EFEAE0; --card:#FFFFFF;
+    --teal:#3A6B70; --teal-deep:#1F4448; --sage:#8FAFA6; --signal:#C1552F; --signal-soft:#F0DACD;
+    --line:#DAD3C4; --muted:#6C7A76; --shadow:0 20px 50px -25px rgba(18,40,43,0.35);
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --ink:#EFE9DD; --ink-soft:#C9C2B2; --paper:#14282A; --paper-dim:#193033; --card:#1B3538;
+      --teal:#8FBBB8; --teal-deep:#B7DAD5; --sage:#6E938A; --signal:#E5875D; --signal-soft:#3A2A20;
+      --line:#2E4749; --muted:#9FB0AC; --shadow:0 20px 50px -20px rgba(0,0,0,0.55);
+    }
+  }
+  *{box-sizing:border-box;}
+  html{-webkit-text-size-adjust:100%;scroll-behavior:smooth;}
+  body{margin:0;background:var(--paper);color:var(--ink);font-family:"Source Sans 3",ui-sans-serif,system-ui,sans-serif;font-size:17px;line-height:1.6;-webkit-font-smoothing:antialiased;overflow-x:hidden;}
+  a{color:inherit;}
+  img{max-width:100%;display:block;}
+  h1,h2,h3{font-family:"Zilla Slab",Georgia,serif;font-weight:600;line-height:1.15;margin:0;text-wrap:balance;}
+  p{margin:0;}
+  .wrap{max-width:1120px;margin:0 auto;padding-left:24px;padding-right:24px;}
+  @media (max-width:640px){ .wrap{padding-left:20px;padding-right:20px;} body{font-size:16px;} }
+  .eyebrow{font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:0.78rem;letter-spacing:0.14em;text-transform:uppercase;color:var(--teal);font-weight:500;}
+
+  header.site{position:sticky;top:0;z-index:40;background:color-mix(in srgb,var(--paper) 88%,transparent);backdrop-filter:blur(10px);border-bottom:1px solid var(--line);}
+  .nav{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;padding:16px 24px;max-width:1120px;margin:0 auto;}
+  .brand{display:flex;align-items:center;gap:10px;font-family:"Zilla Slab",serif;font-weight:700;font-size:1.25rem;text-decoration:none;}
+  .nav-right{display:flex;align-items:center;gap:12px;flex-wrap:wrap;}
+  .langbar{display:flex;gap:4px;}
+  .langbar button{font-family:"IBM Plex Mono",monospace;font-size:0.76rem;letter-spacing:0.04em;background:transparent;color:var(--ink-soft);border:1px solid var(--line);padding:7px 11px;border-radius:100px;cursor:pointer;}
+  .langbar button:hover{border-color:var(--teal-deep);color:var(--teal-deep);}
+  .langbar button.activo{background:var(--ink);color:var(--paper);border-color:var(--ink);}
+  .nav-cta{font-family:"IBM Plex Mono",monospace;font-size:0.82rem;letter-spacing:0.03em;background:var(--ink);color:var(--paper);padding:10px 18px;border-radius:100px;text-decoration:none;white-space:nowrap;}
+
+  /* ---------- animación de entrada ---------- */
+  .reveal{opacity:0;transform:translateY(26px);transition:opacity .9s cubic-bezier(.2,.7,.2,1),transform .9s cubic-bezier(.2,.7,.2,1);transition-delay:var(--d,0s);}
+  .reveal.in{opacity:1;transform:none;}
+  .reveal.from-left{transform:translateX(-36px);} .reveal.from-right{transform:translateX(36px);}
+  .reveal.from-left.in,.reveal.from-right.in{transform:none;}
+  /* entrada más marcada: de los extremos hacia adentro */
+  .reveal.from-left:not(.photo){transform:translateX(-90px);} .reveal.from-right:not(.photo){transform:translateX(90px);}
+  .reveal.from-left:not(.photo).in,.reveal.from-right:not(.photo).in{transform:none;}
+  .photo.reveal{transition:opacity 1s ease,transform 1.5s cubic-bezier(.16,1,.3,1);}
+  .photo.reveal.from-left{transform:translateX(-60vw) rotate(-6deg) scale(.88);}
+  .photo.reveal.from-right{transform:translateX(60vw) rotate(6deg) scale(.88);}
+  .photo.reveal.from-left.in,.photo.reveal.from-right.in{transform:none;}
+
+  /* ---------- hero ---------- */
+  .hero{position:relative;padding:68px 0 56px;overflow:hidden;}
+  .blob{position:absolute;border-radius:50%;filter:blur(60px);opacity:.5;pointer-events:none;z-index:0;}
+  .blob.b1{width:340px;height:340px;background:var(--signal-soft);top:-80px;right:-60px;animation:float1 14s ease-in-out infinite;}
+  .blob.b2{width:300px;height:300px;background:color-mix(in srgb,var(--sage) 40%,transparent);bottom:-90px;left:-70px;animation:float2 17s ease-in-out infinite;}
+  @keyframes float1{0%,100%{transform:translate(0,0)}50%{transform:translate(-40px,30px)}}
+  @keyframes float2{0%,100%{transform:translate(0,0)}50%{transform:translate(50px,-30px)}}
+  .hero-grid{position:relative;z-index:1;display:grid;grid-template-columns:1.1fr .9fr;gap:48px;align-items:center;}
+  @media (max-width:860px){ .hero-grid{grid-template-columns:1fr;gap:36px;} .hero{padding:44px 0 40px;} }
+  .hero h1{font-size:clamp(2.1rem,4.6vw,3.4rem);margin-top:14px;}
+  .hero .lead{margin-top:22px;max-width:52ch;color:var(--ink-soft);font-size:1.12rem;}
+
+  .demo{position:relative;display:flex;justify-content:center;align-items:flex-start;min-height:830px;}
+  .qrbox{position:relative;width:230px;height:230px;background:#fff;border:6px solid var(--teal-deep);border-radius:26px;padding:20px;box-shadow:var(--shadow);color:#0a343b;z-index:2;animation:qrfloat 6s ease-in-out infinite;}
+  @keyframes qrfloat{0%,100%{transform:translateY(0)}50%{transform:translateY(-7px)}}
+  .qrbox svg{width:100%;height:100%;display:block;}
+  .scanline{position:absolute;left:10px;right:10px;top:12px;height:3px;background:var(--signal);border-radius:3px;box-shadow:0 0 14px 3px color-mix(in srgb,var(--signal) 70%,transparent);opacity:0;animation:scan 9s linear infinite;}
+  @keyframes scan{0%{top:12px;opacity:1}28%{top:calc(100% - 15px);opacity:1}30%{opacity:0}100%{top:12px;opacity:0}}
+  .corner{position:absolute;width:26px;height:26px;border:4px solid var(--signal);opacity:0;animation:corner 9s ease-in-out infinite;}
+  .corner.tl{top:-14px;left:-14px;border-right:0;border-bottom:0;border-top-left-radius:12px;}
+  .corner.tr{top:-14px;right:-14px;border-left:0;border-bottom:0;border-top-right-radius:12px;}
+  .corner.bl{bottom:-14px;left:-14px;border-right:0;border-top:0;border-bottom-left-radius:12px;}
+  .corner.br{bottom:-14px;right:-14px;border-left:0;border-top:0;border-bottom-right-radius:12px;}
+  @keyframes corner{0%{opacity:0;transform:scale(1.4)}8%{opacity:1;transform:scale(1)}32%{opacity:1;transform:scale(1)}40%{opacity:0;transform:scale(1)}100%{opacity:0}}
+  .hint{position:absolute;bottom:-44px;left:50%;transform:translateX(-50%);white-space:nowrap;font-family:"IBM Plex Mono",monospace;font-size:.78rem;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);animation:hint 9s ease-in-out infinite;}
+  @keyframes hint{0%,30%{opacity:1}36%,100%{opacity:0}}
+
+  .ficha{position:absolute;top:250px;left:50%;width:min(310px,92%);margin-left:calc(min(310px,92%) / -2);background:var(--card);border:1px solid var(--line);border-radius:20px;box-shadow:var(--shadow);padding:18px 18px 16px;z-index:3;opacity:0;animation:ficha 9s cubic-bezier(.2,.7,.2,1) infinite;}
+
+  .ficha .row.fhead{flex-direction:row;justify-content:space-between;align-items:flex-start;gap:10px;margin-top:6px;}
+  .ficha .fhead .ft{display:block;font-family:"Zilla Slab",serif;font-size:1.15rem;line-height:1.15;color:var(--teal-deep);}
+  .ficha .fhead .fsub{display:block;text-transform:none;letter-spacing:0;font-family:"Source Sans 3",sans-serif;font-size:.74rem;margin-top:3px;}
+  .ficha .avatar{flex:none;width:52px;height:52px;border-radius:50%;background:var(--line);color:var(--muted);border:3px solid var(--line);overflow:hidden;display:block;}
+  .ficha .avatar svg{width:100%;height:100%;display:block;}
+  .ficha .nm b{font-size:1.2rem;}
+  .ficha .row.kv{flex-direction:row;justify-content:space-between;align-items:baseline;}
+  .ficha .kv span{font-size:.95rem;}
+  .ficha .fh{font-family:"Zilla Slab",serif;color:var(--teal-deep);font-size:.98rem;margin-bottom:2px;}
+  .ficha .ct{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:6px;font-size:.84rem;}
+  .ficha .call.mini{margin:0;padding:4px 10px;font-size:.72rem;white-space:nowrap;animation:none;opacity:1;flex:none;}
+  .ficha .ct b{font-size:.95rem;}
+  @keyframes ficha{0%,32%{opacity:0;transform:translateY(60px) scale(.94)}42%{opacity:1;transform:none}90%{opacity:1;transform:none}100%{opacity:0;transform:translateY(-10px)}}
+  .ficha .tag{display:inline-block;font-family:"IBM Plex Mono",monospace;font-size:.68rem;letter-spacing:.12em;text-transform:uppercase;background:var(--signal-soft);color:var(--signal);padding:3px 10px;border-radius:100px;}
+  .ficha .row{display:flex;flex-direction:column;padding:9px 0;border-bottom:1px dashed var(--line);opacity:0;animation:row 9s ease-out infinite;animation-delay:calc(var(--r) * .45s);}
+  .ficha .row:last-of-type{border-bottom:0;}
+  .ficha .row small{font-family:"IBM Plex Mono",monospace;font-size:.68rem;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);}
+  .ficha .row b{font-family:"Zilla Slab",serif;font-size:1.12rem;font-weight:600;}
+  @keyframes row{0%,40%{opacity:0;transform:translateX(-14px)}48%{opacity:1;transform:none}90%{opacity:1}100%{opacity:0}}
+  .ficha .call{display:flex;align-items:center;justify-content:center;gap:8px;margin-top:10px;background:var(--signal);color:#FFF9F4;font-weight:600;font-size:.95rem;padding:10px;border-radius:100px;opacity:0;animation:call 9s ease-out infinite;animation-delay:1.9s;}
+  .ficha .call svg{width:16px;height:16px;animation:ring 1.4s ease-in-out infinite;}
+  @keyframes call{0%,40%{opacity:0;transform:scale(.9)}50%{opacity:1;transform:scale(1)}90%{opacity:1}100%{opacity:0}}
+  @keyframes ring{0%,60%,100%{transform:rotate(0)}10%{transform:rotate(-16deg)}20%{transform:rotate(14deg)}30%{transform:rotate(-12deg)}40%{transform:rotate(8deg)}}
+
+  /* ---------- paneles con foto ---------- */
+  section.story{padding:36px 0 8px;}
+  .section-head{max-width:640px;margin-bottom:34px;}
+  .section-head h2{font-size:clamp(1.7rem,3.4vw,2.4rem);margin-top:12px;}
+  .panel{display:grid;grid-template-columns:1fr 1fr;gap:44px;align-items:center;padding:30px 0;}
+  .panel.flip .photo{order:2;}
+  @media (max-width:760px){ .panel{grid-template-columns:1fr;gap:20px;padding:22px 0;} .panel.flip .photo{order:0;} }
+  .photo{position:relative;border-radius:24px;overflow:hidden;box-shadow:var(--shadow);aspect-ratio:16/10;background:var(--paper-dim);}
+  .photo img{width:100%;height:100%;object-fit:cover;animation:kenburns 20s ease-in-out infinite alternate;}
+  @keyframes kenburns{from{transform:scale(1) translate(0,0)}to{transform:scale(1.12) translate(-2%,-1.5%)}}
+  .photo::after{content:"";position:absolute;inset:0;background:linear-gradient(120deg,transparent 40%,rgba(255,255,255,.18) 50%,transparent 60%);transform:translateX(-120%);animation:shine 7s 1.5s ease-in-out infinite;pointer-events:none;}
+  @keyframes shine{0%{transform:translateX(-120%)}35%,100%{transform:translateX(120%)}}
+  .panel .num{font-family:"IBM Plex Mono",monospace;font-size:.78rem;letter-spacing:.14em;color:var(--signal);}
+  .panel h3{font-size:clamp(1.5rem,2.8vw,2rem);margin:8px 0 12px;}
+  .panel p{color:var(--ink-soft);font-size:1.06rem;max-width:46ch;}
+
+  /* ---------- acompañante ---------- */
+  .companion{margin:34px 0 10px;padding:46px 40px;border-radius:26px;background:var(--teal-deep);color:var(--paper);position:relative;overflow:hidden;}
+  .companion::before{content:"";position:absolute;width:420px;height:420px;border-radius:50%;border:2px solid color-mix(in srgb,var(--paper) 18%,transparent);right:-120px;top:-150px;animation:pulse 6s ease-out infinite;}
+  .companion::after{content:"";position:absolute;width:420px;height:420px;border-radius:50%;border:2px solid color-mix(in srgb,var(--paper) 18%,transparent);right:-120px;top:-150px;animation:pulse 6s 3s ease-out infinite;}
+  @keyframes pulse{0%{transform:scale(.4);opacity:.9}100%{transform:scale(1.25);opacity:0}}
+  .companion .eyebrow{color:var(--sage);position:relative;z-index:1;}
+  .companion h2{color:var(--paper);font-size:clamp(1.6rem,3.2vw,2.3rem);margin-top:12px;position:relative;z-index:1;max-width:24ch;}
+  .companion p{margin-top:16px;max-width:60ch;opacity:.92;font-size:1.08rem;position:relative;z-index:1;}
+  @media (max-width:640px){ .companion{padding:34px 24px;} }
+
+  /* ---------- pasos ---------- */
+  .steps-wrap{padding:60px 0 20px;}
+  .steps{position:relative;display:grid;grid-template-columns:repeat(3,1fr);gap:24px;margin-top:40px;}
+  .steps .track{position:absolute;left:16.6%;right:16.6%;top:34px;height:3px;background:var(--line);border-radius:3px;overflow:hidden;}
+  .steps .track::after{content:"";position:absolute;inset:0;background:var(--signal);transform:scaleX(0);transform-origin:left;transition:transform 2.2s .4s cubic-bezier(.4,0,.2,1);}
+  .steps.in .track::after{transform:scaleX(1);}
+  .step{position:relative;text-align:center;padding:0 8px;}
+  .step .dot{width:70px;height:70px;border-radius:50%;margin:0 auto 16px;background:var(--card);border:3px solid var(--teal-deep);display:flex;align-items:center;justify-content:center;box-shadow:var(--shadow);transform:scale(.4);opacity:0;transition:transform .7s cubic-bezier(.3,1.6,.5,1),opacity .5s;transition-delay:var(--d,0s);}
+  .steps.in .step .dot{transform:scale(1);opacity:1;}
+  .step .dot svg{width:32px;height:32px;stroke:var(--teal-deep);fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;}
+  .step h3{font-size:1.35rem;}
+  .step p{margin-top:6px;color:var(--ink-soft);font-size:.98rem;}
+  .step .dot::after{content:"";position:absolute;inset:-3px;border-radius:50%;border:3px solid var(--signal);opacity:0;}
+  .steps.in .step .dot::after{animation:ping 2.6s ease-out infinite;animation-delay:calc(var(--d,0s) + 1s);}
+  @keyframes ping{0%{transform:scale(1);opacity:.7}100%{transform:scale(1.5);opacity:0}}
+  @media (max-width:640px){ .steps{grid-template-columns:1fr;gap:34px;} .steps .track{display:none;} }
+
+  /* ---------- cierre ---------- */
+  .cta-band{background:var(--card);border:1px solid var(--line);border-radius:26px;padding:48px 36px;margin:56px 0 72px;text-align:center;box-shadow:var(--shadow);}
+  .cta-band h2{font-size:clamp(1.6rem,3vw,2.2rem);}
+  .cta-band p{margin:12px auto 24px;max-width:52ch;color:var(--ink-soft);}
+  .btnrow{display:flex;flex-wrap:wrap;gap:12px;justify-content:center;}
+  .btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;font-family:"Source Sans 3",sans-serif;font-weight:600;font-size:1rem;text-decoration:none;padding:13px 24px;border-radius:100px;border:1.5px solid var(--line);color:var(--ink);background:transparent;transition:transform .2s,border-color .2s;}
+  .btn:hover{border-color:var(--teal-deep);color:var(--teal-deep);transform:translateY(-2px);}
+  .btn.primary{background:var(--signal);border-color:var(--signal);color:#FFF9F4;animation:glow 3.2s ease-in-out infinite;}
+  .btn.primary:hover{color:#FFF9F4;opacity:.93;}
+  @keyframes glow{0%,100%{box-shadow:0 0 0 0 color-mix(in srgb,var(--signal) 45%,transparent)}50%{box-shadow:0 0 0 12px transparent}}
+  .btn svg{width:18px;height:18px;flex:none;}
+  .nota{margin-top:22px;font-size:.84rem;color:var(--muted);}
+
+  footer{border-top:1px solid var(--line);padding:36px 0;}
+  .foot-row{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:14px;}
+  footer .fine{font-size:.8rem;color:var(--muted);}
+
+  /* ---------- sin movimiento ---------- */
+  @media (prefers-reduced-motion: reduce){
+    *,*::before,*::after{animation:none !important;transition:none !important;}
+    .reveal,.steps .step .dot{opacity:1 !important;transform:none !important;}
+    .steps .track::after{transform:scaleX(1);}
+    .ficha{opacity:1;} .ficha .row,.ficha .call{opacity:1;}
+    .hint{display:none;}
+  }
+</style>
+<noscript><style>.reveal,.steps .step .dot{opacity:1 !important;transform:none !important;} .steps .track::after{transform:scaleX(1);}</style></noscript>
+</head>
+<body>
+<header class="site">
+  <div class="nav">
+    <a class="brand" href="/">VidaVitalQR</a>
+    <div class="nav-right">
+      <div class="langbar" role="group" aria-label="Idioma / Language">
+        <button type="button" data-lang="es">ES</button>
+        <button type="button" data-lang="en">EN</button>
+        <button type="button" data-lang="fr">FR</button>
+        <button type="button" data-lang="pt">PT</button>
+      </div>
+      <a class="nav-cta" href="/blog.html" data-i18n="volver">Volver al blog</a>
+    </div>
+  </div>
+</header>
+
+<main>
+  <!-- ============ HERO ============ -->
+  <section class="hero">
+    <div class="blob b1"></div><div class="blob b2"></div>
+    <div class="wrap hero-grid">
+      <div>
+        <span class="eyebrow reveal" data-i18n="eyebrow">Un acompañante para los suyos</span>
+        <h1 class="reveal" style="--d:.1s" data-i18n="h1">Esté siempre al alcance de sus hijos y de sus seres queridos, en caso de que ellos lo necesiten.</h1>
+        <p class="lead reveal" style="--d:.25s" data-i18n="lead">Con VidaVitalQR, la información esencial de una persona, una mascota o un objeto queda a un escaneo de distancia.</p>
+      </div>
+      <div class="demo reveal from-right" style="--d:.2s" aria-hidden="true">
+        <div class="qrbox">
+          <span class="corner tl"></span><span class="corner tr"></span><span class="corner bl"></span><span class="corner br"></span>
+          <svg viewBox="0 0 25 25" shape-rendering="crispEdges"><path fill="none" stroke="currentColor" stroke-width="1" d="M0 0.5h7m1 0h2m1 0h1m1 0h1m4 0h7m-25 1h1m5 0h1m3 0h3m5 0h1m5 0h1m-25 1h1m1 0h3m1 0h1m1 0h1m4 0h1m1 0h1m2 0h1m1 0h3m1 0h1m-25 1h1m1 0h3m1 0h1m3 0h1m2 0h3m2 0h1m1 0h3m1 0h1m-25 1h1m1 0h3m1 0h1m4 0h3m4 0h1m1 0h3m1 0h1m-25 1h1m5 0h1m1 0h4m1 0h1m2 0h1m1 0h1m5 0h1m-25 1h7m1 0h1m1 0h1m1 0h1m1 0h1m1 0h1m1 0h7m-13 1h1m-13 1h1m1 0h1m3 0h2m2 0h2m2 0h3m2 0h1m2 0h1m1 0h1m-23 1h3m2 0h1m4 0h2m1 0h2m1 0h2m1 0h1m1 0h2m-25 1h1m1 0h2m1 0h2m8 0h3m1 0h1m1 0h2m1 0h1m-24 1h1m1 0h1m1 0h1m1 0h5m4 0h2m1 0h1m1 0h1m-20 1h1m3 0h1m2 0h3m3 0h1m2 0h1m5 0h1m-23 1h1m2 0h1m2 0h1m6 0h2m1 0h2m3 0h2m-25 1h3m3 0h1m1 0h2m1 0h1m2 0h2m2 0h1m2 0h2m1 0h1m-22 1h2m5 0h1m3 0h1m4 0h3m-22 1h4m2 0h3m1 0h3m3 0h5m2 0h1m-16 1h3m1 0h2m2 0h1m3 0h1m3 0h1m-25 1h7m1 0h1m1 0h1m1 0h1m3 0h1m1 0h1m1 0h1m3 0h1m-25 1h1m5 0h1m2 0h4m1 0h3m3 0h1m2 0h2m-25 1h1m1 0h3m1 0h1m5 0h1m2 0h6m3 0h1m-25 1h1m1 0h3m1 0h1m2 0h2m2 0h1m2 0h2m2 0h1m1 0h2m-24 1h1m1 0h3m1 0h1m1 0h6m2 0h2m1 0h3m1 0h2m-25 1h1m5 0h1m3 0h1m3 0h3m2 0h2m-21 1h7m1 0h2m1 0h4m1 0h1m1 0h1m2 0h1m2 0h1"/></svg>
+          <span class="scanline"></span>
+          <span class="hint" data-i18n="hint">Escanee para ver la ficha</span>
+        </div>
+        <div class="ficha">
+          <span class="tag" data-i18n="fEjemplo">Ejemplo</span>
+          <div class="fhead row" style="--r:1">
+            <div><b class="ft" data-i18n="fInfo">Información de emergencia</b><small class="fsub" data-i18n="fSub">Este código pertenece a una ficha de VidaVitalQR.</small></div>
+            <span class="avatar" aria-hidden="true"><svg viewBox="0 0 48 48"><circle cx="24" cy="18" r="9" fill="currentColor"/><path d="M6 46c1-11 8-17 18-17s17 6 18 17z" fill="currentColor"/></svg></span>
+          </div>
+          <div class="row nm" style="--r:2"><b data-i18n="fNombreV">Ana Ejemplo</b></div>
+          <div class="row kv" style="--r:3"><small data-i18n="fSangre">Tipo de sangre</small><span>O+</span></div>
+          <div class="row kv" style="--r:4"><small data-i18n="fPais">País</small><span data-i18n="fPaisV">Costa Rica</span></div>
+          <div class="row" style="--r:5"><strong class="fh" data-i18n="fComent">Comentarios importantes</strong><span data-i18n="fComentV">Alérgica a la penicilina</span></div>
+          <div class="row" style="--r:6"><strong class="fh" data-i18n="fContactos">Contactos de emergencia</strong>
+            <div class="ct"><span><b data-i18n="fC1">Carlos Ejemplo</b> — <span data-i18n="fC1r">Esposo</span></span><span class="call mini"><span data-i18n="fLlamar">Llamar</span> (*****123)</span></div>
+            <div class="ct"><span><b data-i18n="fC2">Marta Ejemplo</b> — <span data-i18n="fC2r">hija</span></span><span class="call mini"><span data-i18n="fLlamar">Llamar</span> (*****456)</span></div>
+          </div>
+          <div class="call"><span data-i18n="fPdf">Ver ficha completa (PDF)</span></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ PARA QUIÉN ============ -->
+  <section class="story wrap">
+    <div class="section-head reveal">
+      <span class="eyebrow" data-i18n="s1e">Para toda la familia</span>
+      <h2 data-i18n="s1h">Cerca de quienes más quiere</h2>
+    </div>
+
+    <div class="panel">
+      <div class="photo reveal from-left"><img src="blog/acompanante_familia.jpg" data-i18n-alt="a1" alt="La mano de un bebé sobre la mano de un adulto" loading="lazy"></div>
+      <div class="reveal from-right" style="--d:.1s">
+        <span class="num">01</span>
+        <h3 data-i18n="p1h">Hijos y seres queridos</h3>
+        <p data-i18n="p1p">Un código que lleva la información esencial, para que quien los ayude sepa a quién contactar aunque usted no esté cerca.</p>
+      </div>
+    </div>
+
+    <div class="panel flip">
+      <div class="photo reveal from-right"><img src="blog/acompanante_mascotas.jpg" data-i18n-alt="a2" alt="Un perro y un gato descansando juntos sobre el pasto" loading="lazy"></div>
+      <div class="reveal from-left" style="--d:.1s">
+        <span class="num">02</span>
+        <h3 data-i18n="p2h">Nuestras mascotas</h3>
+        <p data-i18n="p2p">Ya son parte importante de la familia. Su placa con código QR muestra los datos del dueño y cómo contactarlo, y puede ayudar a que vuelvan a casa.</p>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="photo reveal from-left"><img src="blog/acompanante_mayores.jpg" data-i18n-alt="a3" alt="Las manos de una persona mayor sostenidas con cariño" loading="lazy"></div>
+      <div class="reveal from-right" style="--d:.1s">
+        <span class="num">03</span>
+        <h3 data-i18n="p3h">Adultos mayores, hermanos, amigos y usted</h3>
+        <p data-i18n="p3p">Tener a mano la información fundamental ayuda a quien presta auxilio, sea en una caída, un problema de salud o cualquier percance.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ ACOMPAÑANTE ============ -->
+  <div class="wrap">
+    <div class="companion reveal">
+      <span class="eyebrow" data-i18n="ce">El mejor acompañante</span>
+      <h2 data-i18n="ch">Un acompañante para nuestros seres queridos</h2>
+      <p data-i18n="cp">VidaVitalQR resulta de gran utilidad cuando el portador presenta un problema de salud, un accidente o algún percance que requiera tener a mano la información esencial.</p>
+    </div>
+  </div>
+
+  <!-- ============ PASOS ============ -->
+  <section class="steps-wrap wrap">
+    <div class="section-head reveal" style="margin-bottom:0">
+      <span class="eyebrow" data-i18n="se">Así de fácil</span>
+      <h2 data-i18n="sh">Tres pasos: escanear, ver y contactar</h2>
+    </div>
+    <div class="steps reveal" id="steps">
+      <div class="track"></div>
+      <div class="step" style="--d:.2s">
+        <div class="dot"><svg viewBox="0 0 24 24"><path d="M4 8V6a2 2 0 0 1 2-2h2M16 4h2a2 2 0 0 1 2 2v2M20 16v2a2 2 0 0 1-2 2h-2M8 20H6a2 2 0 0 1-2-2v-2"/><path d="M4 12h16"/></svg></div>
+        <h3 data-i18n="t1h">Escanee</h3>
+        <p data-i18n="t1p">Con la cámara de cualquier teléfono.</p>
+      </div>
+      <div class="step" style="--d:1.2s">
+        <div class="dot"><svg viewBox="0 0 24 24"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg></div>
+        <h3 data-i18n="t2h">Vea</h3>
+        <p data-i18n="t2p">La información esencial, al instante.</p>
+      </div>
+      <div class="step" style="--d:2.2s">
+        <div class="dot"><svg viewBox="0 0 24 24"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1 1 .4 1.9.7 2.8a2 2 0 0 1-.5 2.1L8.1 9.9a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.8.6 2.8.7a2 2 0 0 1 1.7 2z"/></svg></div>
+        <h3 data-i18n="t3h">Contacte</h3>
+        <p data-i18n="t3p">Con un toque, a quien avisar.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ CIERRE ============ -->
+  <div class="wrap">
+    <div class="cta-band reveal">
+      <h2 data-i18n="ctaH">Conozca VidaVitalQR</h2>
+      <p data-i18n="ctaP">Para compras y más información, visite nuestro sitio o escríbanos por WhatsApp.</p>
+      <div class="btnrow">
+        <a class="btn primary" href="/" data-i18n="ctaBtn">Ir a vidavitalqr.com</a>
+        <a class="btn" href="https://wa.me/50660933090" target="_blank" rel="noopener"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.4 8.4 0 0 1-12.4 7.4L3 20.5l1.7-5.4A8.4 8.4 0 1 1 21 11.5z"/></svg><span data-i18n="ctaWa">WhatsApp</span></a>
+      </div>
+      <p class="nota" data-i18n="nota">Los datos que muestra cada código son los que su titular decide ingresar. La ficha de la imagen es solo un ejemplo.</p>
+    </div>
+  </div>
+</main>
+
+<footer>
+  <div class="wrap foot-row">
+    <a class="brand" href="/">VidaVitalQR</a>
+    <span class="fine" data-i18n="foot">Información esencial, disponible cuando más se necesita.</span>
+  </div>
+</footer>
+
+<script>
+  var TEXTOS = {"en": {"title": "A companion for your loved ones | VidaVitalQR", "desc": "VidaVitalQR, a companion for your children, your loved ones and your pets: essential information at hand when it is needed.", "volver": "Back to the blog", "eyebrow": "A companion for your loved ones", "h1": "Always within reach of your children and your loved ones, in case they need it.", "lead": "With VidaVitalQR, the essential information of a person, a pet or an object is one scan away.", "hint": "Scan to see the profile", "fEjemplo": "Example", "fNombre": "Name", "fNombreV": "Ana Example", "fAlerg": "Allergies", "fAlergV": "Penicillin", "fCont": "Emergency contact", "fContV": "Carlos Example", "fLlamar": "Call", "s1e": "For the whole family", "s1h": "Close to the ones you love most", "a1": "A baby's hand resting on an adult's hand", "a2": "A dog and a cat resting together on the grass", "a3": "The hands of an older person held with care", "p1h": "Children and loved ones", "p1p": "A code that carries the essential information, so whoever helps them knows who to contact even if you are not nearby.", "p2h": "Our pets", "p2p": "They are already an important part of the family. Their QR code tag shows the owner's details and how to contact them, and it can help them get back home.", "p3h": "Older adults, siblings, friends and you", "p3p": "Having the key information at hand helps whoever gives assistance, whether after a fall, a health problem or any mishap.", "ce": "The best companion", "ch": "A companion for our loved ones", "cp": "VidaVitalQR is very useful when the carrier has a health problem, an accident or any mishap that calls for having the essential information at hand.", "se": "It's that easy", "sh": "Three steps: scan, see and contact", "t1h": "Scan", "t1p": "With any phone's camera.", "t2h": "See", "t2p": "The essential information, instantly.", "t3h": "Contact", "t3p": "With one tap, whoever should be notified.", "ctaH": "Discover VidaVitalQR", "ctaP": "For purchases and more information, visit our site or write to us on WhatsApp.", "ctaBtn": "Go to vidavitalqr.com", "ctaWa": "WhatsApp", "nota": "The details each code shows are the ones its owner decides to enter. The profile in the image is only an example.", "foot": "Essential information, available when it is needed most.", "fInfo": "Emergency information", "fSub": "This code belongs to a VidaVitalQR profile.", "fSangre": "Blood type", "fPais": "Country", "fPaisV": "Costa Rica", "fComent": "Important comments", "fComentV": "Allergic to penicillin", "fContactos": "Emergency contacts", "fC1": "Carlos Example", "fC1r": "Husband", "fC2": "Marta Example", "fC2r": "daughter", "fPdf": "View full profile (PDF)"}, "fr": {"title": "Un compagnon pour vos proches | VidaVitalQR", "desc": "VidaVitalQR, un compagnon pour vos enfants, vos proches et vos animaux : les informations essentielles à portée de main quand on en a besoin.", "volver": "Retour au blog", "eyebrow": "Un compagnon pour vos proches", "h1": "Soyez toujours à portée de vos enfants et de vos proches, au cas où ils en auraient besoin.", "lead": "Avec VidaVitalQR, les informations essentielles d'une personne, d'un animal ou d'un objet sont à un scan de distance.", "hint": "Scannez pour voir la fiche", "fEjemplo": "Exemple", "fNombre": "Nom", "fNombreV": "Ana Exemple", "fAlerg": "Allergies", "fAlergV": "Pénicilline", "fCont": "Contact d'urgence", "fContV": "Carlos Exemple", "fLlamar": "Appeler", "s1e": "Pour toute la famille", "s1h": "Près de ceux que vous aimez le plus", "a1": "La main d'un bébé posée sur la main d'un adulte", "a2": "Un chien et un chat se reposant ensemble sur l'herbe", "a3": "Les mains d'une personne âgée tenues avec tendresse", "p1h": "Enfants et proches", "p1p": "Un code qui porte les informations essentielles, pour que celui qui les aide sache qui contacter même si vous n'êtes pas près d'eux.", "p2h": "Nos animaux de compagnie", "p2p": "Ils font déjà partie importante de la famille. Leur plaque à code QR montre les données du propriétaire et comment le contacter, et peut aider à ce qu'ils rentrent à la maison.", "p3h": "Personnes âgées, frères et sœurs, amis et vous", "p3p": "Avoir sous la main les informations clés aide celui qui porte secours, après une chute, un problème de santé ou tout incident.", "ce": "Le meilleur compagnon", "ch": "Un compagnon pour nos proches", "cp": "VidaVitalQR est très utile lorsque le porteur a un problème de santé, un accident ou tout incident qui demande d'avoir sous la main les informations essentielles.", "se": "C'est aussi simple que ça", "sh": "Trois étapes : scanner, voir et contacter", "t1h": "Scannez", "t1p": "Avec l'appareil photo de n'importe quel téléphone.", "t2h": "Voyez", "t2p": "Les informations essentielles, aussitôt.", "t3h": "Contactez", "t3p": "D'un seul geste, la personne à prévenir.", "ctaH": "Découvrez VidaVitalQR", "ctaP": "Pour les achats et plus d'informations, visitez notre site ou écrivez-nous sur WhatsApp.", "ctaBtn": "Aller sur vidavitalqr.com", "ctaWa": "WhatsApp", "nota": "Les données affichées par chaque code sont celles que son titulaire décide de saisir. La fiche de l'image n'est qu'un exemple.", "foot": "Informations essentielles, disponibles quand on en a le plus besoin.", "fInfo": "Informations d'urgence", "fSub": "Ce code appartient à une fiche VidaVitalQR.", "fSangre": "Groupe sanguin", "fPais": "Pays", "fPaisV": "Costa Rica", "fComent": "Commentaires importants", "fComentV": "Allergique à la pénicilline", "fContactos": "Contacts d'urgence", "fC1": "Carlos Exemple", "fC1r": "Époux", "fC2": "Marta Exemple", "fC2r": "fille", "fPdf": "Voir la fiche complète (PDF)"}, "pt": {"title": "Um companheiro para os seus | VidaVitalQR", "desc": "VidaVitalQR, um companheiro para seus filhos, seus entes queridos e seus animais: as informações essenciais à mão quando se precisa.", "volver": "Voltar ao blog", "eyebrow": "Um companheiro para os seus", "h1": "Esteja sempre ao alcance de seus filhos e de seus entes queridos, caso precisem.", "lead": "Com a VidaVitalQR, as informações essenciais de uma pessoa, um animal ou um objeto ficam a um escaneamento de distância.", "hint": "Escaneie para ver a ficha", "fEjemplo": "Exemplo", "fNombre": "Nome", "fNombreV": "Ana Exemplo", "fAlerg": "Alergias", "fAlergV": "Penicilina", "fCont": "Contato de emergência", "fContV": "Carlos Exemplo", "fLlamar": "Ligar", "s1e": "Para toda a família", "s1h": "Perto de quem você mais ama", "a1": "A mão de um bebê sobre a mão de um adulto", "a2": "Um cachorro e um gato descansando juntos na grama", "a3": "As mãos de uma pessoa idosa seguradas com carinho", "p1h": "Filhos e entes queridos", "p1p": "Um código que leva as informações essenciais, para que quem os ajudar saiba quem contatar mesmo que você não esteja por perto.", "p2h": "Nossos animais de estimação", "p2p": "Eles já são uma parte importante da família. A placa com código QR mostra os dados do dono e como contatá-lo, e pode ajudar a que voltem para casa.", "p3h": "Idosos, irmãos, amigos e você", "p3p": "Ter à mão as informações fundamentais ajuda quem presta socorro, seja numa queda, num problema de saúde ou em qualquer imprevisto.", "ce": "O melhor companheiro", "ch": "Um companheiro para nossos entes queridos", "cp": "A VidaVitalQR é muito útil quando o portador apresenta um problema de saúde, um acidente ou qualquer imprevisto que exija ter à mão as informações essenciais.", "se": "É assim de fácil", "sh": "Três passos: escanear, ver e contatar", "t1h": "Escaneie", "t1p": "Com a câmera de qualquer celular.", "t2h": "Veja", "t2p": "As informações essenciais, na hora.", "t3h": "Contate", "t3p": "Com um toque, quem deve ser avisado.", "ctaH": "Conheça a VidaVitalQR", "ctaP": "Para compras e mais informações, visite nosso site ou escreva para nós no WhatsApp.", "ctaBtn": "Ir para vidavitalqr.com", "ctaWa": "WhatsApp", "nota": "Os dados que cada código mostra são os que seu titular decide informar. A ficha da imagem é apenas um exemplo.", "foot": "Informações essenciais, disponíveis quando mais se precisa.", "fInfo": "Informações de emergência", "fSub": "Este código pertence a uma ficha da VidaVitalQR.", "fSangre": "Tipo sanguíneo", "fPais": "País", "fPaisV": "Costa Rica", "fComent": "Comentários importantes", "fComentV": "Alérgica à penicilina", "fContactos": "Contatos de emergência", "fC1": "Carlos Exemplo", "fC1r": "Marido", "fC2": "Marta Exemplo", "fC2r": "filha", "fPdf": "Ver ficha completa (PDF)"}, "es": {}};
+  var ES_DEFAULT = {};
+  function aplicarIdioma(lang){
+    var dic = TEXTOS[lang] || {};
+    document.querySelectorAll('[data-i18n]').forEach(function(el){
+      var k = el.getAttribute('data-i18n');
+      if (ES_DEFAULT['t_'+k] === undefined) ES_DEFAULT['t_'+k] = el.textContent;
+      el.textContent = (dic[k] !== undefined) ? dic[k] : ES_DEFAULT['t_'+k];
+    });
+    document.querySelectorAll('[data-i18n-alt]').forEach(function(el){
+      var k = el.getAttribute('data-i18n-alt');
+      if (ES_DEFAULT['a_'+k] === undefined) ES_DEFAULT['a_'+k] = el.getAttribute('alt');
+      el.setAttribute('alt', (dic[k] !== undefined) ? dic[k] : ES_DEFAULT['a_'+k]);
+    });
+    if (dic.title) document.title = dic.title;
+    var md = document.querySelector('meta[name="description"]');
+    if (md && dic.desc) md.setAttribute('content', dic.desc);
+    document.documentElement.lang = lang;
+    document.querySelectorAll('.langbar button').forEach(function(b){
+      b.classList.toggle('activo', b.getAttribute('data-lang') === lang);
+    });
+    try { localStorage.setItem('vidavitalqr_lang', lang); } catch(e){}
+  }
+  document.querySelectorAll('.langbar button').forEach(function(b){
+    b.addEventListener('click', function(){ aplicarIdioma(b.getAttribute('data-lang')); });
+  });
+  (function(){
+    var preferido = 'es';
+    try { var g = localStorage.getItem('vidavitalqr_lang'); if (g && TEXTOS[g]) preferido = g; } catch(e){}
+    aplicarIdioma(preferido);
+  })();
+
+  /* aparición al desplazarse */
+  (function(){
+    var els = document.querySelectorAll('.reveal');
+    if (!('IntersectionObserver' in window)) { els.forEach(function(e){ e.classList.add('in'); }); return; }
+    var io = new IntersectionObserver(function(entries){
+      entries.forEach(function(en){ if (en.isIntersecting){ en.target.classList.add('in'); var ph=window.__photoMap&&window.__photoMap.get(en.target); if(ph) ph.classList.add('in'); io.unobserve(en.target); } });
+    }, {threshold:0.18, rootMargin:'0px 0px -6% 0px'});
+    var map = new Map();
+    els.forEach(function(e){
+      var tgt = e.classList.contains('photo') ? e.parentElement : e;
+      if (tgt !== e) { map.set(tgt, e); }
+      io.observe(tgt);
+    });
+    window.__photoMap = map;
+  })();
+</script>
+</body>
+</html>
