@@ -2027,6 +2027,31 @@ function emailValido(str){
   // no de forma continua) -- se deja como funcion vacia para no romper las llamadas ya existentes
   // en el resto del archivo.
   window.detenerSonidoProcesando = function () {};
+  // 2026-10-09: segunda vez del piano real, al terminar de actualizar los idiomas. Espera a que
+  // termine la primera (si aun suena), la reproduce completa otra vez y devuelve una promesa que
+  // se cumple al terminar (con tope de seguridad), para que el modal/cierre no la corte.
+  window.sonarSonidoFinal = function () {
+    return new Promise(function (resolve) {
+      var a = window.__audioMarca;
+      if (!a) { resolve(); return; }
+      var hecho = false, tope;
+      function fin() { if (hecho) return; hecho = true; clearTimeout(tope); a.removeEventListener('ended', fin); a.removeEventListener('error', fin); resolve(); }
+      function segunda() {
+        try {
+          a.removeEventListener('ended', segunda);
+          a.addEventListener('ended', fin); a.addEventListener('error', fin);
+          a.currentTime = 0;
+          var p = a.play(); if (p && p.catch) p.catch(fin);
+        } catch (e) { fin(); }
+      }
+      tope = setTimeout(fin, 25000);
+      try {
+        if (!a.paused && !a.ended) { a.addEventListener('ended', segunda); }
+        else { segunda(); }
+      } catch (e) { fin(); }
+    });
+  };
+
 
   // alias explicito: llamarlo una vez cada vez que se procesa un idioma adicional (ver
   // generarYSubirPdfsOtrosIdiomas)
@@ -2156,6 +2181,7 @@ $('btnEmail').addEventListener('click', async () => {
     // en los otros 3 idiomas y se sube por separado (ver la función y su comentario). Cualquier
     // fallo aquí se ignora sin afectar el resto de este flujo, que ya se completó. ----
     try{ await generarYSubirPdfsOtrosIdiomas(folio); }catch(errIdiomas){ console.error('generarYSubirPdfsOtrosIdiomas falló (no crítico):', errIdiomas); }
+    try{ if (window.sonarSonidoFinal) await window.sonarSonidoFinal(); }catch(eFin){}
 
     // el envío ya terminó — se quita el overlay de "procesando" antes de mostrar el modal del
     // PIN (o de cerrar la pestaña), para que no quede tapándolo por encima

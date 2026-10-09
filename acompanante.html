@@ -214,7 +214,7 @@
   }
 </style>
 <noscript><style>.reveal,.steps .step .dot{opacity:1 !important;transform:none !important;} .steps .track::after{transform:scaleX(1);}</style></noscript>
-<script>try{if(/blog/i.test(document.referrer)||/[?&]sonido=1/.test(location.search)){document.documentElement.className+=" con-intro";}}catch(e){}</script>
+<script>try{if(!window.__sonidoDesdeBlog&&(/blog/i.test(document.referrer)||/[?&]sonido=1/.test(location.search))){document.documentElement.className+=" con-intro";}}catch(e){}</script>
 </head>
 <body>
 <header class="site">
@@ -408,30 +408,48 @@
   })();
 
 
-  /* sonido de marca: se intenta al llegar desde el blog; si el navegador lo bloquea, queda el botón */
+  /* sonido de marca. Si se llega desde el botón del blog, el clic ya arrancó el piano en esa página
+     (window.__audioMarca) y aquí solo se continúa; el piano suena 2 veces seguidas. */
   (function(){
-    var a=document.getElementById('sndAudio'), b=document.getElementById('sndBtn');
+    var b=document.getElementById('sndBtn');
+    var heredado = !!(window.__sonidoDesdeBlog && window.__audioMarca);
+    var a = heredado ? window.__audioMarca : document.getElementById('sndAudio');
     if(!a||!b) return;
+    var TOTAL=2, veces=0, detenido=false;
     function st(s){ b.setAttribute('data-s', s); }
     b.hidden=false;
     a.addEventListener('error', function(){ b.hidden=true; });
-    a.addEventListener('ended', function(){ st('done'); });
-    b.addEventListener('click', function(){
-      if (b.getAttribute('data-s')==='playing'){ a.pause(); a.currentTime=0; st('done'); return; }
+    a.addEventListener('ended', function(){
+      veces++;
+      if (!detenido && veces<TOTAL){ try { a.currentTime=0; } catch(e){} var q=a.play(); if(q&&q.catch) q.catch(function(){ st('done'); }); }
+      else { st('done'); }
+    });
+    function sonar(){
+      veces=0; detenido=false;
       try { a.currentTime=0; } catch(e){}
       var p=a.play(); if(p&&p.then){ p.then(function(){ st('playing'); }).catch(function(){ st('idle'); }); } else { st('playing'); }
+    }
+    b.addEventListener('click', function(){
+      if (b.getAttribute('data-s')==='playing'){ detenido=true; a.pause(); try{a.currentTime=0;}catch(e){} st('done'); return; }
+      sonar();
     });
+    if (heredado){
+      /* el piano ya viene sonando desde el clic en el blog */
+      if (!a.paused && !a.ended) { st('playing'); } else { st('idle'); }
+    }
     var intro=document.getElementById('intro');
     function cerrarIntro(conSonido){
       document.documentElement.className=document.documentElement.className.replace(/\bcon-intro\b/,'').trim();
       if (intro) intro.style.display='none';
-      if (conSonido){ try { a.currentTime=0; } catch(e){} var p=a.play(); if(p&&p.then){ p.then(function(){ st('playing'); }).catch(function(){ st('idle'); }); } else { st('playing'); } }
+      if (conSonido) sonar();
       if (window.__iniciarReveal) window.__iniciarReveal();
     }
     window.__cerrarIntro=cerrarIntro;
     var go=document.getElementById('introGo'), no=document.getElementById('introNo');
     if (go) go.addEventListener('click', function(){ cerrarIntro(true); });
     if (no) no.addEventListener('click', function(){ cerrarIntro(false); });
+    /* si se llegó con la técnica del blog, el botón "atrás" debe volver a cargar la página anterior */
+    window.addEventListener('popstate', function(){ location.reload(); });
   })();
 
   /* aparición al desplazarse */

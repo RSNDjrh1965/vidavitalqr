@@ -203,6 +203,28 @@
     } catch(e){}
     aplicarIdiomaBlog(preferido);
   })();
+
+  /* "Ver la página animada": el clic arranca el piano aquí (gesto válido) y carga la página animada
+     sin recargar el navegador, así el sonido sigue sin pantalla intermedia. Si algo falla, navega normal. */
+  (function(){
+    var a=document.querySelector('a[href*="acompanante.html"]');
+    if(!a) return;
+    a.addEventListener('click', function(ev){
+      if (ev.ctrlKey||ev.metaKey||ev.shiftKey||ev.button===1) return;
+      ev.preventDefault();
+      var destino='/acompanante.html';
+      try {
+        var au=new Audio('sonido-marca.mp3'); au.preload='auto';
+        window.__audioMarca=au; window.__sonidoDesdeBlog=true;
+        var p=au.play(); if(p&&p.catch) p.catch(function(){});
+      } catch(e){}
+      fetch(destino,{cache:'no-cache'}).then(function(r){ if(!r.ok) throw 0; return r.text(); }).then(function(html){
+        history.pushState({}, '', destino);
+        document.open(); document.write(html); document.close();
+        try { window.scrollTo(0,0); } catch(e){}
+      }).catch(function(){ window.__sonidoDesdeBlog=false; window.location.href='/acompanante.html?sonido=1'; });
+    });
+  })();
 </script>
 </body>
 </html>
