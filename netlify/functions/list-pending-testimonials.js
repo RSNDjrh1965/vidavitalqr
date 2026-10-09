@@ -6,6 +6,7 @@
 //   ADMIN_OPINIONES_PASSWORD = la contraseña que usted elija para entrar al panel
 
 const { S3Client, ListObjectsV2Command, GetObjectCommand } = require('@aws-sdk/client-s3');
+const { estaBloqueado, anotar, ipDe, claveIgual } = require('./lib/limite');
 
 const BUCKET_RESUMEN = process.env.S3_BUCKET_RESUMEN || 'resumen-vidavitalqr';
 const PREFIJO = 'testimonios/';
@@ -53,7 +54,16 @@ exports.handler = async (event) => {
   if (!passwordEsperada) {
     return { statusCode: 500, headers, body: JSON.stringify({ error: 'Falta configurar ADMIN_OPINIONES_PASSWORD en Netlify.' }) };
   }
-  if (payload.password !== passwordEsperada) {
+  // ---- 2026-10-09 (revisión de seguridad): comparación en tiempo constante + máximo 10 contraseñas
+  // incorrectas cada 15 minutos por conexión (ver lib/limite.js) ----
+  const ipAdmin = ipDe(event);
+  let s3Admin = null;
+  try { s3Admin = getS3Client(); } catch (eS3) { s3Admin = null; }
+  if (s3Admin && await estaBloqueado(s3Admin, BUCKET_RESUMEN, 'admin-ip', ipAdmin, 10, 15 * 60 * 1000)) {
+    return { statusCode: 429, headers, body: JSON.stringify({ error: 'Demasiados intentos. Espere unos minutos.' }) };
+  }
+  if (!claveIgual(payload.password, passwordEsperada)) {
+    if (s3Admin) await anotar(s3Admin, BUCKET_RESUMEN, 'admin-ip', ipAdmin, 15 * 60 * 1000);
     return { statusCode: 401, headers, body: JSON.stringify({ error: 'Contraseña incorrecta.' }) };
   }
 

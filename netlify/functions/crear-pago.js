@@ -159,6 +159,15 @@ exports.handler = async (event) => {
       // claude/correccion-activacion-pago-vidavitalqr.md). Antes de ese cambio esta rama nunca
       // guardaba el folio porque no hacía falta para nada más.
       folio = String(entrada.folio || '').trim();
+      // ---- 2026-10-09 (revisión de seguridad): ya NO se permite pagar un producto sin la ficha asociada
+      // (antes se cobraba, envío incluido, sin saber a qué ficha ni a dónde enviarlo) ----
+      if (!folio) {
+        return { statusCode: 400, body: JSON.stringify({ error: 'Para pagar este producto primero debe completar su ficha (falta el código de la ficha).' }) };
+      }
+    }
+    // el folio solo puede tener letras y números (nunca se arman rutas ni metadatos con texto libre)
+    if (!/^[A-Za-z0-9]{6,30}$/.test(folio)) {
+      return { statusCode: 400, body: JSON.stringify({ error: 'Código de ficha inválido para: ' + catalogo.label }) };
     }
     // ---- estilo de placa elegido (solo aplica a "plate_personal" -- ver bitácora punto 39):
     // se acepta únicamente si es uno de los 4 valores reales, para que el aviso de pago al
@@ -184,9 +193,14 @@ exports.handler = async (event) => {
   const envio = (incluyeFisico && !retiroPersona) ? SHIPPING_COST : 0;
 
   const subtotalProductos = items.reduce((sum, it) => sum + it.price, 0);
-  const subtotal = subtotalProductos + envio;
-  const iva = subtotal * IVA_RATE;
-  const totalUSD = subtotal + iva;
+  // ---- 2026-10-09: el cálculo se hace en CENTAVOS ENTEROS (igual que index.html), para que el total que
+  // ve el cliente y el que se cobra sean SIEMPRE exactamente iguales (antes podían diferir un centavo
+  // por redondeo de decimales) ----
+  const subtotalCents = Math.round((subtotalProductos + envio) * 100);
+  const ivaCents = Math.round(subtotalCents * IVA_RATE);
+  const subtotal = subtotalCents / 100;
+  const iva = ivaCents / 100;
+  const totalUSD = (subtotalCents + ivaCents) / 100;
 
   // ---- moneda elegida por el cliente: "USD" (por defecto, como siempre) o "CRC" -- cualquier
   // otro valor recibido se ignora y se cobra en USD ----

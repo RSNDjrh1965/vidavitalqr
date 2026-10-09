@@ -21,8 +21,11 @@
 // error se ignora sin afectar a los demás ni a la ficha ya guardada.
 
 const { S3Client, PutObjectCommand, GetObjectCommand } = require('@aws-sdk/client-s3');
+const { pinValido } = require('./lib/pin');
+const { estaBloqueado, anotar, folioSeguro } = require('./lib/limite');
 
 const BUCKET_FICHAS = process.env.S3_BUCKET_FICHAS || 'vidavitalqr';
+const BUCKET_RESUMEN = process.env.S3_BUCKET_RESUMEN || 'resumen-vidavitalqr';
 const IDIOMAS_VALIDOS = ['es', 'en', 'fr', 'pt'];
 
 function getS3Client() {
@@ -81,13 +84,21 @@ exports.handler = async (event) => {
     return { statusCode: 400, headers, body: JSON.stringify({ error: 'JSON inválido' }) };
   }
 
-  const { folio, idioma, filename, pdfBase64 } = payload;
+  // ---- 2026-10-09 (revisión de seguridad): antes esta función no pedía ninguna autenticación y
+  // usaba el "filename" que mandaba el navegador como ruta de S3, así que cualquiera que conociera
+  // un folio (que es público) podía reemplazar el PDF o los datos de otra ficha. Ahora: (1) el folio
+  // se valida (solo letras/números), (2) la ruta se arma aquí como "<folio>-<idioma>.pdf", ignorando
+  // el nombre que mande el navegador, (3) se exige el PIN de la ficha (el mismo que ya conoce el
+  // formulario que acaba de guardarla) y (4) el archivo debe ser realmente un PDF. ----
+  const { idioma, pdfBase64 } = payload;
+  const folio = folioSeguro(payload.folio);
+  const pinProvisto = String(payload.pin || '').trim().toUpperCase();
 
-  if (!folio || !IDIOMAS_VALIDOS.includes(idioma) || !filename || !pdfBase64) {
+  if (!folio || !IDIOMAS_VALIDOS.includes(idioma) || !pdfBase64) {
     return {
       statusCode: 400,
       headers,
-      body: JSON.stringify({ error: 'Faltan datos: folio, idioma (es/en/fr/pt), filename y pdfBase64 son obligatorios.' }),
+      body: JSON.stringify({ error: 'Faltan datos: folio, idioma (es/en/fr/pt) y pdfBase64 son obligatorios.' }),
     };
   }
 
@@ -96,12 +107,38 @@ exports.handler = async (event) => {
     const s3 = getS3Client();
     const carpeta = carpetaTipo(folio);
 
+    // ---- verificación del PIN (con límite de intentos fallidos, ver lib/limite.js) ----
+    if (await estaBloqueado(s3, BUCKET_RESUMEN, 'pin', folio, 8, 15 * 60 * 1000)) {
+      return { statusCode: 429, headers, body: JSON.stringify({ error: 'Demasiados intentos. Intente más tarde.' }) };
+    }
+    let registroLogin = null;
+    for (const loginKey of [`${carpeta}/login/${folio}.json`, `login/${folio}.json`]) {
+      try {
+        const rl = await s3.send(new GetObjectCommand({ Bucket: BUCKET_RESUMEN, Key: loginKey }));
+        registroLogin = JSON.parse(await streamToString(rl.Body));
+        break;
+      } catch (eLogin) { /* se prueba la siguiente ubicación */ }
+    }
+    if (!registroLogin || !registroLogin.pinHash) {
+      return { statusCode: 404, headers, body: JSON.stringify({ error: 'No se encontró la ficha ' + folio + '.' }) };
+    }
+    if (!pinValido(pinProvisto, registroLogin.pinHash)) {
+      await anotar(s3, BUCKET_RESUMEN, 'pin', folio, 15 * 60 * 1000);
+      return { statusCode: 401, headers, body: JSON.stringify({ error: 'PIN incorrecto o faltante.' }) };
+    }
+
+    // ---- el contenido debe ser realmente un PDF (empieza con "%PDF") y no pasar de ~4.5 MB ----
+    const pdfBuffer = Buffer.from(base64PayloadOf(pdfBase64) || '', 'base64');
+    if (pdfBuffer.length < 100 || pdfBuffer.slice(0, 4).toString('latin1') !== '%PDF' || pdfBuffer.length > 4.5 * 1024 * 1024) {
+      return { statusCode: 400, headers, body: JSON.stringify({ error: 'El archivo no es un PDF válido.' }) };
+    }
+
     // 1) sube el PDF en este idioma como un archivo adicional (no reemplaza el PDF original)
-    const pdfKey = `${carpeta}/${filename}`;
+    const pdfKey = `${carpeta}/${folio}-${idioma}.pdf`;
     await s3.send(new PutObjectCommand({
       Bucket: BUCKET_FICHAS,
       Key: pdfKey,
-      Body: Buffer.from(base64PayloadOf(pdfBase64), 'base64'),
+      Body: pdfBuffer,
       ContentType: 'application/pdf',
     }));
     const pdfUrl = publicUrlFor(BUCKET_FICHAS, region, pdfKey);

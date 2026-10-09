@@ -10,6 +10,7 @@
 // avisarles que fueron detectados (se responde 200 igual, pero no se guarda ni se envía nada).
 
 const { S3Client, PutObjectCommand } = require('@aws-sdk/client-s3');
+const { estaBloqueado, anotar, ipDe } = require('./lib/limite');
 
 const DESTINATARIO = 'vidavitalqr@zohomail.com';
 const REMITENTE = 'VidaVitalQR <ficha@vidavitalqr.com>';
@@ -78,6 +79,13 @@ exports.handler = async (event) => {
   // 1) Respaldo en S3 (bucket privado) — así no se pierde nada aunque falle el correo.
   try {
     const s3 = getS3Client();
+    // ---- 2026-10-09 (revisión de seguridad): máximo 3 opiniones por hora desde una misma conexión,
+    // para que nadie llene el panel de moderación ni el correo con basura (ver lib/limite.js) ----
+    const ipOpinion = ipDe(event);
+    if (await estaBloqueado(s3, BUCKET_RESUMEN, 'opinion-ip', ipOpinion, 3, 60 * 60 * 1000)) {
+      return { statusCode: 429, headers, body: JSON.stringify({ error: 'Ya recibimos varias opiniones desde su conexión. Intente de nuevo más tarde.' }) };
+    }
+    await anotar(s3, BUCKET_RESUMEN, 'opinion-ip', ipOpinion, 60 * 60 * 1000);
     await s3.send(new PutObjectCommand({
       Bucket: BUCKET_RESUMEN,
       Key: `testimonios/${idUnico}.json`,

@@ -13,7 +13,8 @@
 // Credenciales de AWS leídas de variables de entorno de Netlify (mismas que usa send-ficha.js):
 // S3_ACCESS_KEY_ID, S3_SECRET_ACCESS_KEY, S3_REGION, S3_BUCKET_RESUMEN.
 
-const { S3Client, PutObjectCommand } = require('@aws-sdk/client-s3');
+const { S3Client, PutObjectCommand, GetObjectCommand } = require('@aws-sdk/client-s3');
+const { estaBloqueado, anotar, ipDe, folioSeguro } = require('./lib/limite');
 
 const BUCKET_RESUMEN = process.env.S3_BUCKET_RESUMEN || 'resumen-vidavitalqr';
 
@@ -53,17 +54,17 @@ exports.handler = async (event) => {
     return { statusCode: 400, body: JSON.stringify({ error: 'JSON inválido.' }) };
   }
 
-  const folio = String(body.folio || '').trim();
+  const folio = folioSeguro(body.folio);
   const tipo = String(body.tipo || '').trim();
   const datosEnvio = body.datosEnvio && typeof body.datosEnvio === 'object' ? body.datosEnvio : {};
 
-  const nombreEnvio = String(datosEnvio.nombreEnvio || '').trim();
-  const provincia = String(datosEnvio.provincia || '').trim();
-  const canton = String(datosEnvio.canton || '').trim();
-  const distrito = String(datosEnvio.distrito || '').trim();
-  const senas = String(datosEnvio.senas || '').trim();
-  const telefono = String(datosEnvio.telefono || '').trim();
-  const correo = String(datosEnvio.correo || '').trim();
+  const nombreEnvio = String(datosEnvio.nombreEnvio || '').trim().slice(0, 120);
+  const provincia = String(datosEnvio.provincia || '').trim().slice(0, 120);
+  const canton = String(datosEnvio.canton || '').trim().slice(0, 120);
+  const distrito = String(datosEnvio.distrito || '').trim().slice(0, 120);
+  const senas = String(datosEnvio.senas || '').trim().slice(0, 400);
+  const telefono = String(datosEnvio.telefono || '').trim().slice(0, 120);
+  const correo = String(datosEnvio.correo || '').trim().slice(0, 120);
   // ---- 2026-10-02: "retiro en persona" — a pedido de James (un vecino que prefiere pasar a
   // recoger su placa en vez de que se le envíe por correo, y sin pagar el cargo de envío). Cuando
   // viene marcado, ya no se piden provincia/cantón/distrito (no hay a dónde enviar nada); solo
@@ -87,6 +88,34 @@ exports.handler = async (event) => {
     const carpeta = carpetaTipo(tipo, folio);
     const key = `${carpeta}/envio/${folio}.json`;
 
+    // ---- 2026-10-09 (revisión de seguridad): esta función es pública (el comprador aún no tiene PIN
+    // en este paso), así que se protege de tres formas: (1) solo acepta folios de fichas que YA
+    // existen (se revisa el registro de acceso), para que nadie llene el bucket con folios inventados;
+    // (2) máximo 10 guardados por hora desde una misma conexión; (3) se conserva el historial de
+    // las últimas direcciones anteriores, para poder detectar si alguien cambió la dirección de otro
+    // cliente. ----
+    const ip = ipDe(event);
+    if (await estaBloqueado(s3, BUCKET_RESUMEN, 'envio-dir-ip', ip, 10, 60 * 60 * 1000)) {
+      return { statusCode: 429, body: JSON.stringify({ error: 'Demasiados intentos. Intente de nuevo más tarde.' }) };
+    }
+    await anotar(s3, BUCKET_RESUMEN, 'envio-dir-ip', ip, 60 * 60 * 1000);
+    let existeFicha = false;
+    for (const loginKey of [`${carpeta}/login/${folio}.json`, `login/${folio}.json`]) {
+      try { await s3.send(new GetObjectCommand({ Bucket: BUCKET_RESUMEN, Key: loginKey })); existeFicha = true; break; } catch (eL) { /* siguiente */ }
+    }
+    if (!existeFicha) {
+      return { statusCode: 404, body: JSON.stringify({ error: 'No se encontró la ficha. Guarde primero la ficha e intente de nuevo.' }) };
+    }
+    let historial = [];
+    try {
+      const prev = await s3.send(new GetObjectCommand({ Bucket: BUCKET_RESUMEN, Key: key }));
+      const chunks = []; for await (const c of prev.Body) chunks.push(c);
+      const anterior = JSON.parse(Buffer.concat(chunks).toString('utf-8'));
+      historial = (Array.isArray(anterior.historial) ? anterior.historial : []).slice(-2);
+      const { historial: _h, ...sinHistorial } = anterior;
+      historial.push(sinHistorial);
+    } catch (ePrev) { /* no había dirección anterior */ }
+
     await s3.send(new PutObjectCommand({
       Bucket: BUCKET_RESUMEN,
       Key: key,
@@ -102,6 +131,7 @@ exports.handler = async (event) => {
         telefono,
         correo,
         actualizado: new Date().toISOString(),
+        historial,
       }), 'utf-8'),
       ContentType: 'application/json',
     }));

@@ -14,8 +14,10 @@
 //    envía igual, sin sección de ubicación.
 
 const { S3Client, GetObjectCommand } = require('@aws-sdk/client-s3');
+const { estaBloqueado, anotar, folioSeguro } = require('./lib/limite');
 
 const BUCKET_FICHAS = process.env.S3_BUCKET_FICHAS || 'vidavitalqr';
+const BUCKET_RESUMEN = process.env.S3_BUCKET_RESUMEN || 'resumen-vidavitalqr';
 const REMITENTE = 'VidaVitalQR <ficha@vidavitalqr.com>';
 
 function getS3Client() {
@@ -304,7 +306,7 @@ exports.handler = async (event) => {
     return { statusCode: 400, headers, body: JSON.stringify({ error: 'JSON inválido.' }) };
   }
 
-  const folio = String(payload.folio || '').trim().toUpperCase();
+  const folio = folioSeguro(payload.folio);
   if (!folio) {
     return { statusCode: 400, headers, body: JSON.stringify({ error: 'Falta el folio.' }) };
   }
@@ -354,6 +356,18 @@ exports.handler = async (event) => {
   if (datos.activo === false) {
     return { statusCode: 200, headers, body: JSON.stringify({ ok: true }) };
   }
+
+  // ---- 2026-10-09 (revisión de seguridad): máximo 1 aviso de escaneo cada 10 minutos por ficha. Antes
+  // cualquiera que conociera un folio podía llamar esta función muchas veces y llenar de correos a
+  // los contactos de emergencia (y dañar la reputación del dominio de envío). Se responde 200 igual,
+  // para no dar pistas. Un escaneo real seguido de otro a los pocos minutos no necesita otro aviso. ----
+  try {
+    const s3Lim = getS3Client();
+    if (await estaBloqueado(s3Lim, BUCKET_RESUMEN, 'aviso-escaneo', folio, 1, 10 * 60 * 1000)) {
+      return { statusCode: 200, headers, body: JSON.stringify({ ok: true }) };
+    }
+    await anotar(s3Lim, BUCKET_RESUMEN, 'aviso-escaneo', folio, 10 * 60 * 1000);
+  } catch (errLim) { /* si el limitador falla, se sigue como antes */ }
 
   // ---- arma los datos crudos de ubicación para el correo (tipo/url/etiqueta, sin traducir
   // todavía) — avisarContactos() arma el prefijo y la nota ya traducidos al idioma de la ficha

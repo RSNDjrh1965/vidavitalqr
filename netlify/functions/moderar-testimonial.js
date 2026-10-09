@@ -12,6 +12,7 @@
 // el código del sitio.
 
 const { S3Client, GetObjectCommand, PutObjectCommand } = require('@aws-sdk/client-s3');
+const { estaBloqueado, anotar, ipDe, claveIgual } = require('./lib/limite');
 
 const BUCKET_RESUMEN = process.env.S3_BUCKET_RESUMEN || 'resumen-vidavitalqr';
 const PREFIJO = 'testimonios/';
@@ -66,7 +67,16 @@ exports.handler = async (event) => {
   if (!passwordEsperada) {
     return { statusCode: 500, headers, body: JSON.stringify({ error: 'Falta configurar ADMIN_OPINIONES_PASSWORD en Netlify.' }) };
   }
-  if (payload.password !== passwordEsperada) {
+  // ---- 2026-10-09 (revisión de seguridad): comparación en tiempo constante + máximo 10 contraseñas
+  // incorrectas cada 15 minutos por conexión (ver lib/limite.js) ----
+  const ipAdmin = ipDe(event);
+  let s3Admin = null;
+  try { s3Admin = getS3Client(); } catch (eS3) { s3Admin = null; }
+  if (s3Admin && await estaBloqueado(s3Admin, BUCKET_RESUMEN, 'admin-ip', ipAdmin, 10, 15 * 60 * 1000)) {
+    return { statusCode: 429, headers, body: JSON.stringify({ error: 'Demasiados intentos. Espere unos minutos.' }) };
+  }
+  if (!claveIgual(payload.password, passwordEsperada)) {
+    if (s3Admin) await anotar(s3Admin, BUCKET_RESUMEN, 'admin-ip', ipAdmin, 15 * 60 * 1000);
     return { statusCode: 401, headers, body: JSON.stringify({ error: 'Contraseña incorrecta.' }) };
   }
 
@@ -94,7 +104,9 @@ exports.handler = async (event) => {
       ContentType: 'application/json',
     }));
 
-    if (accion === 'aprobar') {
+    // 2026-10-09: ahora también se ejecuta al RECHAZAR, para quitar de la lista pública una opinión
+    // que ya estaba aprobada (antes seguía visible aunque se rechazara después).
+    {
       let aprobados = [];
       try {
         const objAprobados = await s3.send(new GetObjectCommand({ Bucket: BUCKET_RESUMEN, Key: APROBADOS_KEY }));
@@ -107,21 +119,26 @@ exports.handler = async (event) => {
       }
 
       // Evita duplicar si ya estaba aprobado antes (por ejemplo, un doble clic accidental).
+      const cantidadAntes = aprobados.length;
       aprobados = aprobados.filter((t) => t && t.id !== id);
-      aprobados.push({
-        id,
-        nombre: datos.nombre || '',
-        rol: datos.rol || '',
-        texto: datos.texto || '',
-        fecha: datos.fecha || '',
-      });
+      if (accion === 'aprobar') {
+        aprobados.push({
+          id,
+          nombre: datos.nombre || '',
+          rol: datos.rol || '',
+          texto: datos.texto || '',
+          fecha: datos.fecha || '',
+        });
+      }
 
-      await s3.send(new PutObjectCommand({
-        Bucket: BUCKET_RESUMEN,
-        Key: APROBADOS_KEY,
-        Body: JSON.stringify(aprobados, null, 2),
-        ContentType: 'application/json',
-      }));
+      if (accion === 'aprobar' || aprobados.length !== cantidadAntes) {
+        await s3.send(new PutObjectCommand({
+          Bucket: BUCKET_RESUMEN,
+          Key: APROBADOS_KEY,
+          Body: JSON.stringify(aprobados, null, 2),
+          ContentType: 'application/json',
+        }));
+      }
     }
 
     return { statusCode: 200, headers, body: JSON.stringify({ ok: true }) };

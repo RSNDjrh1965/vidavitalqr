@@ -35,6 +35,7 @@
 // Ninguna de las dos debe escribirse en este archivo ni en ningún otro que se suba al repositorio.
 
 const { S3Client } = require('@aws-sdk/client-s3');
+const { claveIgual } = require('./lib/limite');
 const { GetObjectCommand, PutObjectCommand } = require('@aws-sdk/client-s3');
 const { agregarIngreso } = require('./lib/ingresos');
 
@@ -124,7 +125,7 @@ exports.handler = async (event) => {
     console.error('onvo-webhook: falta la variable de entorno ONVO_WEBHOOK_SECRET en Netlify.');
     return { statusCode: 500, body: 'Falta configuración.' };
   }
-  if (secretoRecibido !== webhookSecret) {
+  if (!claveIgual(secretoRecibido, webhookSecret)) {
     console.error('onvo-webhook: petición rechazada — el secreto de firma no coincide.');
     return { statusCode: 401, body: 'No autorizado.' };
   }
@@ -206,6 +207,30 @@ exports.handler = async (event) => {
 
   console.log('onvo-webhook: pago CONFIRMADO —', items.length, 'producto(s), folios:', folios || '(ninguno)', '— payment intent', paymentIntentId, '— modo', modo, '— moneda', moneda, '— monto', montoBrutoReal);
 
+  // ---- 2026-10-09: la ACTIVACIÓN de la ficha ahora es lo PRIMERO que se hace (antes iba después del
+  // correo al administrador y del Registro de Ingresos, que es lento). Si esos pasos tardaban de más
+  // y la función se cortaba, un pago ya cobrado podía quedar sin activar. Lo más importante primero. ----
+  // ---- Activar cada ficha pagada (2026-09-30; movido al principio el 2026-10-09) ----
+  // Corrige un problema grave que James detectó: la ficha (y su código QR, ya público) se
+  // activaba por completo en el momento de "Enviar" el formulario, sin importar si el pago se
+  // llegaba a completar o no — si el cliente cancelaba el pago, la ficha quedaba creada y
+  // accesible gratis igual. Ahora send-ficha.js crea toda ficha NUEVA con activo=false, y recién
+  // aquí, cuando ONVO Pay confirma "payment-intent.succeeded" de verdad, se marca como activa —
+  // tanto en el registro privado de login como en el JSON público que lee ver.js. Un fallo aquí
+  // nunca debe impedir que el webhook responda 200 (el pago ya está confirmado y registrado
+  // arriba); si algo falla, queda este log para activarla a mano y diagnosticar.
+  //
+  // Sigue pendiente (fuera de alcance de este cambio, ya señalado y aceptado con James el
+  // 2026-09-25 en la política de vigencia): reiniciar la fecha "creado" de una renovación pagada
+  // recién en este webhook en vez de al momento de "Enviar" — por ahora una renovación conserva
+  // el mismo comportamiento que ya tenía.
+  try {
+    const s3Activacion = getS3Client();
+    await activarFichasPagadas(s3Activacion, items);
+  } catch (err) {
+    console.error('onvo-webhook: no se pudieron activar las fichas pagadas —', err);
+  }
+
   // ---- 2) Avisar por correo al administrador (mismo destinatario que ya recibe los demás avisos) ----
   await avisarAdministrador({ items, folios, sessionId: paymentIntentId, modo, envio, retiroPersona, moneda, tipoCambioUsado, totalUSDReportado, totalCRCInformativo });
 
@@ -244,27 +269,6 @@ exports.handler = async (event) => {
       // con los datos de este correo, y queda este log para diagnosticar el problema.
       console.error('onvo-webhook: no se pudo agregar el ingreso al Registro de Ingresos —', err);
     }
-  }
-
-  // ---- 4) Activar cada ficha pagada (2026-09-30) ----
-  // Corrige un problema grave que James detectó: la ficha (y su código QR, ya público) se
-  // activaba por completo en el momento de "Enviar" el formulario, sin importar si el pago se
-  // llegaba a completar o no — si el cliente cancelaba el pago, la ficha quedaba creada y
-  // accesible gratis igual. Ahora send-ficha.js crea toda ficha NUEVA con activo=false, y recién
-  // aquí, cuando ONVO Pay confirma "payment-intent.succeeded" de verdad, se marca como activa —
-  // tanto en el registro privado de login como en el JSON público que lee ver.js. Un fallo aquí
-  // nunca debe impedir que el webhook responda 200 (el pago ya está confirmado y registrado
-  // arriba); si algo falla, queda este log para activarla a mano y diagnosticar.
-  //
-  // Sigue pendiente (fuera de alcance de este cambio, ya señalado y aceptado con James el
-  // 2026-09-25 en la política de vigencia): reiniciar la fecha "creado" de una renovación pagada
-  // recién en este webhook en vez de al momento de "Enviar" — por ahora una renovación conserva
-  // el mismo comportamiento que ya tenía.
-  try {
-    const s3Activacion = getS3Client();
-    await activarFichasPagadas(s3Activacion, items);
-  } catch (err) {
-    console.error('onvo-webhook: no se pudieron activar las fichas pagadas —', err);
   }
 
   // ---- 5) Avisar por correo al CLIENTE cuando compró el producto "Código QR (solo digital)"
@@ -432,8 +436,11 @@ async function activarUnaFicha(s3, folioMayus) {
 async function medioDePago(paymentMethodId, secretKey) {
   if (!paymentMethodId) return 'Desconocido';
   try {
+    // 2026-10-09: máximo 4 segundos de espera — si ONVO no responde, el pago se registra igual como
+    // "Desconocido" en vez de dejar colgado el webhook
     const resp = await fetch(ONVO_API_BASE + '/payment-methods/' + encodeURIComponent(paymentMethodId), {
       headers: { Authorization: 'Bearer ' + secretKey },
+      signal: AbortSignal.timeout(4000),
     });
     const pm = await resp.json().catch(() => null);
     if (!resp.ok || !pm) return 'Desconocido';

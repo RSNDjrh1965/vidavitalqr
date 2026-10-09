@@ -23,6 +23,7 @@ const { buildQrSvg, buildQrSvgParaPlaca } = require('./lib/qr-svg');
 const { actualizarResumenXlsx } = require('./lib/xlsx-resumen');
 const { generarPin, hashPin, pinValido } = require('./lib/pin');
 const { fechaVencimiento } = require('./lib/vigencia');
+const { estaBloqueado, anotar, ipDe, folioSeguro } = require('./lib/limite');
 
 const DESTINATARIO = 'vidavitalqr@zohomail.com';
 const REMITENTE = 'VidaVitalQR <ficha@vidavitalqr.com>';
@@ -151,7 +152,12 @@ async function cargarOCrearLogin(s3, folio, datosFormulario, carpeta, resetCread
   // mismo método de hash en tiempo constante que usa login-ficha.js (pinValido, lib/pin.js).
   // Una ficha COMPLETAMENTE NUEVA (folio sin ningún registro previo) no se ve afectada: ahí
   // todavía no existe ningún PIN con el cual comparar, así que se sigue creando igual que antes.
-  if (!esNuevo) {
+  // ---- 2026-10-09 (revisión de seguridad): un registro antiguo que solo guardaba el hash (sin el PIN
+  // en texto plano) antes se trataba como "nuevo" y se saltaba esta verificación — cualquiera que
+  // conociera el folio podía sobrescribir esa ficha. Ahora, si el registro tiene un hash, SIEMPRE
+  // se exige el PIN actual (aunque después se regenere el PIN en texto plano, que es lo que hace
+  // "esNuevo"). Un registro sin hash alguno (dañado) no tiene con qué compararse, así que sigue igual. ----
+  if (registro && registro.pinHash) {
     if (!pinValido(pinProvisto, registro.pinHash)) {
       const errorPin = new Error('PIN incorrecto o faltante — no se guardó ningún cambio.');
       errorPin.pinInvalido = true;
@@ -311,7 +317,7 @@ async function enviarCodigoPorCorreo(contactos, { folio, pin, nombreCompleto, ti
   const correos = Array.from(new Set(
     (Array.isArray(contactos) ? contactos : [])
       .map((c) => (c && c.email ? String(c.email).trim() : ''))
-      .filter(Boolean)
+      .filter((e) => /^[^@\s<>,;]+@[^@\s<>,;]+\.[^@\s<>,;]+$/.test(e) && e.length <= 120)
   ));
   if (correos.length === 0) return { intentados: 0, fallidos: [] };
 
@@ -784,7 +790,7 @@ exports.handler = async (event) => {
     return { statusCode: 400, headers, body: JSON.stringify({ error: 'JSON inválido.' }) };
   }
 
-  const { folio, filename, pdfBase64, nombreCompleto, tipo, fotoBase64, tarjetaBase64, placaEstilo, contactos, datosVisor, datosFormulario, esRenovacionPago, correoTitular, producto, pin: pinRecibido } = payload;
+  const { folio: folioCliente, pdfBase64, nombreCompleto, tipo, fotoBase64, tarjetaBase64, placaEstilo, contactos: contactosCliente, datosVisor, datosFormulario, esRenovacionPago, correoTitular, producto, pin: pinRecibido } = payload;
   // ---- idioma elegido por quien llenó la ficha (ES/EN/FR/PT) — se guarda junto con la ficha
   // para que los correos automáticos que lleguen después (código de acceso aquí mismo, y el
   // aviso de escaneo en avisar-escaneo.js) puedan enviarse en ese mismo idioma. Solo se aceptan
@@ -793,11 +799,22 @@ exports.handler = async (event) => {
   const IDIOMAS_VALIDOS = ['es', 'en', 'fr', 'pt'];
   const idioma = IDIOMAS_VALIDOS.includes(payload.idioma) ? payload.idioma : 'es';
 
-  if (!pdfBase64 || !filename) {
+  // ---- 2026-10-09 (revisión de seguridad): el folio se valida (solo letras y números) y el nombre del
+  // archivo YA NO se toma de lo que mande el navegador — se arma aquí, en el servidor, como
+  // "<folio>.pdf". Antes un envío con un "filename" manipulado (por ejemplo "datos/<otro folio>.json")
+  // podía sobrescribir archivos de otra ficha. También se limita a 2 contactos (los 2 que existen en
+  // el formulario) para que nadie use este endpoint para mandar correos a una lista larga. ----
+  const folio = folioSeguro(folioCliente);
+  const filename = folio ? `${folio}.pdf` : '';
+  const contactos = (Array.isArray(contactosCliente) ? contactosCliente : []).slice(0, 2);
+  if (!folio) {
+    return { statusCode: 400, headers, body: JSON.stringify({ error: 'Folio inválido o faltante.' }) };
+  }
+  if (!pdfBase64) {
     return {
       statusCode: 400,
       headers,
-      body: JSON.stringify({ error: 'Faltan datos: filename y pdfBase64 son obligatorios.' }),
+      body: JSON.stringify({ error: 'Faltan datos: pdfBase64 es obligatorio.' }),
     };
   }
 
@@ -808,9 +825,23 @@ exports.handler = async (event) => {
   let pinNuevo = null;
   let codigoCorreoFallidos = [];
   const carpeta = carpetaTipo(tipo, folio);
+  let s3Limite = null;
   try {
     const region = process.env.S3_REGION || 'us-east-1';
     const s3 = getS3Client();
+    s3Limite = s3;
+
+    // ---- 2026-10-09: límites contra abuso (ver lib/limite.js). Máximo 30 envíos por hora desde una
+    // misma conexión, y máximo 8 PIN incorrectos en 15 minutos por folio. Si S3 falla, no se bloquea
+    // a nadie (falla "abierta"). ----
+    const ipCliente = ipDe(event);
+    if (await estaBloqueado(s3, BUCKET_RESUMEN, 'envio-ip', ipCliente, 30, 60 * 60 * 1000)) {
+      return { statusCode: 429, headers, body: JSON.stringify({ error: 'Demasiados envíos desde esta conexión. Intente de nuevo en una hora.' }) };
+    }
+    if (await estaBloqueado(s3, BUCKET_RESUMEN, 'pin', folio, 8, 15 * 60 * 1000)) {
+      return { statusCode: 429, headers, body: JSON.stringify({ error: 'Demasiados intentos con PIN incorrecto. Espere 15 minutos e intente de nuevo.' }) };
+    }
+    await anotar(s3, BUCKET_RESUMEN, 'envio-ip', ipCliente, 60 * 60 * 1000);
 
     // El login (PIN + fecha "creado" de vigencia) se resuelve PRIMERO — antes de subir a los
     // buckets — para poder incluir "creado"/"fechaVencimiento" en el JSON público que lee ver.js,
@@ -876,6 +907,7 @@ exports.handler = async (event) => {
     // aviso al administrador, y no se actualiza el cuadro resumen. Responde 401 sin revelar si el
     // folio existe o no, igual que ya hace login-ficha.js. ----
     if (err && err.pinInvalido) {
+      if (s3Limite) await anotar(s3Limite, BUCKET_RESUMEN, 'pin', folio, 15 * 60 * 1000);
       return {
         statusCode: 401,
         headers,

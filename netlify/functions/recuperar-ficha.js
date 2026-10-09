@@ -10,6 +10,7 @@
 // facilitarle a alguien ir probando combinaciones.
 
 const { S3Client, GetObjectCommand } = require('@aws-sdk/client-s3');
+const { estaBloqueado, anotar, ipDe, folioSeguro } = require('./lib/limite');
 
 const BUCKET_RESUMEN = process.env.S3_BUCKET_RESUMEN || 'resumen-vidavitalqr';
 const REMITENTE = 'VidaVitalQR <ficha@vidavitalqr.com>';
@@ -121,7 +122,7 @@ exports.handler = async (event) => {
     return { statusCode: 400, headers, body: JSON.stringify({ error: 'JSON inválido.' }) };
   }
 
-  const folio = String(payload.folio || '').trim().toUpperCase();
+  const folio = folioSeguro(payload.folio);
   const nombreCompleto = normalizarNombre(payload.nombreCompleto);
   const fnac = String(payload.fnac || '').trim();
   const accion = payload.accion === 'correo' ? 'correo' : 'ver';
@@ -137,8 +138,17 @@ exports.handler = async (event) => {
     return { statusCode: 400, headers, body: JSON.stringify({ error: 'Faltan el código de la ficha, el nombre completo o la fecha de nacimiento.' }) };
   }
 
+  // ---- 2026-10-09 (revisión de seguridad): límite de intentos fallidos — máximo 6 por folio y 20 por
+  // conexión cada 15 minutos (ver lib/limite.js). Sin esto, conociendo el nombre se podía probar
+  // fecha de nacimiento por fecha de nacimiento hasta acertar. ----
+  const VENTANA = 15 * 60 * 1000;
+  const ip = ipDe(event);
+
   try {
     const s3 = getS3Client();
+    if (await estaBloqueado(s3, BUCKET_RESUMEN, 'recup', folio, 6, VENTANA) || await estaBloqueado(s3, BUCKET_RESUMEN, 'recup-ip', ip, 20, VENTANA)) {
+      return { statusCode: 429, headers, body: JSON.stringify({ error: 'Demasiados intentos. Espere unos 15 minutos e intente de nuevo.' }) };
+    }
     let registro;
     try {
       const resp = await s3.send(new GetObjectCommand({ Bucket: BUCKET_RESUMEN, Key: `${carpeta}/login/${folio}.json` }));
@@ -172,6 +182,8 @@ exports.handler = async (event) => {
     const coincideFecha = Boolean(fnacGuardada) && fnac === fnacGuardada;
 
     if (!coincideNombre || !coincideFecha) {
+      await anotar(s3, BUCKET_RESUMEN, 'recup', folio, VENTANA);
+      await anotar(s3, BUCKET_RESUMEN, 'recup-ip', ip, VENTANA);
       return respuestaInvalida;
     }
 
@@ -218,7 +230,11 @@ exports.handler = async (event) => {
     };
   } catch (err) {
     const noExiste = err.name === 'NoSuchKey' || err.Code === 'NoSuchKey' || err.$metadata?.httpStatusCode === 404;
-    if (noExiste) return respuestaInvalida;
-    return { statusCode: 500, headers, body: JSON.stringify({ error: 'No se pudo procesar la recuperación.', detalle: String(err) }) };
+    if (noExiste) {
+      try { await anotar(getS3Client(), BUCKET_RESUMEN, 'recup-ip', ip, VENTANA); } catch (e) { /* no crítico */ }
+      return respuestaInvalida;
+    }
+    console.error('recuperar-ficha: error', err);
+    return { statusCode: 500, headers, body: JSON.stringify({ error: 'No se pudo procesar la recuperación.' }) };
   }
 };

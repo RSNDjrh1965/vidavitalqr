@@ -42,6 +42,15 @@ function streamToString(stream) {
   });
 }
 
+// ---- 2026-10-09: JSON seguro para incrustar dentro de un <script> — JSON.stringify NO escapa "<",
+// así que un valor con "</script>" podría cerrar el script y ejecutar código. Aquí se escapan
+// "<", ">", "&" y los separadores de línea especiales de Unicode. ----
+function jsonEnScript(valor) {
+  return JSON.stringify(valor)
+    .replace(/</g, '\\u003c').replace(/>/g, '\\u003e').replace(/&/g, '\\u0026')
+    .replace(/\u2028/g, '\\u2028').replace(/\u2029/g, '\\u2029');
+}
+
 function escapeHtml(str) {
   return String(str || '')
     .replace(/&/g, '&amp;')
@@ -500,15 +509,15 @@ function paginaVisor(datos) {
     });
   })();
 
-  var TEXTOS = ${JSON.stringify(TEXTOS)};
-  var FOLIO = ${JSON.stringify(datos.folio || '')};
+  var TEXTOS = ${jsonEnScript(TEXTOS)};
+  var FOLIO = ${jsonEnScript(datos.folio || '')};
   // ---- URL del PDF completo, por idioma. "PDF_URL_DEFAULT" es el PDF en el idioma con que se
   // llenó la ficha (siempre existe, es el que ya funcionaba antes). "PDF_URLS" trae, además, el
   // mismo documento en los otros idiomas cuando el formulario logró generarlos y subirlos (ver
   // subir-pdf-idioma.js) — si un idioma en particular no se pudo generar, simplemente no aparece
   // aquí y el botón cae de vuelta al PDF por defecto, sin que la persona note ningún error. ----
-  var PDF_URL_DEFAULT = ${JSON.stringify(datos.pdfUrl || '')};
-  var PDF_URLS = ${JSON.stringify((datos.pdfUrls && typeof datos.pdfUrls === 'object') ? datos.pdfUrls : {})};
+  var PDF_URL_DEFAULT = ${jsonEnScript(datos.pdfUrl || '')};
+  var PDF_URLS = ${jsonEnScript((datos.pdfUrls && typeof datos.pdfUrls === 'object') ? datos.pdfUrls : {})};
   var idiomaActual = 'es';
   // estadoUbicacion: 'pendiente' mientras se espera la respuesta del navegador al permiso de
   // ubicación; 'concedida' si la persona que escaneó aceptó compartirla; 'denegada' si la
