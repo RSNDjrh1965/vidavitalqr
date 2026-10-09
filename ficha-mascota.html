@@ -1738,7 +1738,9 @@ async function generarYSubirPdfsOtrosIdiomas(folio){
   // duración total de la melodía "Vidavitalllll" (Vi-da-vi-taaal): la última nota empieza a los
   // 0.50s, dura 1.50s, más 0.05s de cola -- se redondea hacia arriba con margen a 2200ms para
   // garantizar que nunca quede a medio sonar antes de pasar al siguiente idioma.
-  const DURACION_SONIDO_MARCA_MS = 2200;
+  // 2026-10-08: el sonido de marca ahora es el piano real de James (8.6 s), que suena UNA sola vez
+  // al guardar (ver iniciarSonidoProcesando), asi que ya no se espera nada por idioma.
+  const DURACION_SONIDO_MARCA_MS = 0;
 
   for (const lang of otros) {
     const inicioProcesoIdioma = Date.now();
@@ -1994,13 +1996,31 @@ function emailValido(str){
     notaPiano(783.99, 0.50, 1.50, 0.60); // taaaal - G5 (sostenida)
   }
 
+  try { window.__audioMarca = new Audio('sonido-marca.mp3'); window.__audioMarca.preload = 'auto'; } catch (ePre) {}
   window.iniciarSonidoProcesando = function () {
-    if (!CtxProc) return;
+    // 2026-10-08: piano real de James (sonido-marca.mp3, 8.6 s), UNA sola vez por envio, completo.
+    // Se llama dentro del clic del boton (gesto valido para el navegador). Si el archivo no se
+    // puede reproducir, se usa como respaldo la melodia sintetica anterior.
+    var yaRespaldo = false;
+    function respaldo() {
+      if (yaRespaldo) return; yaRespaldo = true;
+      if (!CtxProc) return;
+      try {
+        if (!ctxProc) ctxProc = new CtxProc();
+        if (ctxProc.state === 'suspended') { ctxProc.resume().catch(function () {}); }
+        sonarSonidoMarca();
+      } catch (e) { /* si el navegador bloquea el audio, seguimos sin sonido, sin afectar el envío */ }
+    }
     try {
-      if (!ctxProc) ctxProc = new CtxProc();
-      if (ctxProc.state === 'suspended') { ctxProc.resume().catch(function () {}); }
-      sonarSonidoMarca();
-    } catch (e) { /* si el navegador bloquea el audio, seguimos sin sonido, sin afectar el envío */ }
+      // ruta relativa (misma carpeta que la ficha) y referencia global para que el navegador no
+      // suelte el audio mientras se generan los PDFs de los demas idiomas
+      var audioMarca = window.__audioMarca || new Audio('sonido-marca.mp3');
+      window.__audioMarca = audioMarca;
+      audioMarca.addEventListener('error', respaldo);
+      try { audioMarca.currentTime = 0; } catch (e0) {}
+      var pr = audioMarca.play();
+      if (pr && pr.catch) pr.catch(respaldo);
+    } catch (e) { respaldo(); }
   };
 
   // ya no hay ningun intervalo que detener (el sonido ahora suena una vez por idioma procesado,
@@ -2010,10 +2030,8 @@ function emailValido(str){
 
   // alias explicito: llamarlo una vez cada vez que se procesa un idioma adicional (ver
   // generarYSubirPdfsOtrosIdiomas)
-  window.sonarSonidoMarca = function () {
-    if (!ctxProc) return;
-    try { sonarSonidoMarca(); } catch (e) {}
-  };
+  // ya no suena una vez por idioma: el piano real suena una sola vez al guardar (ver arriba)
+  window.sonarSonidoMarca = function () {};
 })();
 
 $('btnEmail').addEventListener('click', async () => {
