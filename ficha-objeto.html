@@ -1615,7 +1615,7 @@ async function generatePdfBlob(){
 // está preparado para caer de vuelta al PDF del idioma original si el de un idioma en particular
 // no está disponible (ver PDF_URLS/PDF_URL_DEFAULT en ver.js). Al final siempre se restaura el
 // idioma que la persona tenía elegido en pantalla, para que no note ningún cambio. ----
-async function generarYSubirPdfsOtrosIdiomas(folio){
+async function generarYSubirPdfsOtrosIdiomas(folio, pinParaSubir){
   const idiomaOriginal = LANG_FICHA;
   const otros = ['es','en','fr','pt'].filter(l => l !== idiomaOriginal);
   // duración total de la melodía "Vidavitalllll" (Vi-da-vi-taaal): la última nota empieza a los
@@ -1641,7 +1641,7 @@ async function generarYSubirPdfsOtrosIdiomas(folio){
       await fetch('/.netlify/functions/subir-pdf-idioma', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({ folio, idioma: lang, filename: `${folio}-${lang}.pdf`, pdfBase64: base64 }),
+        body: JSON.stringify({ folio, idioma: lang, filename: `${folio}-${lang}.pdf`, pdfBase64: base64, pin: pinParaSubir || '' }),
       });
     } catch (errIdioma) {
       console.error('No se pudo generar/subir el PDF en idioma "' + lang + '" (no crítico, se omite):', errIdioma);
@@ -1906,6 +1906,10 @@ function emailValido(str){
   // 2026-10-09: segunda vez del piano real, al terminar de actualizar los idiomas. Espera a que
   // termine la primera (si aun suena), la reproduce completa otra vez y devuelve una promesa que
   // se cumple al terminar (con tope de seguridad), para que el modal/cierre no la corte.
+  // 2026-10-09: si el guardado FALLA, el piano se detiene (antes seguía sonando después del aviso de error)
+  window.detenerSonidoError = function () {
+    try { var a = window.__audioMarca; if (a) { a.pause(); a.currentTime = 0; } } catch (e) {}
+  };
   window.sonarSonidoFinal = function () {
     return new Promise(function (resolve) {
       var a = window.__audioMarca;
@@ -1965,6 +1969,7 @@ $('btnEmail').addEventListener('click', async () => {
     pdfBlob = await generatePdfBlob();
   }catch(err){
     console.error('Error generando el PDF:', err);
+    if (window.detenerSonidoError) window.detenerSonidoError();
     alert(T().errorGenerarPdf(err && err.message ? err.message : err));
     btn.disabled = false;
     btn.textContent = originalText;
@@ -2052,8 +2057,12 @@ $('btnEmail').addEventListener('click', async () => {
     // ---- ficha ya guardada con éxito arriba: ahora, mejor esfuerzo, se genera el PDF también
     // en los otros 3 idiomas y se sube por separado (ver la función y su comentario). Cualquier
     // fallo aquí se ignora sin afectar el resto de este flujo, que ya se completó. ----
-    try{ await generarYSubirPdfsOtrosIdiomas(folio); }catch(errIdiomas){ console.error('generarYSubirPdfsOtrosIdiomas falló (no crítico):', errIdiomas); }
-    try{ if (window.sonarSonidoFinal) await window.sonarSonidoFinal(); }catch(eFin){}
+    try{ await generarYSubirPdfsOtrosIdiomas(folio, pinNuevo || pinConfirmadoFicha); }catch(errIdiomas){ console.error('generarYSubirPdfsOtrosIdiomas falló (no crítico):', errIdiomas); }
+    // ---- 2026-10-09: el 2.º piano arranca ya, SIN hacer esperar al cliente — el PIN (o el aviso de éxito)
+    // se muestra de inmediato y el sonido termina de sonar detrás. Solo antes de cerrar esta pestaña o
+    // pasar al pago se espera (con tope) a que el piano termine, para que no se corte. ----
+    let pSonidoFinal = Promise.resolve();
+    try{ if (window.sonarSonidoFinal) pSonidoFinal = window.sonarSonidoFinal(); }catch(eFin){}
 
     // el envío ya terminó — se quita el overlay de "procesando" antes de mostrar el modal del
     // PIN (o de cerrar la pestaña), para que no quede tapándolo por encima
@@ -2064,6 +2073,8 @@ $('btnEmail').addEventListener('click', async () => {
       await mostrarPinModal(pinNuevo, folio, qrUrlGenerado);
     }
 
+    if (!esActualizacion) { try{ await pSonidoFinal; }catch(eEsperaSonido){} }
+
     if (esActualizacion) {
       mostrarActualizacionExitosa();
     } else if (!avisarOpenerYCerrar('objeto', folio)) {
@@ -2071,6 +2082,7 @@ $('btnEmail').addEventListener('click', async () => {
     }
   }catch(err){
     console.error('Error guardando la ficha en la nube:', err);
+    if (window.detenerSonidoError) window.detenerSonidoError();
     alert(T().errorGuardarFicha(err && err.message ? err.message : err));
   }finally{
     btn.disabled = false;
