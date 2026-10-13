@@ -50,7 +50,7 @@ function textoComoPath(text, cx, cy, fontSize, targetWidth, maxScaleX) {
 //    ahora baja a 18mm para dejar margen libre para el texto del dominio).
 //  - "pulsera" ya NO es 20x30mm, ahora es 20x28mm (el QR de 16mm se mantiene igual).
 //  - se agregan 2 piezas nuevas de la cadena: "cadenaRect" (rectangular, 22x32mm, QR 18mm según
-//    dato del usuario) y "cadenaCirc" (circular, Ø20mm). cadenaCirc NO tiene entrada en
+//    dato del usuario) y "cadenaCirc" (circular, Ø25mm desde 2026-10-12). cadenaCirc NO tiene entrada en
 //    ALTURA_TOTAL_MM_POR_PLACA a propósito (ver más abajo): es la pieza más chica de todas, y un
 //    QR es siempre una cuadrícula cuadrada — el máximo cuadrado que cabe completo dentro de un
 //    círculo de 20mm de diámetro es de ~14mm (diagonal = diámetro), así que se deja en 13mm con
@@ -61,13 +61,13 @@ function textoComoPath(text, cx, cy, fontSize, targetWidth, maxScaleX) {
 //    producto comprable en index.html (a pedido de James, 2026-10-02) — solo existen aquí para
 //    cuando él las genere manualmente. ----
 const MEDIDA_QR_MM_POR_PLACA = {
-  clasica: 18, // Placa 1, 40 x 20 mm
+  clasica: 20.35, // Placa 1, 40 x 20 mm (18 → 20.35 el 2026-10-13: módulo de 0,55 mm exactos = 11 píxeles a 508 dpi; probada en láser, lee bien con Xiaomi. El margen blanco de la placa queda en 2,0 mm)
   llavero: 20, // Placa 2, 40 x 22 mm
   ranuras: 22, // Placa 3, 45 x 25 mm
-  dije: 18, // Placa 4, 30 x 30 mm (corregido 2026-10-02, antes 40x40 con QR 30mm)
-  pulsera: 16, // Pulsera con placa QR, área grabable 16 x 16 mm (2026-09-29, dato del usuario)
-  cadenaRect: 18, // Cadena rectangular, 22 x 32 mm (2026-10-02, dato del usuario)
-  cadenaCirc: 13, // Cadena circular, Ø20 mm — máximo cuadrado seguro dentro del círculo (2026-10-02)
+  dije: 20, // Placa 4, 30 x 30 mm (QR 18 → 20 el 2026-10-12 al pasar a URL en minúsculas, 29 módulos)
+  pulsera: 18, // Pulsera 20 x 29 mm (QR 16 → 18 el 2026-10-12 para conservar ~0,49 mm por módulo con 29 módulos)
+  cadenaRect: 20, // Cadena rectangular, 22 x 32 mm (QR 18 → 20 el 2026-10-12)
+  cadenaCirc: 19, // Cadena circular, Ø25 mm (medida real confirmada 2026-10-12; antes Ø20 con QR 13). El QR incluye su margen blanco: la parte oscura queda de ~15 mm y su esquina más lejana a ~10,5 mm del centro, dentro del radio de 12,5 mm
 };
 
 // ---- Dimensión mayor real de cada placa física — se usa como alto total del diseño para láser:
@@ -83,9 +83,35 @@ const ALTURA_TOTAL_MM_POR_PLACA = {
   llavero: 40, // 40 x 22 mm → 10mm libres arriba/abajo del QR de 20mm
   ranuras: 45, // 45 x 25 mm → 11.5mm libres arriba/abajo del QR de 22mm
   dije: 30, // 30 x 30 mm (corregido 2026-10-02) → 6mm libres arriba/abajo del QR de 18mm
-  pulsera: 28, // placa de 20 x 28 mm (corregido 2026-10-02) → 6mm libres arriba/abajo del QR de 16mm
+  pulsera: 29, // placa de 20 x 29 mm (medida real confirmada 2026-10-12; antes 28) → 6,5mm libres arriba/abajo del QR de 16mm
   cadenaRect: 32, // 22 x 32 mm → 7mm libres arriba/abajo del QR de 18mm
 };
+
+// ---- 2026-10-12: tamaño real de cada placa en la plantilla de acrílico del láser. El archivo para
+// grabar ahora mide EXACTAMENTE lo que mide la placa (ancho x alto, o diámetro en la circular), con
+// el QR centrado, así el cero del láser (G92 X0 Y0) se pone siempre en la esquina inferior izquierda
+// de la ventana y el diseño cae centrado en la placa. Lo que se agrega es solo espacio en blanco:
+// el QR y el texto no cambian de tamaño. ----
+const LADO_CORTO_MM_POR_PLACA = {
+  clasica: 20, llavero: 22, ranuras: 25, dije: 30, pulsera: 20, cadenaRect: 22, cadenaCirc: 25,
+};
+// Placas que en la plantilla del láser quedan "acostadas" (el lado largo en horizontal): el diseño
+// se gira 90° a la izquierda → el QR queda centrado en el lado largo, a la izquierda del texto, y
+// el texto (pegado al QR, a su derecha) se lee de abajo hacia arriba. Las demás quedan de pie:
+// QR arriba y texto abajo, como siempre.
+const PLACAS_HORIZONTALES = ['clasica', 'llavero', 'ranuras'];
+
+// ---- 2026-10-13: ajustes finos confirmados con pruebas de láser ----
+// Llavero 40 x 22: el hueco para la argolla queda a la izquierda; el QR se corre 3 mm hacia la
+// derecha (lejos del hueco) y el texto 3,3 mm, así ya no queda pegado al hueco ni descentrado.
+const DESPLAZ_QR_MM_POR_PLACA = { llavero: 3, clasica: -0.025, pulsera: -2.35 };
+// Corrimiento del QR en el otro eje (lado corto), para que los bordes de los módulos caigan en
+// píxeles enteros a 508 dpi (clásica: +0,025 mm = medio píxel).
+const DESPLAZ_QR_LADO_CORTO_MM_POR_PLACA = { clasica: 0.025 };
+const DESPLAZ_TEXTO_MM_POR_PLACA = { llavero: 3.3, clasica: -1.1, pulsera: -2.35 };
+// Ancho del texto del dominio (mm) cuando no debe crecer con el QR (clásica: se conserva el mismo
+// texto que ya se probó con el QR de 18 mm = 92 % de 18 mm).
+const ANCHO_TEXTO_MM_POR_PLACA = { clasica: 16.56 };
 
 async function buildQrSvg(targetUrl, folioText) {
   const qr = QRCode.create(targetUrl, { errorCorrectionLevel: 'H' });
@@ -203,15 +229,19 @@ async function buildQrSvg(targetUrl, folioText) {
 // líneas compiten por ese poco alto y cada una queda más chica que una sola línea completa (hasta
 // 3 veces más chica en algunos casos). Por eso se mantiene en una sola línea.
 //
-// La placa circular de cadena (cadenaCirc, Ø20mm) no tiene entrada en ALTURA_TOTAL_MM_POR_PLACA
+// La placa circular de cadena (cadenaCirc, Ø25mm) no tiene entrada en ALTURA_TOTAL_MM_POR_PLACA
 // a propósito: a pedido de James, esa placa no lleva ningún texto, solo el QR — es la pieza más
 // chica del catálogo y no hay margen real para nada más.
 async function buildQrSvgParaPlaca(targetUrl, placaEstilo) {
   const sizeMm = MEDIDA_QR_MM_POR_PLACA[placaEstilo];
   if (!sizeMm) return null; // estilo de placa no reconocido o sin medida definida
 
-  // Mayúsculas en toda la URL EXCEPTO el segmento de ruta "/v/", que se conserva en minúscula.
-  const urlParaQr = String(targetUrl || '').toUpperCase().replace('/V/', '/v/');
+  // 2026-10-12: la URL se codifica TAL CUAL (https://vidavitalqr.com/v/<FOLIO>), con "https" en
+  // minúsculas. Antes se pasaba todo a mayúsculas para ahorrar módulos, pero algunos lectores de
+  // Android (confirmado en un Xiaomi) leían "HTTPS://..." como URL y luego NO la abrían en el
+  // navegador, porque el esquema en mayúsculas no es reconocido. Costo: el QR pasa de 25 a 29
+  // módulos por lado, y por eso se agrandó un poco el QR de las placas donde cabe (ver tabla).
+  const urlParaQr = String(targetUrl || '').trim();
   // Nivel de corrección 'L' (el más compacto): ya no se dibuja el recuadro "VIDAVITALQR" en
   // ninguna placa, así que no hace falta margen extra para tolerar una obstrucción central.
   const qr = QRCode.create(urlParaQr, { errorCorrectionLevel: 'L' });
@@ -243,12 +273,19 @@ async function buildQrSvgParaPlaca(targetUrl, placaEstilo) {
   const alturaTotalMm = ALTURA_TOTAL_MM_POR_PLACA[placaEstilo];
   const pxPorMm = qrPixelSize / sizeMm;
 
+  const ladoCortoMm = LADO_CORTO_MM_POR_PLACA[placaEstilo] || sizeMm;
+  const ladoCortoPx = ladoCortoMm * pxPorMm;
+
   if (!alturaTotalMm) {
+    // Placa circular: archivo cuadrado del tamaño del diámetro, con el QR centrado y sin texto.
+    const off = (ladoCortoPx - qrPixelSize) / 2;
     return `<?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" width="${sizeMm}mm" height="${sizeMm}mm" viewBox="0 0 ${qrPixelSize} ${qrPixelSize}">
-  <rect x="0" y="0" width="${qrPixelSize}" height="${qrPixelSize}" fill="#F9F6EF"/>
-  <g>${modulesSvg}</g>
-  ${centerLabel}
+<svg xmlns="http://www.w3.org/2000/svg" width="${ladoCortoMm}mm" height="${ladoCortoMm}mm" viewBox="0 0 ${ladoCortoPx} ${ladoCortoPx}">
+  <rect x="0" y="0" width="${ladoCortoPx}" height="${ladoCortoPx}" fill="#F9F6EF"/>
+  <g transform="translate(${off} ${off})">
+    <g>${modulesSvg}</g>
+    ${centerLabel}
+  </g>
 </svg>`;
   }
 
@@ -265,7 +302,8 @@ async function buildQrSvgParaPlaca(targetUrl, placaEstilo) {
   const textoDominio = 'vidavitalqr.com';
   const fontTmp = getFont();
   const opcionesFuente = { kerning: false, features: { liga: false, rlig: false } };
-  const dominioTargetWidth = qrPixelSize * 0.92;
+  const anchoTextoMm = ANCHO_TEXTO_MM_POR_PLACA[placaEstilo];
+  const dominioTargetWidth = anchoTextoMm ? anchoTextoMm * (qrPixelSize / sizeMm) : qrPixelSize * 0.92;
   const altoDisponible = margenPx * 0.88; // tope por altura, para no salirse del margen
 
   const anchoAReferencia = fontTmp.getAdvanceWidth(textoDominio, 100, opcionesFuente) || 1;
@@ -284,24 +322,48 @@ async function buildQrSvgParaPlaca(targetUrl, placaEstilo) {
   // placa (mismo criterio que ya se usaba para el folio).
   const alturaTextoDominio = (fontTmp.ascender - fontTmp.descender) * (dominioFontSize / fontTmp.unitsPerEm);
   const gapSuperior = margenPx * 0.05;
-  const dominioCenterY = margenPx + qrPixelSize + gapSuperior + alturaTextoDominio / 2;
+  const dominioCenterY = margenPx + qrPixelSize + gapSuperior + alturaTextoDominio / 2 + (DESPLAZ_TEXTO_MM_POR_PLACA[placaEstilo] || 0) * pxPorMm;
 
-  const dominioLabel = textoComoPath(
+  const esHorizontal = PLACAS_HORIZONTALES.includes(placaEstilo);
+  // Vertical: el texto va centrado en el ancho de la placa, debajo del QR. Horizontal: el mismo
+  // texto se gira -90° (abajo hacia arriba) y queda a la derecha del QR, centrado en el lado corto.
+  const textoCx = ladoCortoPx / 2;
+  const dominioLabelVertical = textoComoPath(
     textoDominio,
-    qrPixelSize / 2,
+    textoCx,
     dominioCenterY,
     dominioFontSize,
     dominioStretch ? dominioTargetWidth : null
   );
 
+  const qrX = (ladoCortoPx - qrPixelSize) / 2 + (DESPLAZ_QR_LADO_CORTO_MM_POR_PLACA[placaEstilo] || 0) * pxPorMm;
+  const qrY = margenPx + (DESPLAZ_QR_MM_POR_PLACA[placaEstilo] || 0) * pxPorMm;
+
+  if (esHorizontal) {
+    // Archivo de (lado largo x lado corto) mm. Se gira el diseño vertical 90° a la izquierda:
+    // el punto (x, y) del diseño vertical pasa a (y, anchoVertical - x).
+    const anchoHorizPx = totalHeightPx; // lado largo en px
+    return `<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="${alturaTotalMm}mm" height="${ladoCortoMm}mm" viewBox="0 0 ${anchoHorizPx} ${ladoCortoPx}">
+  <rect x="0" y="0" width="${anchoHorizPx}" height="${ladoCortoPx}" fill="#F9F6EF"/>
+  <g transform="translate(0 ${ladoCortoPx}) rotate(-90)">
+    <g transform="translate(${qrX} ${qrY})">
+      <g>${modulesSvg}</g>
+      ${centerLabel}
+    </g>
+    ${dominioLabelVertical}
+  </g>
+</svg>`;
+  }
+
   return `<?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" width="${sizeMm}mm" height="${alturaTotalMm}mm" viewBox="0 0 ${qrPixelSize} ${totalHeightPx}">
-  <rect x="0" y="0" width="${qrPixelSize}" height="${totalHeightPx}" fill="#F9F6EF"/>
-  <g transform="translate(0 ${margenPx})">
+<svg xmlns="http://www.w3.org/2000/svg" width="${ladoCortoMm}mm" height="${alturaTotalMm}mm" viewBox="0 0 ${ladoCortoPx} ${totalHeightPx}">
+  <rect x="0" y="0" width="${ladoCortoPx}" height="${totalHeightPx}" fill="#F9F6EF"/>
+  <g transform="translate(${qrX} ${qrY})">
     <g>${modulesSvg}</g>
     ${centerLabel}
   </g>
-  ${dominioLabel}
+  ${dominioLabelVertical}
 </svg>`;
 }
 

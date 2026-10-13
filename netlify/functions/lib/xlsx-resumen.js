@@ -60,6 +60,23 @@ const COL_QR = 10;
 // histórico de que existió.
 const COL_VENCIMIENTO = 11;
 const COL_ESTADO = 12;
+// ---- columnas de la placa para láser (agregadas 2026-10-13, a pedido de James): enlaces al archivo
+// SVG y al PNG de grabado de la placa (<tipo>/placas-laser/<folio>.svg y .png) — siempre al final,
+// igual que las de vigencia, para no mover ninguna columna ni foto existente. ----
+const COL_QR_PLACA_SVG = 13;
+const COL_QR_PLACA_PNG = 14;
+
+// ---- 2026-10-13, a pedido de James: los títulos de varias columnas se veían CORTADOS ("Fecha de
+// actualización", "Meses transcurridos", "URL del objeto (PDF)", "Fecha de vencimiento"). Ahora los
+// anchos de columna dan lugar al título completo y el título puede pasar a 2 renglones si hiciera
+// falta (wrapText + fila de encabezado más alta). Los anchos se re-aplican cada vez que se abre el
+// archivo (ver ajustarEncabezadoYAnchos), para que también se corrijan los resumen.xlsx que ya
+// existen en S3, no solo los nuevos. "Fotografía" se queda en FOTO_COL_WIDTH a propósito: de ese
+// ancho depende el centrado de las fotos incrustadas. ----
+const ALTO_ENCABEZADO_PT = 34;
+const ANCHOS_COLUMNAS = {
+  1: 16, 2: 22, 3: 12, 4: 30, 5: 17, 6: 26, 7: 23, 8: 25, 9: 16, 10: 18, 11: 25, 12: 14, 13: 19, 14: 19,
+};
 
 const FOTO_ANCHO_PX = 74;
 const FOTO_ALTO_PX = 74;
@@ -101,24 +118,26 @@ function nuevaHojaConEstilo(workbook) {
     views: [{ state: 'frozen', ySplit: 1 }],
   });
   sheet.columns = [
-    { header: 'Actualización', key: 'actualizacion', width: 14 },
-    { header: 'Contador', key: 'contador', width: 20 },
+    { header: 'Actualización', key: 'actualizacion', width: 16 },
+    { header: 'Contador', key: 'contador', width: 22 },
     { header: 'PIN', key: 'pin', width: 12 },
-    { header: 'Nombre completo', key: 'nombre', width: 28 },
-    { header: 'Fecha de inicio', key: 'fecha', width: 15 },
-    { header: 'Fecha de actualización', key: 'fechaActualizacion', width: 18 },
-    { header: 'Meses transcurridos', key: 'meses', width: 16 },
-    { header: 'URL del objeto (PDF)', key: 'pdf', width: 14 },
+    { header: 'Nombre completo', key: 'nombre', width: 30 },
+    { header: 'Fecha de inicio', key: 'fecha', width: 17 },
+    { header: 'Fecha de actualización', key: 'fechaActualizacion', width: 26 },
+    { header: 'Meses transcurridos', key: 'meses', width: 23 },
+    { header: 'URL del objeto (PDF)', key: 'pdf', width: 25 },
     { header: 'Fotografía', key: 'foto', width: FOTO_COL_WIDTH },
-    { header: 'Código QR', key: 'qr', width: 16 },
-    { header: 'Fecha de vencimiento', key: 'vencimiento', width: 18 },
+    { header: 'Código QR', key: 'qr', width: 18 },
+    { header: 'Fecha de vencimiento', key: 'vencimiento', width: 25 },
     { header: 'Estado', key: 'estado', width: 14 },
+    { header: 'QR placa (SVG)', key: 'qrPlacaSvg', width: 19 },
+    { header: 'QR placa (PNG)', key: 'qrPlacaPng', width: 19 },
   ];
   const headerRow = sheet.getRow(1);
-  headerRow.height = 22;
+  headerRow.height = ALTO_ENCABEZADO_PT;
   headerRow.eachCell((cell) => {
     cell.font = { bold: true, color: { argb: HEADER_FONT } };
-    cell.alignment = { vertical: 'middle', horizontal: 'center' };
+    cell.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
     cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: HEADER_FILL } };
     cell.border = { top: BORDER, left: BORDER, bottom: BORDER, right: BORDER };
   });
@@ -355,11 +374,48 @@ function asegurarColumnasVigencia(sheet) {
     const cell = headerRow.getCell(col);
     cell.value = texto;
     cell.font = { bold: true, color: { argb: HEADER_FONT } };
-    cell.alignment = { vertical: 'middle', horizontal: 'center' };
+    cell.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
     cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: HEADER_FILL } };
     cell.border = { top: BORDER, left: BORDER, bottom: BORDER, right: BORDER };
   });
   headerRow.commit();
+}
+
+// ---- migración liviana (2026-10-13): agrega los encabezados "QR placa (SVG)" y "QR placa (PNG)" a
+// una hoja que ya tiene las columnas de vigencia. No mueve nada existente. ----
+function asegurarColumnasPlaca(sheet) {
+  const encabezadoPng = sheet.getRow(1).getCell(COL_QR_PLACA_PNG).value;
+  if (String(encabezadoPng || '').trim() === 'QR placa (PNG)') return;
+  sheet.getColumn(COL_QR_PLACA_SVG).width = 16;
+  sheet.getColumn(COL_QR_PLACA_PNG).width = 16;
+  const headerRow = sheet.getRow(1);
+  [
+    [COL_QR_PLACA_SVG, 'QR placa (SVG)'],
+    [COL_QR_PLACA_PNG, 'QR placa (PNG)'],
+  ].forEach(([col, texto]) => {
+    const cell = headerRow.getCell(col);
+    cell.value = texto;
+    cell.font = { bold: true, color: { argb: HEADER_FONT } };
+    cell.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
+    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: HEADER_FILL } };
+    cell.border = { top: BORDER, left: BORDER, bottom: BORDER, right: BORDER };
+  });
+  headerRow.commit();
+}
+
+// ---- Deja los encabezados completos y legibles en cualquier resumen.xlsx (nuevo o ya existente):
+// nunca ENCOGE una columna (si James la ensanchó a mano, se respeta), solo la agranda hasta el mínimo
+// necesario para que el título entre; y activa el ajuste de texto en el encabezado. ----
+function ajustarEncabezadoYAnchos(sheet) {
+  Object.entries(ANCHOS_COLUMNAS).forEach(([col, minimo]) => {
+    const columna = sheet.getColumn(Number(col));
+    if (!columna.width || columna.width < minimo) columna.width = minimo;
+  });
+  const headerRow = sheet.getRow(1);
+  if (!headerRow.height || headerRow.height < ALTO_ENCABEZADO_PT) headerRow.height = ALTO_ENCABEZADO_PT;
+  headerRow.eachCell({ includeEmpty: false }, (cell) => {
+    cell.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
+  });
 }
 
 async function cargarOCrearLibro(s3, bucket, key) {
@@ -378,12 +434,14 @@ async function cargarOCrearLibro(s3, bucket, key) {
       sheet = await migrarAgregarColumnaPin(workbook, sheet, s3, bucket);
     } else {
       asegurarColumnasVigencia(sheet);
+      asegurarColumnasPlaca(sheet);
     }
   } catch (err) {
     const noExiste = err.name === 'NoSuchKey' || err.Code === 'NoSuchKey' || err.$metadata?.httpStatusCode === 404;
     if (!noExiste) throw err;
     sheet = nuevaHojaConEstilo(workbook);
   }
+  ajustarEncabezadoYAnchos(sheet);
   return { workbook, sheet };
 }
 
@@ -425,7 +483,7 @@ function offsetParaCentrar(colWidthChars, rowHeightPt, imgWidthPx, imgHeightPx) 
 }
 
 async function actualizarResumenXlsx(s3, bucket, key, fila) {
-  const { contador, pin, nombre, fecha, pdfUrl, fotoBase64, qrUrl, creadoVigencia } = fila;
+  const { contador, pin, nombre, fecha, pdfUrl, fotoBase64, qrUrl, creadoVigencia, qrPlacaSvgUrl, qrPlacaPngUrl } = fila;
   const { workbook, sheet } = await cargarOCrearLibro(s3, bucket, key);
 
   let rowNumber = buscarFilaPorContador(sheet, contador);
@@ -467,6 +525,12 @@ async function actualizarResumenXlsx(s3, bucket, key, fila) {
   row.getCell(COL_MESES).value = { formula: `IFERROR(DATEDIF(${celdaFechaActualizacion},TODAY(),"m"),"")` };
   row.getCell(COL_PDF).value = pdfUrl ? { text: 'Ver PDF', hyperlink: pdfUrl } : '';
   row.getCell(COL_QR).value = qrUrl ? { text: 'Ver código QR', hyperlink: qrUrl } : '';
+  // ---- enlaces a los archivos de la placa para láser (2026-10-13). Solo se escriben cuando este
+  // guardado sí generó el archivo (compra nueva con placa); si no (por ejemplo, "Actualizar" datos
+  // de una ficha existente, que nunca manda el estilo de placa), se deja intacto lo que la fila ya
+  // tenía — nunca se borra un enlace válido con un valor vacío. ----
+  if (qrPlacaSvgUrl) row.getCell(COL_QR_PLACA_SVG).value = { text: 'Ver SVG', hyperlink: qrPlacaSvgUrl };
+  if (qrPlacaPngUrl) row.getCell(COL_QR_PLACA_PNG).value = { text: 'Ver PNG', hyperlink: qrPlacaPngUrl };
 
   // ---- "Fecha de vencimiento" y "Estado" (agregadas 2026-09-25) ----
   // "creadoVigencia" es la fecha real de inicio de la vigencia anual (campo "creado" del login,
@@ -490,10 +554,10 @@ async function actualizarResumenXlsx(s3, bucket, key, fila) {
     cell.border = { top: BORDER, left: BORDER, bottom: BORDER, right: BORDER };
     cell.alignment = { vertical: 'middle', horizontal: 'left', wrapText: true };
   });
-  [COL_ACTUALIZACION, COL_PIN, COL_FECHA_INICIO, COL_FECHA_ACTUALIZACION, COL_MESES, COL_VENCIMIENTO, COL_ESTADO].forEach((col) => {
+  [COL_ACTUALIZACION, COL_PIN, COL_FECHA_INICIO, COL_FECHA_ACTUALIZACION, COL_MESES, COL_VENCIMIENTO, COL_ESTADO, COL_QR_PLACA_SVG, COL_QR_PLACA_PNG].forEach((col) => {
     row.getCell(col).alignment = { vertical: 'middle', horizontal: 'center' };
   });
-  [COL_PDF, COL_QR].forEach((col) => {
+  [COL_PDF, COL_QR, COL_QR_PLACA_SVG, COL_QR_PLACA_PNG].forEach((col) => {
     const cell = row.getCell(col);
     if (cell.value) cell.font = { color: { argb: 'FF1155CC' }, underline: true };
   });
@@ -572,6 +636,10 @@ async function marcarFilaComoEliminada(s3, bucket, key, contador, textoEstado) {
   if (celdaPdf.value) celdaPdf.value = '(eliminado)';
   const celdaQr = row.getCell(COL_QR);
   if (celdaQr.value) celdaQr.value = '(eliminado)';
+  [COL_QR_PLACA_SVG, COL_QR_PLACA_PNG].forEach((col) => {
+    const c = row.getCell(col);
+    if (c.value) c.value = '(eliminado)';
+  });
 
   row.commit();
 

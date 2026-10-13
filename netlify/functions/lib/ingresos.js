@@ -96,7 +96,7 @@ function nuevaHojaConEstilo(workbook) {
     { header: 'ID de pago (interno)', key: 'paymentIntentId', width: 24 },
   ];
   const headerRow = sheet.getRow(1);
-  headerRow.height = 30;
+  headerRow.height = 36;
   headerRow.eachCell((cell) => {
     cell.font = { bold: true, color: { argb: HEADER_FONT } };
     cell.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
@@ -104,6 +104,28 @@ function nuevaHojaConEstilo(workbook) {
     cell.border = { top: BORDER, left: BORDER, bottom: BORDER, right: BORDER };
   });
   return sheet;
+}
+
+// ---- 2026-10-13, a pedido de James: ningún título de columna debe verse cortado. Se re-aplica cada
+// vez que se abre el archivo (también corrige el registro-ingresos.xlsx que ya existe en S3): el
+// título puede pasar a 2 renglones (wrapText + fila más alta) y cada columna se agranda, nunca se
+// encoge, hasta que entren la palabra más larga del título y la mitad del título completo. ----
+const ALTO_ENCABEZADO_PT = 36;
+// Anchos mínimos por columna (según el contenido real: folios de 17 caracteres, nombres largos,
+// el ID de pago de ONVO, etc.) para que ningún DATO se parta ni se corte (se vio un folio partido
+// en dos renglones). Se agranda, nunca se encoge.
+const ANCHOS_MINIMOS = { 1: 20, 2: 22, 3: 30, 4: 18, 5: 11, 6: 18, 7: 18, 8: 22, 9: 20, 10: 16, 11: 20, 12: 24, 13: 20, 14: 26, 15: 13, 16: 22, 17: 34 };
+function ajustarEncabezadoYAnchos(sheet) {
+  const headerRow = sheet.getRow(1);
+  if (!headerRow.height || headerRow.height < ALTO_ENCABEZADO_PT) headerRow.height = ALTO_ENCABEZADO_PT;
+  headerRow.eachCell({ includeEmpty: false }, (cell, colNumber) => {
+    cell.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
+    const texto = String(cell.value || '');
+    const palabraLarga = texto.split(/\s+/).reduce((m, w) => Math.max(m, w.length), 0);
+    const minimo = Math.max(palabraLarga + 3, Math.ceil(texto.length / 2) + 4, 11, ANCHOS_MINIMOS[colNumber] || 0);
+    const columna = sheet.getColumn(colNumber);
+    if (!columna.width || columna.width < minimo) columna.width = minimo;
+  });
 }
 
 async function cargarOCrearLibro(s3, bucket, key) {
@@ -120,6 +142,7 @@ async function cargarOCrearLibro(s3, bucket, key) {
     if (!noExiste) throw err;
     sheet = nuevaHojaConEstilo(workbook);
   }
+  ajustarEncabezadoYAnchos(sheet);
   return { workbook, sheet };
 }
 
