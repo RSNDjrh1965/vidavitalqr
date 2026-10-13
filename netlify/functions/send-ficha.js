@@ -813,7 +813,11 @@ exports.handler = async (event) => {
     return { statusCode: 400, headers, body: JSON.stringify({ error: 'JSON inválido.' }) };
   }
 
-  const { folio: folioCliente, pdfBase64, nombreCompleto, tipo, fotoBase64, tarjetaBase64, placaEstilo, contactos: contactosCliente, datosVisor, datosFormulario, esRenovacionPago, correoTitular, producto, pin: pinRecibido } = payload;
+  const { folio: folioCliente, pdfBase64, nombreCompleto, tipo, fotoBase64, tarjetaBase64, placaEstilo: placaEstiloEnviado, contactos: contactosCliente, datosVisor, datosFormulario, esRenovacionPago, correoTitular, producto, pin: pinRecibido } = payload;
+  // 2026-10-13: estilo de placa efectivo. Si este guardado no lo trae (por ejemplo una actualización de
+  // datos, que no pasa por la elección de producto), se usa el que ya quedó guardado en el registro de
+  // la ficha (ver más abajo, tras cargarOCrearLogin), para que igual se regeneren los códigos SVG/PNG.
+  let placaEstilo = placaEstiloEnviado;
   // ---- idioma elegido por quien llenó la ficha (ES/EN/FR/PT) — se guarda junto con la ficha
   // para que los correos automáticos que lleguen después (código de acceso aquí mismo, y el
   // aviso de escaneo en avisar-escaneo.js) puedan enviarse en ese mismo idioma. Solo se aceptan
@@ -878,6 +882,7 @@ exports.handler = async (event) => {
       creadoActual = login.creado || null;
       activoActual = login.activo !== false;
       if (login.esNuevo) pinNuevo = login.pin;
+      if (!(placaEstilo && String(placaEstilo).trim()) && login.placaEstilo) placaEstilo = login.placaEstilo;
       // se envía en cada guardado (ficha nueva o actualización), no solo cuando el PIN es nuevo,
       // para que los contactos de emergencia siempre tengan a la mano el folio y el PIN vigentes
       // (el código QR no se envía por correo — solo se muestra en pantalla)
