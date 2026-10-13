@@ -253,6 +253,9 @@ async function borrarFichaCompleta(s3, carpeta, folio, datosPublicos) {
 
   // Código QR
   clavesABorrar.push({ bucket: BUCKET_QR, key: `${carpeta}/${folio}.svg` });
+  // Archivos de la placa para láser (SVG y PNG de grabado) — antes no se borraban (2026-10-13)
+  clavesABorrar.push({ bucket: BUCKET_QR, key: `${carpeta}/placas-laser/${folio}.svg` });
+  clavesABorrar.push({ bucket: BUCKET_QR, key: `${carpeta}/placas-laser/${folio}.png` });
 
   // Registro de acceso (login/PIN) — ubicación nueva y la antigua (legacy)
   clavesABorrar.push({ bucket: BUCKET_RESUMEN, key: `${carpeta}/login/${folio}.json` });
