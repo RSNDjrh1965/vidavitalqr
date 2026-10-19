@@ -82,12 +82,13 @@ const IVA_RATE = 0.13;
 const MAX_ITEMS_POR_PEDIDO = 20; // límite defensivo, muy por encima de lo que ofrece la página
 
 // ---- costo de envío: cargo único de $8.50 cuando el carrito incluye al menos un producto
-// físico, cubre hasta 5 productos físicos por dirección (van juntos en el mismo paquete) — nunca
-// se cobra un envío aparte por cada producto físico agregado. Debe coincidir siempre con
+// físico, cubre hasta 5 productos físicos por dirección (van juntos en el mismo paquete); del 6.º en adelante se suma
+// otro cargo por cada grupo de hasta 5 — nunca se cobra un envío aparte por cada producto físico. Debe coincidir siempre con
 // SHIPPING_COST/ITEMS_FISICOS de index.html — si se cambia un lado, hay que cambiar el otro. Se
 // recalcula aquí siempre desde cero, nunca se confía en ningún monto de envío que mande el
 // navegador. ----
 const SHIPPING_COST = 8.50;
+const ENVIO_MAX_PRODUCTOS = 5; // cada paquete de hasta 5 productos físicos paga un cargo de SHIPPING_COST (igual que index.html)
 const ITEMS_FISICOS = ['plate_personal', 'plate_mascota', 'plate_objeto', 'bracelet', 'chain', 'idcard'];
 
 // ---- estilos válidos de "Placa con código QR — Personal" (numerados 1-4 en el landing, ver
@@ -182,7 +183,11 @@ exports.handler = async (event) => {
 
   // ---- costo de envío: se agrega una sola vez si el pedido incluye algún producto físico,
   // nunca por separado por cada uno (cubre hasta 5 productos físicos por dirección) ----
-  const incluyeFisico = items.some((it) => ITEMS_FISICOS.indexOf(it.itemId) !== -1);
+  const cantidadFisicos = items.filter((it) => ITEMS_FISICOS.indexOf(it.itemId) !== -1).length;
+  const incluyeFisico = cantidadFisicos > 0;
+  // ---- 2026-10-19: un cargo de envío por cada grupo de hasta 5 productos físicos (1-5 => 1 cargo,
+  // 6-10 => 2 cargos, ...). Se recalcula aquí siempre; nunca se acepta un monto del navegador. ----
+  const paquetesEnvio = incluyeFisico ? Math.ceil(cantidadFisicos / ENVIO_MAX_PRODUCTOS) : 0;
   // ---- 2026-10-02: "retiro en persona" — a pedido de James. El mismo modal de "Dirección de
   // envío" de index.html, cuando el cliente marca que va a retirar en persona, manda esta
   // bandera aquí también (además de guardarla en guardar-envio.js) para que no se le cobre el
@@ -190,7 +195,7 @@ exports.handler = async (event) => {
   // solo un sí/no entre los dos precios de envío ya fijos de este archivo (0 u 8.50), igual de
   // confiable que cualquier otro identificador de producto que ya se valida aquí mismo. ----
   const retiroPersona = data.retiroPersona === true;
-  const envio = (incluyeFisico && !retiroPersona) ? SHIPPING_COST : 0;
+  const envio = (incluyeFisico && !retiroPersona) ? SHIPPING_COST * paquetesEnvio : 0;
 
   const subtotalProductos = items.reduce((sum, it) => sum + it.price, 0);
   // ---- 2026-10-09: el cálculo se hace en CENTAVOS ENTEROS (igual que index.html), para que el total que
