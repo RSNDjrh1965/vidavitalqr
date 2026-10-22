@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pedido de tarjetas para empresas — VidaVitalQR</title>
+<meta name="robots" content="noindex">
+<style>
+  :root{ --ink:#12282B; --ink-soft:#2C4247; --paper:#F7F4EE; --card:#FFFFFF; --teal:#1F4448; --sage:#8FAFA6; --line:#DAD3C4; --muted:#6C7A76; --accent:#C1552F; --ok:#2E7D6B; --err:#B3261E; }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--paper);color:var(--ink);font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;line-height:1.5}
+  header{background:var(--teal);color:#F7F4EE;padding:14px 20px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+  header .marca{font-family:Georgia,"Times New Roman",serif;font-weight:700;font-size:1.25rem}
+  header .marca i{font-style:normal;color:var(--sage)}
+  header a{color:#F7F4EE;font-size:.9rem}
+  main{max-width:820px;margin:0 auto;padding:28px 16px 60px}
+  h1{font-family:Georgia,"Times New Roman",serif;font-size:1.7rem;margin:0 0 6px}
+  .lead{color:var(--ink-soft);margin:0 0 20px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:22px 20px;box-shadow:0 16px 38px -26px rgba(18,40,43,.35);margin-bottom:18px}
+  .card h2{font-size:1.05rem;margin:0 0 12px}
+  label{display:block;font-weight:600;font-size:.9rem;margin:14px 0 4px}
+  label small{font-weight:400;color:var(--muted)}
+  input[type=text],input[type=email],input[type=tel],input[type=number]{width:100%;padding:11px 12px;border:1px solid var(--line);border-radius:10px;font-size:1rem;background:#fff;color:var(--ink)}
+  input:focus{outline:2px solid var(--sage);border-color:var(--sage)}
+  .fila{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  @media (max-width:640px){ .fila{grid-template-columns:1fr} }
+  .tramos{width:100%;border-collapse:collapse;font-size:.92rem}
+  .tramos td{padding:7px 4px;border-bottom:1px solid var(--line)}
+  .tramos td:last-child{text-align:right;font-family:ui-monospace,Menlo,monospace}
+  .tramos tr.activo{background:#EAF2EF;font-weight:700}
+  .logo-box{display:flex;gap:14px;align-items:center;flex-wrap:wrap}
+  .logo-prev{width:130px;height:86px;border:1.5px dashed var(--line);border-radius:10px;background:#fff;display:flex;align-items:center;justify-content:center;overflow:hidden;color:var(--muted);font-size:.78rem;text-align:center}
+  .logo-prev img{max-width:100%;max-height:100%;object-fit:contain}
+  .chk{display:flex;gap:10px;align-items:flex-start;margin-top:16px;font-size:.92rem}
+  .chk input{margin-top:4px;width:18px;height:18px;flex:none}
+  .resumen .linea{display:flex;justify-content:space-between;padding:6px 0;font-size:.95rem}
+  .resumen .total{border-top:2px solid var(--ink);margin-top:6px;padding-top:10px;font-weight:700;font-size:1.15rem}
+  .resumen .mono{font-family:ui-monospace,Menlo,monospace}
+  button.pagar{width:100%;margin-top:16px;padding:14px;border-radius:100px;border:0;background:var(--teal);color:#fff;font-weight:700;font-size:1rem;cursor:pointer}
+  button.pagar:disabled{opacity:.55;cursor:not-allowed}
+  .msg{margin-top:12px;padding:10px 12px;border-radius:10px;font-size:.92rem;display:none}
+  .msg.err{display:block;background:#FDECEA;color:var(--err);border:1px solid #F5C6C2}
+  .banner{border-radius:12px;padding:14px 16px;margin-bottom:18px;font-size:.95rem}
+  .banner.ok{background:#E6F4EF;border:1px solid #BFE0D5;color:#14513F}
+  .banner.cancel{background:#FFF4E5;border:1px solid #F3D9AE;color:#6B4A00}
+  ol.pasos{margin:0;padding-left:20px;color:var(--ink-soft);font-size:.92rem}
+  ol.pasos li{margin:4px 0}
+  .nota{color:var(--muted);font-size:.82rem;margin-top:10px}
+</style>
+</head>
+<body>
+<header>
+  <div class="marca">Vida<i>Vital</i>QR</div>
+  <a href="/">&larr; Volver a la página principal</a>
+</header>
+<main>
+  <h1>Identificador QR para empresas</h1>
+  <p class="lead">Tarjetas de identificación para sus colaboradores, con el logo de su empresa, foto, nombre, cargo y código QR de emergencia. Haga su pedido aquí y pague de forma segura en línea con ONVO Pay.</p>
+
+  <div id="bannerPago"></div>
+
+  <div class="card">
+    <h2>Cómo funciona</h2>
+    <ol class="pasos">
+      <li>Complete los datos de su empresa, suba el logo y elija la cantidad de tarjetas.</li>
+      <li>Pague en línea (ONVO Pay). Al confirmarse el pago, recibe por correo un enlace para cada colaborador.</li>
+      <li>Cada colaborador llena su propia ficha desde su celular (con foto y PIN personal). La empresa no ve sus datos médicos ni su PIN.</li>
+      <li>Cuando las fichas estén completas, coordinamos con usted la entrega de las tarjetas impresas.</li>
+    </ol>
+    <p class="nota">Vigencia de 12 meses desde el pago. La renovación la realiza la empresa con un solo pago por todo el grupo.</p>
+  </div>
+
+  <form id="frm" class="card" novalidate>
+    <h2>Datos del pedido</h2>
+    <label for="nombre">Nombre de la empresa</label>
+    <input type="text" id="nombre" maxlength="80" autocomplete="organization" required>
+    <div class="fila">
+      <div>
+        <label for="correo">Correo de la empresa <small>(aquí recibirá los enlaces)</small></label>
+        <input type="email" id="correo" autocomplete="email" required>
+      </div>
+      <div>
+        <label for="telefono">Teléfono <small>(opcional)</small></label>
+        <input type="tel" id="telefono" maxlength="30" autocomplete="tel">
+      </div>
+    </div>
+    <label for="cantidad">Cantidad de tarjetas <small>(una por colaborador, máximo 500)</small></label>
+    <input type="number" id="cantidad" min="1" max="500" step="1" value="10" inputmode="numeric" required>
+
+    <label>Logo de la empresa <small>(PNG, JPG o SVG; fondo claro o transparente)</small></label>
+    <div class="logo-box">
+      <div class="logo-prev" id="logoPrev">Sin logo</div>
+      <input type="file" id="logoFile" accept="image/png,image/jpeg,image/svg+xml">
+    </div>
+    <div class="chk">
+      <input type="checkbox" id="autoriza">
+      <label for="autoriza" style="margin:0;font-weight:400">Confirmo que mi empresa autoriza el uso de su logo en las tarjetas de identificación de sus colaboradores.</label>
+    </div>
+    <div class="msg" id="msg"></div>
+  </form>
+
+  <div class="card">
+    <h2>Precio por tarjeta</h2>
+    <table class="tramos" id="tabla">
+      <tr data-min="1" data-max="10"><td>1 a 10 tarjetas</td><td>$14</td></tr>
+      <tr data-min="11" data-max="50"><td>11 a 50 tarjetas</td><td>$13</td></tr>
+      <tr data-min="51" data-max="100"><td>51 a 100 tarjetas</td><td>$12</td></tr>
+      <tr data-min="101" data-max="500"><td>Más de 100 tarjetas</td><td>$11</td></tr>
+    </table>
+    <p class="nota">El precio del tramo aplica a todas las tarjetas del pedido. Para más de 500 tarjetas escríbanos por WhatsApp al 6093-3090.</p>
+  </div>
+
+  <div class="card resumen">
+    <h2>Resumen</h2>
+    <div class="linea"><span id="rCant">10 tarjetas × $14.00</span><span class="mono" id="rSub">$140.00</span></div>
+    <div class="linea"><span>IVA (13%)</span><span class="mono" id="rIva">$18.20</span></div>
+    <div class="linea total"><span>Total a pagar</span><span class="mono" id="rTot">$158.20</span></div>
+    <button type="button" class="pagar" id="btnPagar">Pagar con ONVO Pay</button>
+    <p class="nota">Será redirigido a la página segura de ONVO Pay para completar el pago (tarjeta o SINPE Móvil). Todos los pagos se procesan únicamente por ONVO Pay.</p>
+  </div>
+</main>
+
+<script>
+(function(){
+  var $ = function(id){ return document.getElementById(id); };
+  var logoDataUrl = '';
+  var enviando = false;
+
+  function precioUnit(n){ return n <= 10 ? 14 : (n <= 50 ? 13 : (n <= 100 ? 12 : 11)); }
+  function usd(c){ return '$' + (c/100).toFixed(2); }
+  function recalcular(){
+    var n = parseInt($('cantidad').value, 10);
+    var ok = Number.isInteger(n) && n >= 1 && n <= 500;
+    var filas = document.querySelectorAll('#tabla tr');
+    for (var i = 0; i < filas.length; i++) {
+      var f = filas[i], mn = +f.getAttribute('data-min'), mx = +f.getAttribute('data-max');
+      f.className = (ok && n >= mn && n <= mx) ? 'activo' : '';
+    }
+    if (!ok) { $('rCant').textContent = '—'; $('rSub').textContent = '—'; $('rIva').textContent = '—'; $('rTot').textContent = '—'; return; }
+    var u = precioUnit(n), sub = u * n * 100, iva = Math.round(sub * 0.13);
+    $('rCant').textContent = n + (n === 1 ? ' tarjeta' : ' tarjetas') + ' × $' + u.toFixed(2);
+    $('rSub').textContent = usd(sub); $('rIva').textContent = usd(iva); $('rTot').textContent = usd(sub + iva);
+  }
+  $('cantidad').addEventListener('input', recalcular);
+  ['nombre','correo','telefono','cantidad','autoriza','logoFile'].forEach(function(id){ $(id).addEventListener('input', function(){ var m = $('msg'); m.textContent = ''; m.className = 'msg'; }); });
+  recalcular();
+
+  function mostrarError(t){ var m = $('msg'); m.textContent = t; m.className = 'msg err'; m.scrollIntoView({behavior:'smooth', block:'center'}); }
+  function limpiarError(){ var m = $('msg'); m.textContent = ''; m.className = 'msg'; }
+
+  // ---- logo: PNG/JPG se reducen en el navegador (máx. 800 px de lado) para que pesen poco; SVG se envía tal cual ----
+  var MAX_BYTES = 380 * 1024;
+  function bytesDeDataUrl(d){ return Math.floor((d.length - d.indexOf(',') - 1) * 3 / 4); }
+  $('logoFile').addEventListener('change', function(){
+    limpiarError(); logoDataUrl = '';
+    var file = this.files && this.files[0];
+    if (!file) { $('logoPrev').textContent = 'Sin logo'; return; }
+    var tipo = file.type;
+    if (['image/png','image/jpeg','image/svg+xml'].indexOf(tipo) === -1) { mostrarError('El logo debe ser un archivo PNG, JPG o SVG.'); this.value = ''; $('logoPrev').textContent = 'Sin logo'; return; }
+    var rd = new FileReader();
+    rd.onload = function(){
+      var original = rd.result;
+      if (tipo === 'image/svg+xml') {
+        if (bytesDeDataUrl(original) > MAX_BYTES) { mostrarError('El logo pesa demasiado (máximo 380 KB). Use un PNG o JPG.'); return; }
+        logoDataUrl = original; ponerPrev(original); return;
+      }
+      var im = new Image();
+      im.onload = function(){
+        var lado = 800;
+        for (var intento = 0; intento < 4; intento++) {
+          var esc = Math.min(1, lado / Math.max(im.naturalWidth, im.naturalHeight));
+          var w = Math.max(1, Math.round(im.naturalWidth * esc)), h = Math.max(1, Math.round(im.naturalHeight * esc));
+          var c = document.createElement('canvas'); c.width = w; c.height = h;
+          var x = c.getContext('2d');
+          var out = (tipo === 'image/png') ? (function(){ x.drawImage(im, 0, 0, w, h); return c.toDataURL('image/png'); })()
+                                          : (function(){ x.fillStyle = '#fff'; x.fillRect(0,0,w,h); x.drawImage(im, 0, 0, w, h); return c.toDataURL('image/jpeg', 0.9); })();
+          if (bytesDeDataUrl(out) > MAX_BYTES && tipo === 'image/png') {
+            // un PNG muy pesado: se prueba como JPG sobre fondo blanco
+            x.fillStyle = '#fff'; x.fillRect(0,0,w,h); x.drawImage(im, 0, 0, w, h);
+            out = c.toDataURL('image/jpeg', 0.9);
+          }
+          if (bytesDeDataUrl(out) <= MAX_BYTES) { logoDataUrl = out; ponerPrev(out); return; }
+          lado = Math.round(lado * 0.7);
+        }
+        mostrarError('No se pudo reducir el logo lo suficiente. Use una imagen más pequeña.');
+      };
+      im.onerror = function(){ mostrarError('No se pudo leer la imagen del logo.'); };
+      im.src = original;
+    };
+    rd.readAsDataURL(file);
+  });
+  function ponerPrev(url){ var p = $('logoPrev'); p.textContent = ''; var i = document.createElement('img'); i.src = url; i.alt = 'Logo'; p.appendChild(i); }
+
+  $('btnPagar').addEventListener('click', function(){
+    if (enviando) return;
+    limpiarError();
+    var nombre = $('nombre').value.trim(), correo = $('correo').value.trim(), tel = $('telefono').value.trim();
+    var n = parseInt($('cantidad').value, 10);
+    if (nombre.length < 2) { mostrarError('Escriba el nombre de la empresa.'); $('nombre').focus(); return; }
+    if (!/^[^\s@<>"']+@[^\s@<>"']+\.[^\s@<>"']{2,}$/.test(correo)) { mostrarError('Escriba un correo válido para la empresa.'); $('correo').focus(); return; }
+    if (!Number.isInteger(n) || n < 1) { mostrarError('Indique cuántas tarjetas necesita (mínimo 1).'); $('cantidad').focus(); return; }
+    if (n > 500) { mostrarError('Para más de 500 tarjetas escríbanos por WhatsApp al 6093-3090.'); return; }
+    if (!logoDataUrl) { mostrarError('Suba el logo de la empresa.'); return; }
+    if (!$('autoriza').checked) { mostrarError('Marque la casilla que confirma que su empresa autoriza el uso del logo.'); return; }
+    enviando = true; var b = $('btnPagar'); b.disabled = true; b.textContent = 'Preparando el pago…';
+    fetch('/.netlify/functions/pedido-empresa', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ nombre: nombre, correo: correo, telefono: tel, cantidad: n, logoDataUrl: logoDataUrl, autorizaLogo: true })
+    }).then(function(r){ return r.json().then(function(j){ return { ok: r.ok, j: j }; }); })
+      .then(function(res){
+        if (!res.ok || !res.j || !res.j.url) throw new Error((res.j && res.j.error) || 'No se pudo crear el pago.');
+        b.textContent = 'Redirigiendo a ONVO Pay…';
+        window.location.href = res.j.url;
+      })
+      .catch(function(e){ mostrarError(e && e.message ? e.message : 'No se pudo crear el pago. Intente de nuevo.'); enviando = false; b.disabled = false; b.textContent = 'Pagar con ONVO Pay'; });
+  });
+
+  // ---- regreso desde ONVO Pay ----
+  var q = new URLSearchParams(location.search), pago = q.get('pago'), bn = $('bannerPago');
+  if (pago === 'exitoso') {
+    bn.className = 'banner ok';
+    bn.innerHTML = '<b>¡Pago recibido!</b> En unos minutos recibirá en el correo de su empresa los enlaces para sus colaboradores. Si no lo ve, revise la carpeta de correo no deseado o escríbanos por WhatsApp al 6093-3090.';
+    document.getElementById('frm').style.display = 'none';
+  } else if (pago === 'cancelado') {
+    bn.className = 'banner cancel';
+    bn.textContent = 'El pago fue cancelado y no se realizó ningún cobro. Puede volver a intentarlo cuando quiera.';
+  }
+})();
+</script>
+</body>
+</html>

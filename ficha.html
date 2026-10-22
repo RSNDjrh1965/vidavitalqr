@@ -1899,17 +1899,17 @@ async function generateTarjetaBlob(folio, fotoBase64){
          confiable. rotate(90deg) hace que el INICIO del texto (la primera letra) quede arriba y
          el final abajo, leyéndose de arriba hacia abajo — se usa el mismo valor en "Escanear" y
          en "vidavitalqr.com" para que ambos giren en el mismo sentido, como se pidió. */
-      .t-card .t-side-label{position:relative;width:72px;height:300px;}
-      .t-card .t-side-label.t-scan{background:#F0DACD;border-radius:34px;height:260px;}
+      .t-card .t-side-label{position:relative;width:76px;height:360px;}
+      .t-card .t-side-label.t-scan{background:#F0DACD;border-radius:38px;height:360px;}
       .t-card .t-side-label .t-vtext{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%) rotate(90deg);white-space:nowrap;font-family:Helvetica,Arial,sans-serif;font-weight:700;letter-spacing:2.2px;text-transform:uppercase;}
-      .t-card .t-side-label.t-scan .t-vtext{color:#C1552F;font-size:20.5px;top:40%;}
-      .t-card .t-side-label.t-web .t-vtext{color:#1F4448;font-size:19.5px;}
+      .t-card .t-side-label.t-scan .t-vtext{color:#C1552F;font-size:34px;letter-spacing:3px;top:42%;}
+      .t-card .t-side-label.t-web .t-vtext{color:#1F4448;font-size:29px;letter-spacing:2px;}
       /* flecha hecha con bordes CSS (sin SVG): html2canvas no dibujaba de forma confiable el
          icono SVG dentro de esta tarjeta, así que se reemplazó por un triángulo simple de CSS,
          que sí se rasteriza siempre. Apunta hacia la derecha, hacia el código QR. */
-      .t-card .t-side-label.t-scan .t-arrow{position:absolute;left:50%;bottom:34px;transform:translateX(-50%);width:0;height:0;border-top:11px solid transparent;border-bottom:11px solid transparent;border-left:18px solid #C1552F;}
+      .t-card .t-side-label.t-scan .t-arrow{position:absolute;left:50%;bottom:30px;transform:translateX(-50%);width:0;height:0;border-top:14px solid transparent;border-bottom:14px solid transparent;border-left:22px solid #C1552F;}
       .t-card .t-qr-frame{width:360px;height:360px;background:#FFFFFF;border-radius:18px;border:1.5px solid #DAD3C4;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
-      .t-card .t-qr-id{margin-top:22px;font-family:'Courier New',Courier,monospace;font-size:25px;font-weight:700;letter-spacing:1px;color:#12282B;background:#EFEAE0;padding:9px 24px;border-radius:9px;}
+      .t-card .t-qr-id{margin-top:22px;font-family:'Courier New',Courier,monospace;font-size:33px;font-weight:700;letter-spacing:1px;color:#12282B;background:#EFEAE0;padding:9px 0;width:360px;text-align:center;white-space:nowrap;border-radius:9px;}
       .t-card .t-footer-strip{height:9px;background:linear-gradient(90deg,#1F4448,#8FAFA6,#C1552F);}
     </style>
     <div class="t-card" id="tarjetaCardEl">
@@ -2040,9 +2040,9 @@ async function generateTarjetaEmpresa(folio, fotoBase64, info, cargo, nombreComp
   for (let ry = 0; ry < n; ry++) for (let rx = 0; rx < n; rx++) if (qr.isDark(ry, rx)) qrPath += `M${rx} ${ry}h1v1h-1z`;
 
   const nombre = String(nombreCompleto || '').trim();
-  const nombreSize = nombre.length > 30 ? 22 : (nombre.length > 22 ? 26 : 30);
+  const nombreSize = nombre.length > 30 ? 22 : (nombre.length > 22 ? 26 : 32);
   const cargoTxt = String(cargo || '').trim();
-  const cargoSize = cargoTxt.length > 30 ? 16 : (cargoTxt.length > 22 ? 18 : 20);
+  const cargoSize = cargoTxt.length > 30 ? 20 : (cargoTxt.length > 22 ? 23 : 26);
   const logoHtml = info.logo
     ? `<img src="${info.logo}" style="width:214px;height:300px;object-fit:contain;display:block">`
     : `<div style="font:700 26px Georgia,serif;color:#0a4949;text-align:center;padding:10px">${escHtml(info.nombre)}</div>`;
@@ -2059,14 +2059,14 @@ async function generateTarjetaEmpresa(folio, fotoBase64, info, cargo, nombreComp
     <style>
       .e-card{width:856px;height:540px;position:relative;display:flex;overflow:hidden;background:linear-gradient(180deg,#fcfbf8,#f3ede2);color:#12292d;font-family:'Source Sans Pro',Arial,Helvetica,sans-serif;box-sizing:border-box}
       .e-card *{box-sizing:border-box}
-      .e-side{width:290px;height:540px;background:linear-gradient(180deg,#0a4949,#246666);color:#fff;padding:30px 30px 32px;display:flex;flex-direction:column;align-items:center;gap:14px;text-align:center;flex:none}
+      .e-side{width:290px;height:540px;background:linear-gradient(180deg,#0a4949,#246666);color:#fff;padding:26px 24px 26px;display:flex;flex-direction:column;align-items:center;gap:12px;text-align:center;flex:none}
       .e-logo{width:230px;height:316px;background:#fff;border-radius:18px;border:2.5px dashed #b9b09c;display:flex;align-items:center;justify-content:center;flex:none;overflow:hidden}
-      .e-web{color:#ffd9c6;font-size:15px;font-weight:600;letter-spacing:.08em;text-transform:uppercase}
-      .e-tel{font-family:'Courier New',Courier,monospace;font-weight:700;font-size:19px;letter-spacing:.04em;color:#fff;margin-top:-6px}
+      .e-web{color:#ffd9c6;font-size:21px;font-weight:700;letter-spacing:.05em;text-transform:uppercase}
+      .e-tel{font-family:'Courier New',Courier,monospace;font-weight:700;font-size:23px;letter-spacing:.02em;color:#fff;margin-top:-2px;white-space:nowrap}
       .e-rule{width:70%;height:1px;background:rgba(255,255,255,.28);margin-top:auto}
-      .e-brand{font-family:Georgia,'Times New Roman',serif;font-weight:700;font-size:25px}
+      .e-brand{font-family:Georgia,'Times New Roman',serif;font-weight:700;font-size:30px}
       .e-brand i{font-style:normal;color:#9fd0c9}
-      .e-sub{font-weight:600;font-size:11px;letter-spacing:.14em;color:#bfe0dc}
+      .e-sub{font-weight:700;font-size:13px;letter-spacing:.05em;color:#d6efec;white-space:nowrap}
       .e-mid{width:308px;height:540px;padding:26px 14px;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;gap:10px;flex:none}
       .e-photo{width:229px;height:229px;border-radius:22px;overflow:hidden;border:2.5px dashed #cdbfa3;background:#fff;flex:none}
       .e-name{font-family:Georgia,'Times New Roman',serif;font-weight:700;line-height:1.1;color:#0a4949;width:290px;white-space:nowrap}
@@ -2074,8 +2074,8 @@ async function generateTarjetaEmpresa(folio, fotoBase64, info, cargo, nombreComp
       .e-qr{width:258px;height:540px;padding:113px 32px 22px 0;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;gap:12px;flex:none}
       .e-qrbox{width:226px;height:226px;padding:12px;border-radius:16px;background:#fff;border:1.5px solid #e4ddcc;flex:none}
       .e-qrbox svg{width:100%;height:100%;display:block}
-      .e-esc{color:#d3552f;font-weight:700;letter-spacing:.2em;font-size:14px}
-      .e-chip{background:#e2dfd3;border-radius:12px;padding:7px 12px;font-family:'Courier New',Courier,monospace;font-weight:700;font-size:15px;letter-spacing:.04em;white-space:nowrap}
+      .e-esc{color:#d3552f;font-weight:700;letter-spacing:.1em;font-size:27px;width:226px;text-align:center;white-space:nowrap}
+      .e-chip{background:#e2dfd3;border-radius:12px;padding:8px 0;width:226px;text-align:center;font-family:'Courier New',Courier,monospace;font-weight:700;font-size:21px;letter-spacing:.02em;white-space:nowrap}
       .e-bar{position:absolute;left:0;right:0;bottom:0;height:8px;background:linear-gradient(90deg,#0a4949,#d3552f)}
     </style>
     <div class="e-card" id="tarjetaEmpresaEl">
@@ -2103,7 +2103,7 @@ async function generateTarjetaEmpresa(folio, fotoBase64, info, cargo, nombreComp
     // se espera a que carguen las imágenes (logo y foto) antes de capturar
     // nombre y cargo en UNA línea: se achica la letra hasta que quepan (mínimo 18 px; si aun así no
     // caben, se permite partir en dos líneas)
-    [['.e-name', 30, 18], ['.e-role', 20, 14]].forEach(([sel, max, min]) => {
+    [['.e-name', 32, 18], ['.e-role', 26, 16]].forEach(([sel, max, min]) => {
       const el = holder.querySelector(sel);
       if (!el) return;
       let size = max;
@@ -2121,8 +2121,71 @@ async function generateTarjetaEmpresa(folio, fotoBase64, info, cargo, nombreComp
   }
 }
 
+// ---- 2026-10-22: imagen VERTICAL para usar como pantalla de bloqueo del celular (1170 x 2532 px). La tarjeta
+// de empresa es horizontal (para imprimir); esta es otra composición, pensada para el celular: arriba queda
+// libre el espacio de la hora y la fecha, y debajo van logo, foto, nombre, cargo y el código QR grande. ----
+async function generateBloqueoEmpresa(folio, fotoBase64, info, cargo, nombreCompleto){
+  const qr = qrcode(0, 'L');
+  qr.addData('https://vidavitalqr.com/v/' + encodeURIComponent(folio));
+  qr.make();
+  const n = qr.getModuleCount();
+  let qrPath = '';
+  for (let ry = 0; ry < n; ry++) for (let rx = 0; rx < n; rx++) if (qr.isDark(ry, rx)) qrPath += `M${rx} ${ry}h1v1h-1z`;
+  const nombre = String(nombreCompleto || '').trim();
+  const cargoTxt = String(cargo || '').trim();
+  const logoHtml = info && info.logo
+    ? `<img src="${info.logo}" style="max-width:300px;max-height:96px;object-fit:contain;display:block">`
+    : `<div style="font:700 26px Georgia,serif;color:#0a4949;text-align:center">${escHtml((info && info.nombre) || '')}</div>`;
+  const fotoCuadrada = await recortarFotoCuadrada(fotoBase64, 440);
+  const holder = document.createElement('div');
+  holder.style.position = 'fixed'; holder.style.left = '-9999px'; holder.style.top = '0';
+  holder.innerHTML = `
+    <style>
+      .b-pant{width:585px;height:1266px;position:relative;background:linear-gradient(180deg,#1b4044,#12282b);font-family:'Source Sans Pro',Arial,Helvetica,sans-serif;box-sizing:border-box;overflow:hidden}
+      .b-pant *{box-sizing:border-box}
+      .b-card{position:absolute;left:42px;top:390px;width:501px;height:690px;border-radius:26px;background:linear-gradient(180deg,#ffffff,#f4efe5);overflow:hidden;display:flex;flex-direction:column;align-items:center;color:#12292d}
+      .b-head{width:100%;height:112px;background:linear-gradient(120deg,#0a4949,#246666);display:flex;align-items:center;justify-content:center;flex:none}
+      .b-logo{background:#fff;border-radius:12px;padding:8px 14px;display:flex;align-items:center;justify-content:center;min-height:72px;max-width:420px}
+      .b-photo{width:176px;height:176px;border-radius:20px;overflow:hidden;border:2.5px dashed #cdbfa3;background:#fff;margin-top:16px;flex:none}
+      .b-name{font-family:Georgia,'Times New Roman',serif;font-weight:700;color:#0a4949;font-size:27px;line-height:1.1;margin-top:10px;width:460px;text-align:center;white-space:nowrap}
+      .b-role{color:#4b5f62;font-size:20px;margin-top:2px;width:460px;text-align:center;white-space:nowrap}
+      .b-qr{width:232px;height:232px;padding:10px;border-radius:14px;background:#fff;border:1.5px solid #e4ddcc;margin-top:10px;flex:none}
+      .b-qr svg{width:100%;height:100%;display:block}
+      .b-esc{color:#d3552f;font-weight:700;letter-spacing:.12em;font-size:19px;margin-top:6px}
+      .b-chip{background:#e2dfd3;border-radius:10px;padding:5px 0;width:232px;text-align:center;font-family:'Courier New',Courier,monospace;font-weight:700;font-size:20px;margin-top:5px}
+      .b-bar{position:absolute;left:0;right:0;bottom:0;height:7px;background:linear-gradient(90deg,#0a4949,#d3552f)}
+    </style>
+    <div class="b-pant" id="bloqueoEmpresaEl">
+      <div class="b-card">
+        <div class="b-head"><div class="b-logo">${logoHtml}</div></div>
+        <div class="b-photo">${fotoCuadrada ? `<img src="${fotoCuadrada}" style="width:176px;height:176px;display:block">` : ''}</div>
+        <div class="b-name">${escHtml(nombre)}</div>
+        <div class="b-role">${escHtml(cargoTxt)}</div>
+        <div class="b-qr"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${n} ${n}" shape-rendering="crispEdges"><path fill="#004344" d="${qrPath}"/></svg></div>
+        <div class="b-esc">▲ ESCANEAR · vidavitalqr.com</div>
+        <div class="b-chip">${escHtml(folio)}</div>
+        <div class="b-bar"></div>
+      </div>
+    </div>`;
+  document.body.appendChild(holder);
+  try{
+    [['.b-name', 27, 16], ['.b-role', 20, 13]].forEach(([sel, max, min]) => {
+      const el = holder.querySelector(sel); if (!el) return;
+      let size = max; el.style.fontSize = size + 'px';
+      while (el.scrollWidth > el.clientWidth + 1 && size > min) { size -= 1; el.style.fontSize = size + 'px'; }
+    });
+    await Promise.all(Array.from(holder.querySelectorAll('img')).map(im => im.complete ? Promise.resolve() : new Promise(r => { im.onload = r; im.onerror = r; })));
+    await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+    const canvas = await html2canvas(holder.querySelector('#bloqueoEmpresaEl'), { scale: 2, backgroundColor: '#12282b', useCORS: true });
+    if (!canvas || !canvas.width || !canvas.height) throw new Error('No se pudo generar la imagen de pantalla de bloqueo.');
+    return canvas.toDataURL('image/png');
+  } finally {
+    document.body.removeChild(holder);
+  }
+}
+
 // ---- pantalla final de una ficha de empresa recién creada (en vez del pago, que aquí no aplica) ----
-function mostrarEmpresaExitosa(folio, tarjetaDataUrl){
+function mostrarEmpresaExitosa(folio, tarjetaDataUrl, bloqueoDataUrl){
   const overlay = document.createElement('div');
   overlay.style.cssText = 'position:fixed;inset:0;background:rgba(18,40,43,0.72);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px;overflow:auto;';
   overlay.innerHTML = `
@@ -2132,7 +2195,17 @@ function mostrarEmpresaExitosa(folio, tarjetaDataUrl){
       ${tarjetaDataUrl ? `<img src="${tarjetaDataUrl}" alt="Vista de su tarjeta" style="width:100%;border-radius:10px;border:1px solid #DDD8CC;margin:8px 0">` : ''}
       <p style="margin:8px 0;color:#3a352b;">Su tarjeta ya fue generada y se imprimirá con los datos de su empresa. Guarde su PIN: es personal y su empresa no lo conoce.</p>
       <p style="margin:8px 0;color:#6b6558;font-size:0.9rem;">Folio: <b>${escHtml(folio)}</b></p>
-      <button type="button" id="empresaOkBtn" class="btn btn-primary" style="margin-top:10px">Listo</button>
+      ${bloqueoDataUrl ? `
+      <div style="margin-top:14px;padding-top:14px;border-top:1px solid #E6E0D2;text-align:left;font-size:0.88rem;color:#3a352b;">
+        <h4 style="margin:0 0 6px;text-align:center;">Úsela como pantalla de bloqueo</h4>
+        <p style="margin:0 0 8px;">Para tener su identificador siempre a la vista, descargue esta imagen vertical. <b>Al descargarla queda guardada en su celular lista para usarse como pantalla de bloqueo; para activarla siga los pasos de abajo</b> (el celular no permite cambiarla automáticamente).</p>
+        <img src="${bloqueoDataUrl}" alt="Imagen para pantalla de bloqueo" style="display:block;margin:0 auto 8px;width:170px;max-width:60%;border-radius:14px;border:1px solid #DDD8CC">
+        <a id="bloqueoEmpresaLnk" href="${bloqueoDataUrl}" download="identificador-${escHtml(folio)}-pantalla-de-bloqueo.png" style="display:block;text-align:center;border:1px solid #1F4448;border-radius:10px;padding:10px;font-weight:700;color:#1F4448;text-decoration:none;margin-bottom:8px;">Guardar la imagen en mi celular</a>
+        <p style="margin:6px 0 2px;"><b>iPhone:</b> mantenga presionada la imagen y elija "Añadir a Fotos"; abra Fotos, toque la imagen, Compartir y "Usar como fondo de pantalla" &rarr; "Pantalla de bloqueo". No la amplíe ni la recorte.</p>
+        <p style="margin:2px 0 6px;"><b>Android:</b> toque "Guardar la imagen", abra la Galería, abra la imagen, menú (&#8942;) &rarr; "Establecer como fondo de pantalla" &rarr; "Pantalla de bloqueo".</p>
+        <p style="margin:0;font-size:0.8rem;color:#6b6558;">Privacidad: con la pantalla bloqueada se verán su foto, su nombre, su cargo y su código QR. Úsela así solo si está de acuerdo; es para que cualquier persona pueda escanear el código en una emergencia.</p>
+      </div>` : ''}
+      <button type="button" id="empresaOkBtn" class="btn btn-primary" style="margin-top:14px">Listo</button>
     </div>`;
   document.body.appendChild(overlay);
   overlay.querySelector('#empresaOkBtn').addEventListener('click', () => { overlay.remove(); });
@@ -2638,7 +2711,9 @@ $('btnEmail').addEventListener('click', async () => {
       mostrarActualizacionExitosa();
     } else if (empresaFicha) {
       // ficha de empresa: ya está pagada por la empresa — no hay paso de pago
-      mostrarEmpresaExitosa(folio, tarjetaBase64);
+      let bloqueoEmpresa = '';
+      try { bloqueoEmpresa = await generateBloqueoEmpresa(folio, fotoBase64, empresaFicha, $('cargo').value, nombreCompleto); } catch (e) { console.warn('No se pudo generar la imagen de pantalla de bloqueo:', e); }
+      mostrarEmpresaExitosa(folio, tarjetaBase64, bloqueoEmpresa);
     } else if (!avisarOpenerYCerrar('persona', folio)) {
       goToPayment(folio);
     }
