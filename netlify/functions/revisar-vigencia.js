@@ -38,6 +38,7 @@
 // sin ningún aviso solo por haberse creado antes de que existiera el campo nuevo.
 
 const { S3Client, ListObjectsV2Command, GetObjectCommand, PutObjectCommand, DeleteObjectCommand } = require('@aws-sdk/client-s3');
+const { idEmpresaValido, escribirJson, claveFolio, claveTarjeta, claveFichaCopia, ARCHIVOS_FICHA_COPIA } = require('./lib/empresa');
 const { fechaVencimiento, finGracia, calcularEstado, diasEntre } = require('./lib/vigencia');
 const { marcarFilaComoEliminada } = require('./lib/xlsx-resumen');
 
@@ -231,7 +232,7 @@ async function enviarCorreo(apiKey, destinatario, { asunto, texto }) {
 // ---- borra por completo los datos de una ficha (llamado únicamente al llegar a "eliminada") ----
 // Nunca lanza si algún objeto individual ya no existe (borrado parcial de un intento anterior, o
 // una ficha que nunca llegó a tener foto/tarjeta) — solo registra el error y continúa con el resto.
-async function borrarFichaCompleta(s3, carpeta, folio, datosPublicos) {
+async function borrarFichaCompleta(s3, carpeta, folio, datosPublicos, empresaId) {
   const clavesABorrar = [];
 
   // JSON público (visor) — ubicación nueva y, por si acaso, la antigua (legacy, sin carpeta)
@@ -261,6 +262,14 @@ async function borrarFichaCompleta(s3, carpeta, folio, datosPublicos) {
   clavesABorrar.push({ bucket: BUCKET_RESUMEN, key: `${carpeta}/login/${folio}.json` });
   clavesABorrar.push({ bucket: BUCKET_RESUMEN, key: `login/${folio}.json` });
 
+  // ---- 2026-10-20: ficha de EMPRESA — también se borra la copia de su tarjeta (lleva la foto) en la
+  // carpeta de la empresa, y el folio queda marcado "eliminada" para que no se pueda volver a llenar ----
+  if (empresaId && idEmpresaValido(empresaId)) {
+    clavesABorrar.push({ bucket: BUCKET_RESUMEN, key: claveTarjeta(empresaId, folio) });
+    // copia ordenada de la ficha (PDF, datos, QR, foto) en la carpeta de la empresa
+    ARCHIVOS_FICHA_COPIA.forEach((a) => clavesABorrar.push({ bucket: BUCKET_RESUMEN, key: claveFichaCopia(empresaId, folio, a) }));
+  }
+
   for (const { bucket, key } of clavesABorrar) {
     try {
       await s3.send(new DeleteObjectCommand({ Bucket: bucket, Key: key }));
@@ -268,6 +277,14 @@ async function borrarFichaCompleta(s3, carpeta, folio, datosPublicos) {
       if (!esNoExiste(err)) {
         console.error('revisar-vigencia: no se pudo borrar', bucket, key, err);
       }
+    }
+  }
+
+  if (empresaId && idEmpresaValido(empresaId)) {
+    try {
+      await escribirJson(s3, BUCKET_RESUMEN, claveFolio(empresaId, folio), { folio, estado: 'eliminada', eliminadaEn: new Date().toISOString() });
+    } catch (err) {
+      console.error('revisar-vigencia: no se pudo marcar como eliminado el folio de empresa', empresaId, folio, err);
     }
   }
 }
@@ -283,6 +300,11 @@ async function procesarFicha(s3, apiKey, ahora, carpeta, key, contadores) {
   }
 
   const folio = registro.folio || folioDesdeClave(key);
+  // ---- 2026-10-20: las fichas de EMPRESA (registro.empresa) siguen EXACTAMENTE la misma cronología
+  // de vencimiento que las personales (avisos a 30 y 7 días, vencida, avisos de gracia y eliminación
+  // a los 2 meses) — decisión de James: "el aviso de vencimiento debe ser el mismo que tenemos".
+  // La única diferencia es que su "creado" es la fecha de pago del lote (la renovación es por
+  // empresa, ver admin-empresas.js) y que, al eliminarlas, también se limpia su carpeta de empresa. ----
   const creado = registro.creado;
   if (!creado) return; // ficha sin fecha de vigencia registrada (de antes de este cambio) — no se procesa
 
@@ -414,7 +436,7 @@ async function procesarFicha(s3, apiKey, ahora, carpeta, key, contadores) {
       if (!esNoExiste(err)) console.error('revisar-vigencia: no se pudo leer el JSON público antes de borrar', folio, err);
     }
 
-    await borrarFichaCompleta(s3, carpeta, folio, datosPublicos);
+    await borrarFichaCompleta(s3, carpeta, folio, datosPublicos, registro.empresa);
     try {
       await marcarFilaComoEliminada(s3, BUCKET_RESUMEN, `${carpeta}/${RESUMEN_KEY}`, folio, 'Eliminada');
     } catch (err) {

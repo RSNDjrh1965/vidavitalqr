@@ -18,13 +18,15 @@
 // (son reservados por el propio entorno de ejecución). Por eso aquí se usan nombres propios:
 // S3_ACCESS_KEY_ID, S3_SECRET_ACCESS_KEY, S3_REGION.
 
-const { S3Client, PutObjectCommand, GetObjectCommand } = require('@aws-sdk/client-s3');
+const { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand } = require('@aws-sdk/client-s3');
 const { buildQrSvg, buildQrSvgParaPlaca } = require('./lib/qr-svg');
 const { svgPlacaAPng } = require('./lib/png-placa');
 const { actualizarResumenXlsx } = require('./lib/xlsx-resumen');
 const { generarPin, hashPin, pinValido } = require('./lib/pin');
 const { fechaVencimiento } = require('./lib/vigencia');
 const { estaBloqueado, anotar, ipDe, folioSeguro } = require('./lib/limite');
+// ---- 2026-10-20: tarjetas para empresas (folios VVITALQRE#######) — ver lib/empresa.js ----
+const { esFolioEmpresa, leerJson, escribirJson, cargarFolioDeEmpresa, claveFolio, claveTarjeta, claveFichaCopia } = require('./lib/empresa');
 
 const DESTINATARIO = 'vidavitalqr@zohomail.com';
 const REMITENTE = 'VidaVitalQR <ficha@vidavitalqr.com>';
@@ -113,7 +115,7 @@ function carpetaTipo(tipo, folio) {
 // — nunca se cambia solo, para no dejar al usuario sin acceso. Si el registro es de una versión
 // anterior que solo guardaba el hash (sin el texto plano), se genera un PIN nuevo esta vez, para
 // que a partir de ahora también quede recuperable.
-async function cargarOCrearLogin(s3, folio, datosFormulario, carpeta, resetCreado, correoTitular, producto, placaEstilo, pinProvisto) {
+async function cargarOCrearLogin(s3, folio, datosFormulario, carpeta, resetCreado, correoTitular, producto, placaEstilo, pinProvisto, empresaCtx) {
   const key = `${carpeta}/login/${folio}.json`;
   const keyLegacy = `login/${folio}.json`;
   let registro = null;
@@ -180,13 +182,25 @@ async function cargarOCrearLogin(s3, folio, datosFormulario, carpeta, resetCread
   // activa solo porque el cliente está actualizando sus datos o renovando. Un registro guardado
   // ANTES de este cambio (sin el campo "activo" todavía) se trata como activo=true, para no
   // desactivar de golpe ninguna ficha que ya estaba funcionando y pagada.
-  const activoFinal = !registro ? false : (registro.activo === false ? false : true);
+  // ---- 2026-10-20: una ficha de EMPRESA nace ya activa (la empresa pagó el lote por adelantado
+  // y el folio ya estaba registrado), así que no pasa por el flujo de "pago pendiente". ----
+  const activoFinal = !registro ? (empresaCtx ? true : false) : (registro.activo === false ? false : true);
 
   // "creado" marca el inicio de la vigencia anual (12 meses). Se conserva tal cual en una
   // actualización normal de datos; solo se reinicia a "ahora" cuando el envío viene marcado
   // explícitamente como una renovación pagada (resetCreado === true) — así vuelve a contar
   // los 12 meses desde ese pago.
-  const creadoFinal = resetCreado ? new Date().toISOString() : ((registro && registro.creado) ? registro.creado : new Date().toISOString());
+  // ---- 2026-10-20: en una ficha de EMPRESA los 12 meses cuentan desde el día del pago del lote
+  // (empresaCtx.fechaPago), no desde que el trabajador llena su ficha; y la renovación se hace por
+  // empresa con un solo pago (admin-empresas.js, acción "renovar"), así que aquí un envío marcado
+  // como renovación NUNCA reinicia la fecha de una ficha de empresa. ----
+  const esDeEmpresa = !!((registro && registro.empresa) || empresaCtx);
+  let creadoFinal;
+  if (esDeEmpresa) {
+    creadoFinal = (registro && registro.creado) ? registro.creado : ((empresaCtx && empresaCtx.fechaPago) || new Date().toISOString());
+  } else {
+    creadoFinal = resetCreado ? new Date().toISOString() : ((registro && registro.creado) ? registro.creado : new Date().toISOString());
+  }
 
   // ---- 2026-09-25: "correoTitular" es el correo de la persona TITULAR de la ficha (quien la
   // llena/paga), separado a propósito de los correos de los contactos de emergencia
@@ -243,13 +257,31 @@ async function cargarOCrearLogin(s3, folio, datosFormulario, carpeta, resetCread
     vigencia: { avisos },
     actualizado: new Date().toISOString(),
   };
+  if (esDeEmpresa) {
+    nuevoRegistro.empresa = (registro && registro.empresa) || empresaCtx.id;
+    const consent = (registro && registro.consentimiento) || (empresaCtx && empresaCtx.consentimiento) || null;
+    if (consent) nuevoRegistro.consentimiento = consent;
+  }
 
-  await s3.send(new PutObjectCommand({
+  // Ficha de empresa NUEVA: la escritura es "solo si todavía no existe" (IfNoneMatch '*'), para que
+  // si dos envíos del mismo folio llegan al mismo tiempo, solo el primero cree el PIN.
+  const escrituraLogin = {
     Bucket: BUCKET_RESUMEN,
     Key: key,
     Body: Buffer.from(JSON.stringify(nuevoRegistro), 'utf-8'),
     ContentType: 'application/json',
-  }));
+  };
+  if (!registro && empresaCtx) escrituraLogin.IfNoneMatch = '*';
+  try {
+    await s3.send(new PutObjectCommand(escrituraLogin));
+  } catch (errPut) {
+    if (!registro && empresaCtx && (errPut.name === 'PreconditionFailed' || errPut.$metadata?.httpStatusCode === 412)) {
+      const errYa = new Error('Este folio ya fue activado por otro envío.');
+      errYa.folioEmpresaYaActivado = true;
+      throw errYa;
+    }
+    throw errPut;
+  }
 
   // "pin" siempre viene relleno (con el PIN actual, nuevo o ya existente) — se usa tanto para
   // mostrarlo en el modal (solo cuando esNuevo) como para registrarlo en la columna "PIN" de
@@ -585,7 +617,7 @@ async function enviarConfirmacionActualizacion(correoTitular, { folio, nombreCom
   }
 }
 
-async function subirABuckets(s3, region, { folio, filename, pdfBase64, fotoBase64, tarjetaBase64, placaEstilo, nombreCompleto, tipo, contactos, datosVisor, idioma, creado, activo }) {
+async function subirABuckets(s3, region, { folio, filename, pdfBase64, fotoBase64, tarjetaBase64, placaEstilo, nombreCompleto, tipo, contactos, datosVisor, idioma, creado, activo, empresaId }) {
   const region_ = region;
   const carpeta = carpetaTipo(tipo, folio);
 
@@ -647,16 +679,28 @@ async function subirABuckets(s3, region, { folio, filename, pdfBase64, fotoBase6
       ContentType: 'image/jpeg',
     }));
     tarjetaUrl = publicUrlFor(BUCKET_FICHAS, region_, tarjetaKey);
+    // ---- 2026-10-20: ficha de empresa — copia de la tarjeta en la carpeta de la empresa (bucket
+    // privado de resumen), para que James tenga todo lo de esa empresa en un solo lugar de S3. Es
+    // un extra: si falla, no afecta el guardado de la ficha. ----
+    if (empresaId) {
+      try {
+        await s3.send(new PutObjectCommand({
+          Bucket: BUCKET_RESUMEN,
+          Key: claveTarjeta(empresaId, folio),
+          Body: Buffer.from(base64PayloadOf(tarjetaBase64), 'base64'),
+          ContentType: 'image/jpeg',
+        }));
+      } catch (errCopia) {
+        console.error('send-ficha: no se pudo copiar la tarjeta a la carpeta de la empresa', empresaId, folio, errCopia);
+      }
+    }
   }
 
   // 3) Datos estructurados para el visor público (lo que se muestra y traduce cuando alguien
   // escanea el código) y para saber a quién avisar. Se guarda como JSON, separado del PDF, para
   // no tener que volver a interpretar el PDF cada vez que alguien escanea.
   const datosKey = `${carpeta}/datos/${folio}.json`;
-  await s3.send(new PutObjectCommand({
-    Bucket: BUCKET_FICHAS,
-    Key: datosKey,
-    Body: Buffer.from(JSON.stringify({
+  const datosJsonBuf = Buffer.from(JSON.stringify({
       folio,
       nombreCompleto: nombreCompleto || '',
       tipo: tipo || 'Persona',
@@ -684,7 +728,11 @@ async function subirABuckets(s3, region, { folio, filename, pdfBase64, fotoBase6
       // asume activo=true para no bloquear por accidente algo que ya funcionaba. ----
       activo: typeof activo === 'boolean' ? activo : true,
       actualizado: new Date().toISOString(),
-    }), 'utf-8'),
+    }), 'utf-8');
+  await s3.send(new PutObjectCommand({
+    Bucket: BUCKET_FICHAS,
+    Key: datosKey,
+    Body: datosJsonBuf,
     ContentType: 'application/json',
   }));
 
@@ -744,6 +792,34 @@ async function subirABuckets(s3, region, { folio, filename, pdfBase64, fotoBase6
       } catch (errPng) {
         console.error('send-ficha: no se pudo generar o subir el PNG de grabado de la placa', folio, errPng);
       }
+    }
+  }
+
+  // ---- 2026-10-20: ficha de EMPRESA — copia ordenada de todo lo generado en la carpeta de la empresa
+  // (bucket privado de resumen): empresas/<id>/fichas/<folio>/{ficha.pdf, datos.json, qr.svg, foto.*}.
+  // Es solo una copia de consulta: el visor, el login y los avisos siguen leyendo de personas/.
+  // NO se copia el PIN ni el registro de acceso. Es un extra: si falla, no afecta el guardado. ----
+  if (empresaId) {
+    const copiar = async (archivo, body, tipoContenido) => {
+      try {
+        await s3.send(new PutObjectCommand({ Bucket: BUCKET_RESUMEN, Key: claveFichaCopia(empresaId, folio, archivo), Body: body, ContentType: tipoContenido }));
+      } catch (errCopia) {
+        console.error('send-ficha: no se pudo copiar a la carpeta de la empresa', empresaId, folio, archivo, errCopia);
+      }
+    };
+    await copiar('ficha.pdf', Buffer.from(base64PayloadOf(pdfBase64), 'base64'), 'application/pdf');
+    await copiar('datos.json', datosJsonBuf, 'application/json');
+    await copiar('qr.svg', Buffer.from(qrSvg, 'utf-8'), 'image/svg+xml');
+    if (fotoBase64) {
+      const tipoFoto = contentTypeFromDataUrl(fotoBase64, 'image/jpeg');
+      const extFoto = { 'image/png': 'png', 'image/webp': 'webp' }[tipoFoto] || 'jpg';
+      // si la foto cambió de formato, se quita la copia anterior para que no queden dos
+      for (const e of ['jpg', 'png', 'webp']) {
+        if (e !== extFoto) {
+          try { await s3.send(new DeleteObjectCommand({ Bucket: BUCKET_RESUMEN, Key: claveFichaCopia(empresaId, folio, `foto.${e}`) })); } catch (errDel) { /* no existía */ }
+        }
+      }
+      await copiar(`foto.${extFoto}`, Buffer.from(base64PayloadOf(fotoBase64), 'base64'), tipoFoto);
     }
   }
 
@@ -813,7 +889,7 @@ exports.handler = async (event) => {
     return { statusCode: 400, headers, body: JSON.stringify({ error: 'JSON inválido.' }) };
   }
 
-  const { folio: folioCliente, pdfBase64, nombreCompleto, tipo, fotoBase64, tarjetaBase64, placaEstilo: placaEstiloEnviado, contactos: contactosCliente, datosVisor, datosFormulario, esRenovacionPago, correoTitular, producto, pin: pinRecibido } = payload;
+  const { folio: folioCliente, pdfBase64, nombreCompleto, tipo, fotoBase64, tarjetaBase64, placaEstilo: placaEstiloEnviado, contactos: contactosCliente, datosVisor, datosFormulario, esRenovacionPago, correoTitular, producto, pin: pinRecibido, empresa: empresaRecibida, consentimientoEmpresa } = payload;
   // 2026-10-13: estilo de placa efectivo. Si este guardado no lo trae (por ejemplo una actualización de
   // datos, que no pasa por la elección de producto), se usa el que ya quedó guardado en el registro de
   // la ficha (ver más abajo, tras cargarOCrearLogin), para que igual se regeneren los códigos SVG/PNG.
@@ -853,6 +929,7 @@ exports.handler = async (event) => {
   let codigoCorreoFallidos = [];
   const carpeta = carpetaTipo(tipo, folio);
   let s3Limite = null;
+  let empresaCtxCorreo = null;
   try {
     const region = process.env.S3_REGION || 'us-east-1';
     const s3 = getS3Client();
@@ -876,8 +953,49 @@ exports.handler = async (event) => {
     let pinActual = '';
     let creadoActual = null;
     let activoActual = true;
+
+    // ---- 2026-10-20: FOLIOS DE EMPRESA (VVITALQRE#######). Regla de James: un folio de empresa solo se
+    // puede llenar si fue registrado antes con su herramienta (admin-empresas.js) — nadie puede
+    // inventar uno. Para crear la ficha hacen falta además: cargo, foto y haber aceptado el aviso de
+    // privacidad. Para actualizarla se sigue exigiendo el PIN (cargarOCrearLogin), como siempre. ----
+    let empresaCtx = null;
+    if (esFolioEmpresa(folio)) {
+      const empresaId = String(empresaRecibida || '').trim().toLowerCase();
+      const enc = await cargarFolioDeEmpresa(s3, BUCKET_RESUMEN, empresaId, folio);
+      if (!enc) {
+        return { statusCode: 403, headers, body: JSON.stringify({ error: 'Este folio de empresa no está registrado. Consulte con su empresa o con VidaVitalQR.' }) };
+      }
+      const cargoEmpresa = String((datosFormulario && datosFormulario.cargo) || '').trim();
+      if (cargoEmpresa.length < 2 || cargoEmpresa.length > 60) {
+        return { statusCode: 400, headers, body: JSON.stringify({ error: 'El cargo es obligatorio (entre 2 y 60 letras).' }) };
+      }
+      const loginExistente = await leerJson(s3, BUCKET_RESUMEN, `${carpeta}/login/${folio}.json`);
+      if (!loginExistente) {
+        if (enc.registroFolio.estado !== 'sin_activar') {
+          return { statusCode: 403, headers, body: JSON.stringify({ error: 'Este folio ya fue activado. Para cambiar datos use la opción Actualizar con su folio y PIN.' }) };
+        }
+        if (consentimientoEmpresa !== true) {
+          return { statusCode: 400, headers, body: JSON.stringify({ error: 'Debe aceptar el aviso de privacidad (casilla) para continuar.' }) };
+        }
+        if (!fotoBase64) {
+          return { statusCode: 400, headers, body: JSON.stringify({ error: 'La foto es obligatoria en la ficha de empresa: se imprime en la tarjeta.' }) };
+        }
+        empresaCtx = { id: empresaId, nombre: enc.lote.nombre || '', fechaPago: enc.lote.fechaPago, nueva: true, registradoEn: enc.registroFolio.creado || null, consentimiento: { aceptado: true, fecha: new Date().toISOString() } };
+      } else {
+        if (loginExistente.empresa !== empresaId) {
+          return { statusCode: 403, headers, body: JSON.stringify({ error: 'Este folio no corresponde a esta empresa.' }) };
+        }
+        empresaCtx = { id: empresaId, nombre: enc.lote.nombre || '', nueva: false };
+      }
+    }
+
+    empresaCtxCorreo = empresaCtx;
     if (folio) {
-      const login = await cargarOCrearLogin(s3, folio, datosFormulario, carpeta, esRenovacionPago === true, correoTitular, producto, placaEstilo, pinRecibido);
+      const login = await cargarOCrearLogin(s3, folio, datosFormulario, carpeta, esRenovacionPago === true, correoTitular, producto, placaEstilo, pinRecibido, empresaCtx);
+      if (empresaCtx && empresaCtx.nueva) {
+        // el folio pasa a "activa" apenas queda creado el acceso (PIN) de la ficha
+        await escribirJson(s3, BUCKET_RESUMEN, claveFolio(empresaCtx.id, folio), { folio, estado: 'activa', activadoEn: new Date().toISOString(), creado: empresaCtx.registradoEn || null });
+      }
       pinActual = login.pin || '';
       creadoActual = login.creado || null;
       activoActual = login.activo !== false;
@@ -904,7 +1022,7 @@ exports.handler = async (event) => {
       }
     }
 
-    const subido = await subirABuckets(s3, region, { folio, filename, pdfBase64, fotoBase64, tarjetaBase64, placaEstilo, nombreCompleto, tipo, contactos, datosVisor, idioma, creado: creadoActual, activo: activoActual });
+    const subido = await subirABuckets(s3, region, { folio, filename, pdfBase64, fotoBase64, tarjetaBase64, placaEstilo, nombreCompleto, tipo, contactos, datosVisor, idioma, creado: creadoActual, activo: activoActual, empresaId: empresaCtx ? empresaCtx.id : '' });
     pdfUrl = subido.pdfUrl; fotoUrl = subido.fotoUrl; qrUrl = subido.qrUrl; qrSvg = subido.qrSvg; tarjetaUrl = subido.tarjetaUrl; qrPlacaUrl = subido.qrPlacaUrl; qrPlacaPngUrl = subido.qrPlacaPngUrl;
 
     // resumen.xlsx separado por tipo (personas/resumen.xlsx y mascotas/resumen.xlsx), para
@@ -937,6 +1055,9 @@ exports.handler = async (event) => {
     // (ya no se subió — cargarOCrearLogin es lo primero que corre), no se manda el correo de
     // aviso al administrador, y no se actualiza el cuadro resumen. Responde 401 sin revelar si el
     // folio existe o no, igual que ya hace login-ficha.js. ----
+    if (err && err.folioEmpresaYaActivado) {
+      return { statusCode: 403, headers, body: JSON.stringify({ error: 'Este folio ya fue activado. Para cambiar datos use la opción Actualizar con su folio y PIN.' }) };
+    }
     if (err && err.pinInvalido) {
       if (s3Limite) await anotar(s3Limite, BUCKET_RESUMEN, 'pin', folio, 15 * 60 * 1000);
       return {
@@ -960,6 +1081,8 @@ exports.handler = async (event) => {
 
   const lineasExtra = [];
   if (nombreCompleto) lineasExtra.push(`Nombre completo: ${nombreCompleto}`);
+  if (empresaCtxCorreo) lineasExtra.push(`Empresa: ${empresaCtxCorreo.nombre} (${empresaCtxCorreo.id})`);
+  if (empresaCtxCorreo) lineasExtra.push(`Tarjeta de empresa lista para imprimir (S3, bucket de resumen): ${claveTarjeta(empresaCtxCorreo.id, folio)}`);
   if (pdfUrl) lineasExtra.push(`PDF en la nube: ${pdfUrl}`);
   if (fotoUrl) lineasExtra.push(`Fotografía: ${fotoUrl}`);
   if (qrUrl) lineasExtra.push(`Código QR: ${qrUrl}`);

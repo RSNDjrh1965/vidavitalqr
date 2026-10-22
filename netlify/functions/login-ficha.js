@@ -126,6 +126,9 @@ exports.handler = async (event) => {
         activo: registro.activo !== false,
         producto: registro.producto || '',
         placaEstilo: registro.placaEstilo || '',
+        // 2026-10-20: id de la empresa si es una ficha de empresa (VVITALQRE...); la ficha lo usa para
+        // mostrar el recuadro de la empresa y regenerar la tarjeta con su logo al actualizar.
+        empresa: registro.empresa || '',
       }),
     };
   } catch (err) {
