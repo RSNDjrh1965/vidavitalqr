@@ -278,6 +278,12 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
 </div>
 </div>
 
+<!-- ---- 2026-10-20: recuadro de la EMPRESA (solo aparece con un enlace de empresa ?e=...&f=...) ---- -->
+<div id="empresaBanner" class="no-print" style="display:none;background:#2E7D6B;color:#fff;border-radius:14px;padding:16px 20px;align-items:center;justify-content:center;flex-wrap:wrap;gap:18px;text-align:center;margin:0 0 18px">
+<div id="empresaBannerLogoBox" style="width:120px;height:80px;background:#fff;border-radius:10px;display:none;align-items:center;justify-content:center;padding:6px"><img id="empresaBannerLogo" alt="Logo de la empresa" style="max-width:100%;max-height:100%;object-fit:contain"></div>
+<div><div id="empresaBannerNombre" style="font-size:20px;font-weight:700"></div><div id="empresaBannerCorreo" style="opacity:.95"></div></div>
+</div>
+
 <!-- Live ID card preview -->
 <div class="idcard">
 <div class="idcard-body">
@@ -357,6 +363,7 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
 <div class="grid">
 <div class="field"><label data-i18n="lblNombres">Nombres</label><input type="text" id="nombres"></div>
 <div class="field"><label data-i18n="lblApellidos">Apellidos</label><input type="text" id="apellidos"></div>
+<div class="field" id="cargoField" style="display:none"><label>Cargo (obligatorio)</label><input type="text" id="cargo" maxlength="60" placeholder="Ej. Ingeniero residente"></div>
 <div class="field"><label data-i18n="lblFnac">Fecha de nacimiento</label><input type="date" id="fnac"></div>
 <div class="field"><label data-i18n="lblEdad">Edad</label><input type="text" id="edad" readonly placeholder="Calculada automáticamente" data-i18n-ph="edadPh"></div>
 <div class="field"><label data-i18n="lblAsegurado">Número de asegurado</label><input type="text" id="asegurado"></div>
@@ -483,7 +490,14 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
 
 
 <!-- Política de vigencia y eliminación (2026-09-25) -->
-<p class="hint no-print" style="margin-top:14px;" data-i18n="politicaVigenciaTexto">Su ficha tiene vigencia anual. Si no la renueva a tiempo, la información básica de emergencia se mantiene visible por 2 meses adicionales; pasado ese plazo, la ficha y su información se eliminan por completo.</p>
+<p class="hint no-print" id="politicaVigenciaP" style="margin-top:14px;" data-i18n="politicaVigenciaTexto">Su ficha tiene vigencia anual. Si no la renueva a tiempo, la información básica de emergencia se mantiene visible por 2 meses adicionales; pasado ese plazo, la ficha y su información se eliminan por completo.</p>
+
+<!-- ---- 2026-10-20: aviso de privacidad de ficha de EMPRESA (obligatorio al crear la ficha) ---- -->
+<div class="section no-print" id="empresaConsent" style="display:none">
+<label style="display:flex;gap:10px;align-items:flex-start;cursor:pointer"><input type="checkbox" id="empresaConsentChk" style="width:20px;height:20px;margin-top:2px;flex:none"><span>Entiendo que mi ficha y mi PIN son personales: mi empresa no tiene acceso a mis datos médicos ni a mi PIN.</span></label>
+<p id="empresaConsentError" style="display:none;margin:8px 0 0;color:#c0392b;font-weight:600">Debe marcar esta casilla para continuar.</p>
+<p class="hint" style="margin:8px 0 0">Al guardar se crea su PIN (se muestra una sola vez) y se genera su tarjeta con el logo de la empresa.</p>
+</div>
 
 <!-- Acciones -->
 <div class="actions no-print">
@@ -529,6 +543,8 @@ const productoElegido = new URLSearchParams(window.location.search).get('product
 //      antes vivía solo esta variable — eso causaba "esRenovacion is not defined" al hacer
 //      clic en "Enviar"). El IIFE de más abajo solo la actualiza, no la vuelve a declarar. ----
 let esRenovacion = false;
+// ---- 2026-10-20: datos de la empresa cuando la ficha se abre con un enlace de empresa (o se actualiza una ficha de empresa) ----
+let empresaFicha = null;
 
 // ---- ¿Es una actualización de datos gratuita (?actualizar=1)? Declarada aquí, en el ámbito
 //      global del script, por el mismo motivo que esRenovacion arriba: se necesita también al
@@ -1054,6 +1070,31 @@ $('photoRemove').addEventListener('click', e => {
   const modoFicha = params.get('actualizar') === '1' ? 'actualizar' : (params.get('renovar') === '1' ? 'renovar' : null);
   esRenovacion = modoFicha === 'renovar';
   esActualizacion = modoFicha === 'actualizar';
+
+  // ---- 2026-10-20: ENLACE DE EMPRESA (?e=<empresa>&f=<folio>) — el folio lo registró James con su
+  // herramienta; aquí solo se consulta a empresa-info.js (que valida el par empresa+folio) y se
+  // muestra el recuadro verde. El trabajador no escribe ni el folio ni los datos de la empresa. ----
+  const empresaParam = (params.get('e') || '').trim().toLowerCase();
+  const folioParam = (params.get('f') || '').trim().toUpperCase();
+  if (empresaParam && folioParam && !modoFicha) {
+    $('counterNum').textContent = folioParam;
+    $('btnEmail').disabled = true;
+    fetch('/.netlify/functions/empresa-info?e=' + encodeURIComponent(empresaParam) + '&f=' + encodeURIComponent(folioParam))
+      .then(res => res.ok ? res.json() : Promise.reject(res.status))
+      .then(info => {
+        info.id = empresaParam;
+        if (info.estado === 'activa') {
+          mostrarErrorEmpresa('Este folio ya fue activado. Para cambiar sus datos use la opción "Actualizar" con su folio y PIN en vidavitalqr.com.');
+          return;
+        }
+        aplicarModoEmpresa(info);
+        $('btnEmail').disabled = false;
+      })
+      .catch(() => {
+        mostrarErrorEmpresa('Este enlace no es válido. Consulte con su empresa o escriba por WhatsApp al +506 6093-3090.');
+      });
+    return;
+  }
   // (placaEstilo ahora se lee en el ámbito global del script, más arriba, para que también
   // esté disponible al enviar el formulario — ver la nota junto a su declaración.)
 
@@ -1130,6 +1171,29 @@ $('photoRemove').addEventListener('click', e => {
             return;
           }
           const data = await resp.json();
+
+          // ---- 2026-10-20: ficha de EMPRESA — la renovación se hace por empresa (un solo pago), no
+          // aquí; en "actualizar" se muestra el recuadro de la empresa y se conserva su tarjeta. ----
+          if (data.empresa) {
+            if (esRenovacion) {
+              alert('Las fichas de empresa las renueva su empresa, con un solo pago por todo el grupo. Consulte con su empresa o escriba por WhatsApp al +506 6093-3090.');
+              btn.disabled = false;
+              btn.textContent = textoOriginal;
+              return;
+            }
+            try {
+              const rEmp = await fetch('/.netlify/functions/empresa-info?e=' + encodeURIComponent(data.empresa) + '&f=' + encodeURIComponent(codigo));
+              if (!rEmp.ok) throw new Error('empresa-info ' + rEmp.status);
+              const infoEmp = await rEmp.json();
+              infoEmp.id = data.empresa;
+              aplicarModoEmpresa(infoEmp);
+            } catch (errEmp) {
+              alert('No se pudieron cargar los datos de su empresa. Intente de nuevo en unos minutos.');
+              btn.disabled = false;
+              btn.textContent = textoOriginal;
+              return;
+            }
+          }
 
           // el PIN quedó validado contra este folio por login-ficha.js arriba — se guarda para
           // mandarlo también con el guardado final (ver el comentario junto a su declaración)
@@ -1894,6 +1958,186 @@ async function generateTarjetaBlob(folio, fotoBase64){
   }
 }
 
+// ======================================================================================
+// 2026-10-20 — FICHA DE EMPRESA (folios VVITALQRE#######): recuadro verde, cargo, aviso de
+// privacidad y tarjeta horizontal con el logo de la empresa (85,6 x 54 mm, diseño aprobado por
+// James el 2026-10-19). Todo esto solo se activa con un enlace de empresa o al actualizar una
+// ficha de empresa; la ficha de personas sigue funcionando exactamente igual.
+// ======================================================================================
+function aplicarModoEmpresa(info){
+  empresaFicha = info;
+  $('empresaBannerNombre').textContent = info.nombre || '';
+  $('empresaBannerCorreo').textContent = info.correo || '';
+  if (info.logo) {
+    $('empresaBannerLogo').src = info.logo;
+    $('empresaBannerLogoBox').style.display = 'flex';
+  } else {
+    $('empresaBannerLogoBox').style.display = 'none';
+  }
+  $('empresaBanner').style.background = '#2E7D6B';
+  $('empresaBanner').style.display = 'flex';
+  $('cargoField').style.display = '';
+  if (!esActualizacion) $('empresaConsent').style.display = 'block';
+  const b = $('btnEmail');
+  b.removeAttribute('data-i18n');
+  b.textContent = esActualizacion ? 'GUARDAR CAMBIOS' : 'GUARDAR Y CREAR MI TARJETA';
+  const pol = $('politicaVigenciaP');
+  if (pol) {
+    pol.removeAttribute('data-i18n');
+    pol.textContent = 'La vigencia de su ficha es de 12 meses contados desde el pago de su empresa. La renovación la realiza su empresa, con un solo pago por todo el grupo.';
+  }
+}
+
+function mostrarErrorEmpresa(mensaje){
+  empresaFicha = null;
+  $('empresaBannerLogoBox').style.display = 'none';
+  $('empresaBannerNombre').textContent = mensaje;
+  $('empresaBannerNombre').style.fontSize = '16px';
+  $('empresaBannerCorreo').textContent = '';
+  $('empresaBanner').style.background = '#C1272D';
+  $('empresaBanner').style.display = 'flex';
+  $('btnEmail').disabled = true;
+}
+
+function escHtml(t){
+  return String(t == null ? '' : t).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+// ---- recorta la foto a un cuadrado (centrada, un poco hacia arriba para no cortar el rostro) con un
+// canvas, para no depender de "object-fit" dentro de html2canvas ----
+function recortarFotoCuadrada(dataUrl, lado){
+  return new Promise((resolve) => {
+    if (!dataUrl) { resolve(''); return; }
+    const im = new Image();
+    im.onload = () => {
+      try{
+        const w = im.naturalWidth, h = im.naturalHeight;
+        const lg = Math.min(w, h);
+        const sx = Math.round((w - lg) / 2);
+        const sy = Math.round((h - lg) * 0.22);
+        const c = document.createElement('canvas');
+        c.width = lado; c.height = lado;
+        const cx = c.getContext('2d');
+        cx.fillStyle = '#FFFFFF'; cx.fillRect(0, 0, lado, lado);
+        cx.drawImage(im, sx, sy, lg, lg, 0, 0, lado, lado);
+        resolve(c.toDataURL('image/jpeg', 0.9));
+      }catch(e){ resolve(dataUrl); }
+    };
+    im.onerror = () => resolve(dataUrl);
+    im.src = dataUrl;
+  });
+}
+
+// ---- tarjeta horizontal de empresa (856 x 540 px = 85,6 x 54 mm). Se genera aquí, en el
+// navegador, igual que la del Identificador QR de personas, y se envía a send-ficha.js
+// (tarjetaBase64), que la guarda en la ficha y copia a la carpeta de la empresa en S3. ----
+async function generateTarjetaEmpresa(folio, fotoBase64, info, cargo, nombreCompleto){
+  const qr = qrcode(0, 'L');
+  qr.addData('https://vidavitalqr.com/v/' + encodeURIComponent(folio));
+  qr.make();
+  const n = qr.getModuleCount();
+  let qrPath = '';
+  for (let ry = 0; ry < n; ry++) for (let rx = 0; rx < n; rx++) if (qr.isDark(ry, rx)) qrPath += `M${rx} ${ry}h1v1h-1z`;
+
+  const nombre = String(nombreCompleto || '').trim();
+  const nombreSize = nombre.length > 30 ? 22 : (nombre.length > 22 ? 26 : 30);
+  const cargoTxt = String(cargo || '').trim();
+  const cargoSize = cargoTxt.length > 30 ? 16 : (cargoTxt.length > 22 ? 18 : 20);
+  const logoHtml = info.logo
+    ? `<img src="${info.logo}" style="width:214px;height:300px;object-fit:contain;display:block">`
+    : `<div style="font:700 26px Georgia,serif;color:#0a4949;text-align:center;padding:10px">${escHtml(info.nombre)}</div>`;
+  const fotoCuadrada = await recortarFotoCuadrada(fotoBase64, 460);
+  const fotoHtml = fotoCuadrada
+    ? `<img src="${fotoCuadrada}" style="width:225px;height:225px;display:block">`
+    : '';
+
+  const holder = document.createElement('div');
+  holder.style.position = 'fixed';
+  holder.style.left = '-9999px';
+  holder.style.top = '0';
+  holder.innerHTML = `
+    <style>
+      .e-card{width:856px;height:540px;position:relative;display:flex;overflow:hidden;background:linear-gradient(180deg,#fcfbf8,#f3ede2);color:#12292d;font-family:'Source Sans Pro',Arial,Helvetica,sans-serif;box-sizing:border-box}
+      .e-card *{box-sizing:border-box}
+      .e-side{width:290px;height:540px;background:linear-gradient(180deg,#0a4949,#246666);color:#fff;padding:30px 30px 32px;display:flex;flex-direction:column;align-items:center;gap:14px;text-align:center;flex:none}
+      .e-logo{width:230px;height:316px;background:#fff;border-radius:18px;border:2.5px dashed #b9b09c;display:flex;align-items:center;justify-content:center;flex:none;overflow:hidden}
+      .e-web{color:#ffd9c6;font-size:15px;font-weight:600;letter-spacing:.08em;text-transform:uppercase}
+      .e-tel{font-family:'Courier New',Courier,monospace;font-weight:700;font-size:19px;letter-spacing:.04em;color:#fff;margin-top:-6px}
+      .e-rule{width:70%;height:1px;background:rgba(255,255,255,.28);margin-top:auto}
+      .e-brand{font-family:Georgia,'Times New Roman',serif;font-weight:700;font-size:25px}
+      .e-brand i{font-style:normal;color:#9fd0c9}
+      .e-sub{font-weight:600;font-size:11px;letter-spacing:.14em;color:#bfe0dc}
+      .e-mid{width:308px;height:540px;padding:26px 14px;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;gap:10px;flex:none}
+      .e-photo{width:229px;height:229px;border-radius:22px;overflow:hidden;border:2.5px dashed #cdbfa3;background:#fff;flex:none}
+      .e-name{font-family:Georgia,'Times New Roman',serif;font-weight:700;line-height:1.1;color:#0a4949;width:290px;white-space:nowrap}
+      .e-role{color:#4b5f62;margin-top:4px;width:290px;white-space:nowrap}
+      .e-qr{width:258px;height:540px;padding:113px 32px 22px 0;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;gap:12px;flex:none}
+      .e-qrbox{width:226px;height:226px;padding:12px;border-radius:16px;background:#fff;border:1.5px solid #e4ddcc;flex:none}
+      .e-qrbox svg{width:100%;height:100%;display:block}
+      .e-esc{color:#d3552f;font-weight:700;letter-spacing:.2em;font-size:14px}
+      .e-chip{background:#e2dfd3;border-radius:12px;padding:7px 12px;font-family:'Courier New',Courier,monospace;font-weight:700;font-size:15px;letter-spacing:.04em;white-space:nowrap}
+      .e-bar{position:absolute;left:0;right:0;bottom:0;height:8px;background:linear-gradient(90deg,#0a4949,#d3552f)}
+    </style>
+    <div class="e-card" id="tarjetaEmpresaEl">
+      <div class="e-side">
+        <div class="e-logo">${logoHtml}</div>
+        <div class="e-web">vidavitalqr.com</div>
+        <div class="e-tel">WhatsApp 6093-3090</div>
+        <div class="e-rule"></div>
+        <div><div class="e-brand">Vida<i>Vital</i>QR</div><div class="e-sub">IDENTIFICADOR DE EMERGENCIA</div></div>
+      </div>
+      <div class="e-mid">
+        <div class="e-photo">${fotoHtml}</div>
+        <div class="e-name" style="font-size:${nombreSize}px">${escHtml(nombre)}</div>
+        <div class="e-role" style="font-size:${cargoSize}px">${escHtml(cargoTxt)}</div>
+      </div>
+      <div class="e-qr">
+        <div class="e-qrbox"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${n} ${n}" shape-rendering="crispEdges"><path fill="#004344" d="${qrPath}"/></svg></div>
+        <div class="e-esc">▲ ESCANEAR</div>
+        <div class="e-chip">${escHtml(folio)}</div>
+      </div>
+      <div class="e-bar"></div>
+    </div>`;
+  document.body.appendChild(holder);
+  try{
+    // se espera a que carguen las imágenes (logo y foto) antes de capturar
+    // nombre y cargo en UNA línea: se achica la letra hasta que quepan (mínimo 18 px; si aun así no
+    // caben, se permite partir en dos líneas)
+    [['.e-name', 30, 18], ['.e-role', 20, 14]].forEach(([sel, max, min]) => {
+      const el = holder.querySelector(sel);
+      if (!el) return;
+      let size = max;
+      el.style.fontSize = size + 'px';
+      while (el.scrollWidth > el.clientWidth + 1 && size > min) { size -= 1; el.style.fontSize = size + 'px'; }
+      if (el.scrollWidth > el.clientWidth + 1) el.style.whiteSpace = 'normal';
+    });
+    await Promise.all(Array.from(holder.querySelectorAll('img')).map(im => im.complete ? Promise.resolve() : new Promise(r => { im.onload = r; im.onerror = r; })));
+    await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+    const canvas = await html2canvas(holder.querySelector('#tarjetaEmpresaEl'), { scale: 2, backgroundColor: '#FFFFFF', useCORS: true });
+    if (!canvas || !canvas.width || !canvas.height) throw new Error('No se pudo generar la imagen de la tarjeta (canvas vacío).');
+    return canvas.toDataURL('image/jpeg', 0.92);
+  } finally {
+    document.body.removeChild(holder);
+  }
+}
+
+// ---- pantalla final de una ficha de empresa recién creada (en vez del pago, que aquí no aplica) ----
+function mostrarEmpresaExitosa(folio, tarjetaDataUrl){
+  const overlay = document.createElement('div');
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(18,40,43,0.72);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px;overflow:auto;';
+  overlay.innerHTML = `
+    <div style="background:#fff;border-radius:16px;max-width:520px;width:100%;padding:24px;text-align:center;font-family:inherit">
+      <div style="font-size:42px;line-height:1">✅</div>
+      <h3 style="margin:10px 0 6px;">Su ficha quedó activa</h3>
+      ${tarjetaDataUrl ? `<img src="${tarjetaDataUrl}" alt="Vista de su tarjeta" style="width:100%;border-radius:10px;border:1px solid #DDD8CC;margin:8px 0">` : ''}
+      <p style="margin:8px 0;color:#3a352b;">Su tarjeta ya fue generada y se imprimirá con los datos de su empresa. Guarde su PIN: es personal y su empresa no lo conoce.</p>
+      <p style="margin:8px 0;color:#6b6558;font-size:0.9rem;">Folio: <b>${escHtml(folio)}</b></p>
+      <button type="button" id="empresaOkBtn" class="btn btn-primary" style="margin-top:10px">Listo</button>
+    </div>`;
+  document.body.appendChild(overlay);
+  overlay.querySelector('#empresaOkBtn').addEventListener('click', () => { overlay.remove(); });
+}
+
 // ---- ir a la sección de pago seguro de VidaVitalQR, pasando el número de la ficha (respaldo,
 // solo se usa cuando esta ficha no se abrió como pestaña nueva desde el landing — ver
 // avisarOpenerYCerrar() más abajo, que es el camino normal) ----
@@ -1982,6 +2226,7 @@ function precargarDatosFicha(datos){
   const setVal = (id, val) => { const el = $(id); if (el && val !== undefined && val !== null) el.value = val; };
   setVal('nombres', datos.nombres);
   setVal('apellidos', datos.apellidos);
+  setVal('cargo', datos.cargo);
   setVal('fnac', datos.fnac);
   $('fnac').dispatchEvent(new Event('input')); // recalcula la edad automática, que depende de este evento
   setVal('asegurado', datos.asegurado);
@@ -2211,6 +2456,27 @@ $('btnEmail').addEventListener('click', async () => {
     return;
   }
 
+  // ---- 2026-10-20: ficha de EMPRESA — cargo, aviso de privacidad y foto son obligatorios al crear ----
+  if (empresaFicha) {
+    if (($('cargo').value || '').trim().length < 2) {
+      alert('El cargo es obligatorio.');
+      $('cargo').focus();
+      return;
+    }
+    if (!esActualizacion) {
+      if (!$('empresaConsentChk').checked) {
+        $('empresaConsentError').style.display = 'block';
+        $('empresaConsent').scrollIntoView({ behavior: 'smooth', block: 'center' });
+        return;
+      }
+      $('empresaConsentError').style.display = 'none';
+      if (!($('photoImg').style.display !== 'none' && $('photoImg').src.startsWith('data:'))) {
+        alert('La foto es obligatoria en la ficha de empresa: se imprime en la tarjeta. Haga clic en el recuadro de foto de la parte de arriba para subirla.');
+        return;
+      }
+    }
+  }
+
   const btn = $('btnEmail');
   const originalText = btn.textContent;
   const procBadge = $('procBadge');
@@ -2247,10 +2513,16 @@ $('btnEmail').addEventListener('click', async () => {
 
     // tarjeta "Identificador QR" (foto + QR real + identificador) — si falla, no debe bloquear el guardado de la ficha
     let tarjetaBase64 = null;
-    try{
-      tarjetaBase64 = await generateTarjetaBlob(folio, fotoBase64);
-    }catch(errTarjeta){
-      console.error('Error generando la tarjeta Identificador QR:', errTarjeta);
+    if (empresaFicha) {
+      // en una ficha de empresa la tarjeta es el producto: si no se puede generar, NO se guarda
+      // nada (así el trabajador puede reintentar y el folio sigue sin activar)
+      tarjetaBase64 = await generateTarjetaEmpresa(folio, fotoBase64, empresaFicha, $('cargo').value, nombreCompleto);
+    } else {
+      try{
+        tarjetaBase64 = await generateTarjetaBlob(folio, fotoBase64);
+      }catch(errTarjeta){
+        console.error('Error generando la tarjeta Identificador QR:', errTarjeta);
+      }
     }
 
     const contactos = [
@@ -2291,6 +2563,7 @@ $('btnEmail').addEventListener('click', async () => {
       medicamentos,
       archivosImportantes,
     };
+    if (empresaFicha) datosFormulario.cargo = ($('cargo').value || '').trim();
 
     // ---- verificación de peso antes de enviar: el servidor (Netlify/AWS) rechaza cualquier
     // solicitud que supere ~6MB con el error "413" — un mensaje críptico que no explica la causa
@@ -2316,7 +2589,7 @@ $('btnEmail').addEventListener('click', async () => {
     const resp = await fetch('/.netlify/functions/send-ficha', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({ folio, filename, pdfBase64, nombreCompleto, tipo: 'Persona', fotoBase64, tarjetaBase64, placaEstilo, producto: productoElegido, contactos, datosVisor, datosFormulario, esRenovacionPago: esRenovacion, idioma: LANG_FICHA, correoTitular: $('correoTitular').value || '', pin: pinConfirmadoFicha })
+      body: JSON.stringify({ folio, filename, pdfBase64, nombreCompleto, tipo: 'Persona', fotoBase64, tarjetaBase64, placaEstilo, producto: productoElegido, contactos, datosVisor, datosFormulario, esRenovacionPago: esRenovacion, idioma: LANG_FICHA, correoTitular: $('correoTitular').value || '', pin: pinConfirmadoFicha, empresa: empresaFicha ? empresaFicha.id : undefined, consentimientoEmpresa: !!(empresaFicha && !esActualizacion && $('empresaConsentChk').checked) })
     });
 
     if(!resp.ok){
@@ -2352,6 +2625,9 @@ $('btnEmail').addEventListener('click', async () => {
 
     if (esActualizacion) {
       mostrarActualizacionExitosa();
+    } else if (empresaFicha) {
+      // ficha de empresa: ya está pagada por la empresa — no hay paso de pago
+      mostrarEmpresaExitosa(folio, tarjetaBase64);
     } else if (!avisarOpenerYCerrar('persona', folio)) {
       goToPayment(folio);
     }

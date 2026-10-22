@@ -18,6 +18,12 @@
 [functions."revisar-vigencia"]
   schedule = "0 13 * * *"
 
+# ---- revisar-empresas.js (2026-10-20): se ejecuta sola una vez al día — envía a cada empresa (con
+# copia oculta a James) los avisos de folios sin activar a los 3 y 9 meses del pago. Los avisos de
+# vencimiento NO se envían aquí: los de siempre los manda revisar-vigencia.js. 13:30 UTC = 7:30 a.m. hora de Costa Rica. ----
+[functions."revisar-empresas"]
+  schedule = "30 13 * * *"
+
 # ---- Rewrite (no redirect: status 200) para acortar la URL pública que se codifica en el QR
 # grabado en las placas físicas. El QR llevaba ".netlify/functions/ver?folio=XXXX" (55+ caracteres),
 # lo que producía un QR demasiado denso para escanear de forma confiable en placas metálicas
