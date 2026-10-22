@@ -969,6 +969,9 @@ exports.handler = async (event) => {
       if (cargoEmpresa.length < 2 || cargoEmpresa.length > 60) {
         return { statusCode: 400, headers, body: JSON.stringify({ error: 'El cargo es obligatorio (entre 2 y 60 letras).' }) };
       }
+      if (String(nombreCompleto || '').trim().length < 3) {
+        return { statusCode: 400, headers, body: JSON.stringify({ error: 'El nombre y los apellidos son obligatorios (se imprimen en la tarjeta).' }) };
+      }
       const loginExistente = await leerJson(s3, BUCKET_RESUMEN, `${carpeta}/login/${folio}.json`);
       if (!loginExistente) {
         if (enc.registroFolio.estado !== 'sin_activar') {
