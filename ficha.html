@@ -2458,6 +2458,17 @@ $('btnEmail').addEventListener('click', async () => {
 
   // ---- 2026-10-20: ficha de EMPRESA — cargo, aviso de privacidad y foto son obligatorios al crear ----
   if (empresaFicha) {
+    // el nombre sale impreso en la tarjeta de la empresa: nombres y apellidos son obligatorios aquí
+    if (($('nombres').value || '').trim().length < 2) {
+      alert('Los nombres son obligatorios: se imprimen en su tarjeta.');
+      $('nombres').focus();
+      return;
+    }
+    if (($('apellidos').value || '').trim().length < 2) {
+      alert('Los apellidos son obligatorios: se imprimen en su tarjeta.');
+      $('apellidos').focus();
+      return;
+    }
     if (($('cargo').value || '').trim().length < 2) {
       alert('El cargo es obligatorio.');
       $('cargo').focus();
