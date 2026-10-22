@@ -75,7 +75,9 @@ const PRECIOS = {
   plate_objeto:     { label: 'Placa con código QR — Objeto',           price: 13.00, tipo: 'objeto',  renovacion: false },
   bracelet:         { label: 'Pulsera con placa QR',                   price: 16.00, tipo: 'persona', renovacion: false },
   chain:            { label: 'Cadena con incrustación religiosa',      price: 19.00, tipo: 'persona', renovacion: false },
-  idcard:           { label: 'Identificador QR',                      price: 12.00, tipo: 'persona', renovacion: false },
+  idcard:           { label: 'Identificador QR',                      price: 14.00, tipo: 'persona', renovacion: false },
+  // 2026-10-22: Identificador QR DIGITAL (tarjeta con foto en imagen/PDF, sin envío: NO está en ITEMS_FISICOS)
+  idcard_digital:   { label: 'Identificador QR (solo digital) — Personal', price: 9.00, tipo: 'persona', renovacion: false },
 };
 
 const IVA_RATE = 0.13;

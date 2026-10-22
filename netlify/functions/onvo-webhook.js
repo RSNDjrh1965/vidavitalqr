@@ -38,6 +38,8 @@ const { S3Client } = require('@aws-sdk/client-s3');
 const { claveIgual } = require('./lib/limite');
 const { GetObjectCommand, PutObjectCommand } = require('@aws-sdk/client-s3');
 const { agregarIngreso } = require('./lib/ingresos');
+const { firmarFolio } = require('./lib/enlace-qr');
+const { procesarPedidoEmpresa } = require('./lib/pedido-empresa-pago');
 
 const ONVO_API_BASE = 'https://api.onvopay.com/v1';
 // ---- reporte de pagos confirmados: este aviso llega solo al administrador (nunca se muestra ni
@@ -92,6 +94,7 @@ const ETIQUETAS_ITEM = {
   bracelet:         'Pulsera con placa QR',
   chain:            'Cadena con incrustación religiosa',
   idcard:           'Identificador QR',
+  idcard_digital:   'Identificador QR (solo digital) — Personal',
 };
 
 // ---- número (1-4, izquierda a derecha en el landing) y medidas de cada estilo de placa -- mismo
@@ -205,6 +208,24 @@ exports.handler = async (event) => {
   const montoBrutoReal = typeof data.amount === 'number' ? data.amount / 100 : null;
   const refNumber = (data.charges && data.charges[0] && data.charges[0].refNumber) || '';
 
+  // ---- 2026-10-22 (Etapa 2 de empresas): si el pago es de un PEDIDO DE EMPRESA (metadata.pedidoEmpresa, lo pone
+  // pedido-empresa.js), se crea el lote de folios y se avisa a la empresa y a James; no es un pago de productos del
+  // carrito, así que NO pasa por la activación de fichas ni por el aviso normal. Si falla, se responde 500 para que
+  // ONVO reintente (el proceso es idempotente: un pedido ya "pagado" no se repite). ----
+  if (meta.pedidoEmpresa) {
+    try {
+      await procesarPedidoEmpresa({
+        s3: getS3Client(), meta, paymentIntentId, modo, moneda, montoBrutoReal, refNumber, tipoCambioUsado, totalCRCInformativo,
+        agregarIngreso, registroKey: REGISTRO_INGRESOS_KEY,
+        medioPago: async () => { const sk = process.env.ONVO_SECRET_KEY; return sk ? await medioDePago(data.paymentMethodId, sk) : 'Desconocido'; },
+      });
+    } catch (err) {
+      console.error('onvo-webhook: error procesando el pedido de empresa —', err);
+      return { statusCode: 500, body: 'error' };
+    }
+    return { statusCode: 200, body: 'ok' };
+  }
+
   console.log('onvo-webhook: pago CONFIRMADO —', items.length, 'producto(s), folios:', folios || '(ninguno)', '— payment intent', paymentIntentId, '— modo', modo, '— moneda', moneda, '— monto', montoBrutoReal);
 
   // ---- 2026-10-09: la ACTIVACIÓN de la ficha ahora es lo PRIMERO que se hace (antes iba después del
@@ -291,6 +312,14 @@ exports.handler = async (event) => {
 // de un "Código QR (solo digital)" (por ejemplo, uno Personal y uno de Objeto en el mismo pago);
 // en ese caso se envía un correo por cada folio, cada uno con su propio enlace. ----
 const PRODUCTOS_QR_DIGITAL = ['qr_only_personal', 'qr_only_objeto'];
+// ---- 2026-10-22: "Identificador QR digital" (idcard_digital): tarjeta con foto en imagen/PDF. Se
+// entrega por el mismo mecanismo (/qr/<folio>), pero con un enlace FIRMADO (ver lib/enlace-qr.js)
+// y un texto propio. Si el mismo folio también trae un "Código QR" (no debería), manda el
+// identificador, que ya incluye el QR. ----
+const PRODUCTO_IDENTIFICADOR_DIGITAL = 'idcard_digital';
+// ---- 2026-10-22: quien compra el Identificador QR FÍSICO ('idcard') recibe además, de obsequio, el enlace a
+// su tarjeta digital para usarla como pantalla de bloqueo (misma página /qr/<folio>?t=<firma>). ----
+const PRODUCTO_IDENTIFICADOR_FISICO = 'idcard';
 
 async function avisarClienteQrDigital(items, correoCliente) {
   const apiKey = process.env.RESEND_API_KEY;
@@ -303,14 +332,102 @@ async function avisarClienteQrDigital(items, correoCliente) {
     return;
   }
 
+  const foliosIdentificadorDigital = Array.from(new Set(
+    (items || [])
+      .filter((it) => it && it.folio && it.item === PRODUCTO_IDENTIFICADOR_DIGITAL)
+      .map((it) => String(it.folio).toUpperCase())
+  ));
   const foliosQrDigital = Array.from(new Set(
     (items || [])
       .filter((it) => it && it.folio && PRODUCTOS_QR_DIGITAL.indexOf(it.item) !== -1)
       .map((it) => String(it.folio).toUpperCase())
-  ));
-  if (!foliosQrDigital.length) return; // esta compra no incluyó "Código QR (solo digital)"
+  )).filter((f) => foliosIdentificadorDigital.indexOf(f) === -1);
+  const foliosIdentificadorFisico = Array.from(new Set(
+    (items || [])
+      .filter((it) => it && it.folio && it.item === PRODUCTO_IDENTIFICADOR_FISICO)
+      .map((it) => String(it.folio).toUpperCase())
+  )).filter((f) => foliosIdentificadorDigital.indexOf(f) === -1 && /^VVITALQR/.test(f));
+  if (!foliosQrDigital.length && !foliosIdentificadorDigital.length && !foliosIdentificadorFisico.length) return; // esta compra no incluyó ningún producto con entrega por correo
 
   const siteUrl = process.env.SITE_URL || 'https://vidavitalqr.com';
+
+  // ---- Identificador QR digital: enlace firmado + texto propio ----
+  for (const folio of foliosIdentificadorDigital) {
+    const firma = firmarFolio(folio);
+    if (!firma) {
+      console.error('onvo-webhook: no se pudo firmar el enlace del Identificador QR digital (falta QR_LINK_SECRET/S3_SECRET_ACCESS_KEY) — folio', folio);
+      continue;
+    }
+    const enlace = `${siteUrl}/qr/${encodeURIComponent(folio)}?t=${firma}`;
+    const asunto = `Su Identificador QR digital VidaVitalQR ya está listo — ${folio}`;
+    const cuerpo = [
+      'Gracias por su compra en VidaVitalQR.',
+      '',
+      `Su Identificador QR digital (folio ${folio}) ya está listo. En este enlace puede verlo y descargarlo como imagen, como PDF a tamaño de tarjeta (listo para imprimir), descargar solo el código QR o descargar la imagen para usarla como pantalla de bloqueo de su celular:`,
+      enlace,
+      '',
+      'Consejo: úsela como pantalla de bloqueo para tener su identificador siempre a la vista. En la página encontrará el botón "Descargar para pantalla de bloqueo" y los pasos para iPhone y Android (el celular no permite cambiarla automáticamente: la imagen queda guardada y usted la elige como fondo). Con la pantalla bloqueada se verán su foto y su código QR.',
+      '',
+      'Guarde este correo: puede volver a abrir el mismo enlace cuando quiera. Es personal: quien tenga el enlace puede ver su tarjeta (con su foto), así que no lo comparta.',
+      '',
+      'Este es un correo automático de VidaVitalQR.',
+    ].join('\n');
+    try {
+      const resp = await fetch('https://api.resend.com/emails', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ from: REMITENTE, to: [correoCliente], subject: asunto, text: cuerpo }),
+      });
+      if (!resp.ok) {
+        let detalle = '';
+        try { detalle = JSON.stringify(await resp.json()); } catch (e) { try { detalle = await resp.text(); } catch (e2) {} }
+        console.error('onvo-webhook: Resend rechazó el correo del Identificador QR digital para', correoCliente, '— status', resp.status, detalle);
+      } else {
+        console.log('onvo-webhook: correo del Identificador QR digital enviado a', correoCliente, '— folio', folio);
+      }
+    } catch (err) {
+      console.error('onvo-webhook: error de red enviando el correo del Identificador QR digital para', correoCliente, '—', err);
+    }
+  }
+
+  // ---- Identificador QR físico: obsequio digital (enlace firmado + pantalla de bloqueo) ----
+  for (const folio of foliosIdentificadorFisico) {
+    const firma = firmarFolio(folio);
+    if (!firma) {
+      console.error('onvo-webhook: no se pudo firmar el enlace del obsequio digital del Identificador QR físico (falta QR_LINK_SECRET/S3_SECRET_ACCESS_KEY) — folio', folio);
+      continue;
+    }
+    const enlace = `${siteUrl}/qr/${encodeURIComponent(folio)}?t=${firma}`;
+    const asunto = `Su tarjeta digital de regalo VidaVitalQR — ${folio}`;
+    const cuerpo = [
+      'Gracias por su compra en VidaVitalQR.',
+      '',
+      `Además de su Identificador QR físico (folio ${folio}), le obsequiamos su tarjeta en versión digital, para que la lleve siempre en el celular. En este enlace puede verla, descargarla como imagen o PDF, o descargar la imagen para usarla como pantalla de bloqueo:`,
+      enlace,
+      '',
+      'Consejo: úsela como pantalla de bloqueo para tener su identificador siempre a la vista. En la página encontrará el botón "Descargar para pantalla de bloqueo" y los pasos para iPhone y Android (el celular no permite cambiarla automáticamente: la imagen queda guardada y usted la elige como fondo). Con la pantalla bloqueada se verán su foto y su código QR.',
+      '',
+      'Guarde este correo: puede volver a abrir el mismo enlace cuando quiera. Es personal: quien tenga el enlace puede ver su tarjeta (con su foto), así que no lo comparta.',
+      '',
+      'Este es un correo automático de VidaVitalQR.',
+    ].join('\n');
+    try {
+      const resp = await fetch('https://api.resend.com/emails', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ from: REMITENTE, to: [correoCliente], subject: asunto, text: cuerpo }),
+      });
+      if (!resp.ok) {
+        let detalle = '';
+        try { detalle = JSON.stringify(await resp.json()); } catch (e) { try { detalle = await resp.text(); } catch (e2) {} }
+        console.error('onvo-webhook: Resend rechazó el correo del obsequio digital para', correoCliente, '— status', resp.status, detalle);
+      } else {
+        console.log('onvo-webhook: correo del obsequio digital (Identificador QR físico) enviado a', correoCliente, '— folio', folio);
+      }
+    } catch (err) {
+      console.error('onvo-webhook: error de red enviando el correo del obsequio digital para', correoCliente, '—', err);
+    }
+  }
 
   for (const folio of foliosQrDigital) {
     const enlace = `${siteUrl}/qr/${encodeURIComponent(folio)}`;
