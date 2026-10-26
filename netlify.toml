@@ -24,6 +24,12 @@
 [functions."revisar-empresas"]
   schedule = "30 13 * * *"
 
+# ---- preparar-impresion.js (2026-10-23): se ejecuta sola una vez al día — recordatorio a las empresas al día 10,
+# PDF listo para imprenta (enviado a James) al día 14 del pago, aviso de entrega al día 21 y lotes extra semanales
+# para fichas activadas tarde. Solo lotes físicos reales. 14:00 UTC = 8:00 a.m. hora de Costa Rica. ----
+[functions."preparar-impresion"]
+  schedule = "0 14 * * *"
+
 # ---- Rewrite (no redirect: status 200) para acortar la URL pública que se codifica en el QR
 # grabado en las placas físicas. El QR llevaba ".netlify/functions/ver?folio=XXXX" (55+ caracteres),
 # lo que producía un QR demasiado denso para escanear de forma confiable en placas metálicas

@@ -46,6 +46,19 @@
   ol.pasos{margin:0;padding-left:20px;color:var(--ink-soft);font-size:.92rem}
   ol.pasos li{margin:4px 0}
   .nota{color:var(--muted);font-size:.82rem;margin-top:10px}
+  .tramos th{font-size:.78rem;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);text-align:right;padding:4px;font-weight:600}
+  .tramos th:first-child{text-align:left}
+  .tramos td.p{text-align:right;font-family:ui-monospace,Menlo,monospace}
+  .tramos td.sel{font-weight:700;color:var(--teal)}
+  .modo{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:4px}
+  @media (max-width:640px){ .modo{grid-template-columns:1fr} }
+  .modo label.op{display:block;margin:0;border:1.5px solid var(--line);border-radius:12px;padding:12px 14px;cursor:pointer;font-weight:400;background:#fff}
+  .modo label.op b{display:block;font-size:.98rem}
+  .modo label.op span{display:block;font-size:.84rem;color:var(--muted);margin-top:2px}
+  .modo input{position:absolute;opacity:0;pointer-events:none}
+  .modo label.op.on{border-color:var(--teal);background:#EAF2EF;box-shadow:0 0 0 2px var(--sage) inset}
+  .renov dl{margin:0;display:grid;grid-template-columns:auto 1fr;gap:6px 16px;font-size:.95rem}
+  .renov dt{color:var(--muted)} .renov dd{margin:0;text-align:right;font-weight:600}
 </style>
 </head>
 <body>
@@ -59,15 +72,19 @@
 
   <div id="bannerPago"></div>
 
+  <div id="panelRenovar" style="display:none"></div>
+
+  <div id="panelPedido">
+
   <div class="card">
     <h2>Cómo funciona</h2>
     <ol class="pasos">
-      <li>Complete los datos de su empresa, suba el logo y elija la cantidad de tarjetas.</li>
+      <li>Complete los datos de su empresa, suba el logo, elija si quiere la tarjeta impresa o solo digital, y la cantidad.</li>
       <li>Pague en línea (ONVO Pay). Al confirmarse el pago, recibe por correo un enlace para cada colaborador.</li>
       <li>Cada colaborador llena su propia ficha desde su celular (con foto y PIN personal). La empresa no ve sus datos médicos ni su PIN.</li>
-      <li>Cuando las fichas estén completas, coordinamos con usted la entrega de las tarjetas impresas.</li>
+      <li>Si eligió la tarjeta impresa, cuando las fichas estén completas coordinamos con usted la entrega. Con la opción solo digital cada colaborador conserva su tarjeta en el celular.</li>
     </ol>
-    <p class="nota">Vigencia de 12 meses desde el pago. La renovación la realiza la empresa con un solo pago por todo el grupo.</p>
+    <p class="nota">Vigencia de 12 meses desde el pago. La renovación la realiza la empresa con un solo pago por todo el grupo: $5 por ficha activa (mínimo 5 fichas) + IVA, y le llega un enlace por correo para hacerlo en línea.</p>
   </div>
 
   <form id="frm" class="card" novalidate>
@@ -84,6 +101,17 @@
         <input type="tel" id="telefono" maxlength="30" autocomplete="tel">
       </div>
     </div>
+    <label>Tipo de tarjeta</label>
+    <div class="modo" id="modo">
+      <label class="op on" id="opFisica"><input type="radio" name="modalidad" value="fisica" checked><b>Tarjeta impresa</b><span>PVC con logo, foto, nombre, cargo y QR. Coordinamos la entrega con usted.</span></label>
+      <label class="op" id="opDigital"><input type="radio" name="modalidad" value="digital"><b>Solo digital</b><span>Sin impresión y sin costo de envío: llega al instante y cada colaborador la lleva siempre en el celular, como pantalla de bloqueo. Es la opción más económica y la ideal para personal en campo.</span></label>
+    </div>
+    <label class="retiro" id="bloqueRetiro" style="display:flex;gap:10px;align-items:flex-start;margin:10px 0 4px;cursor:pointer;font-weight:600">
+      <input type="checkbox" id="retiroPersona" style="margin-top:3px;width:auto">
+      <span>Retiraré las tarjetas en persona (sin costo de envío). Se pedirá un teléfono de contacto.</span>
+    </label>
+    <p class="nota" id="plazosFisica" style="margin:6px 0 4px">Plazos de la tarjeta impresa: después del pago, la empresa tiene <strong>2 semanas</strong> para que todos sus colaboradores completen la ficha; la <strong>impresión</strong> se realiza en la <strong>tercera semana</strong> posterior al pago y el <strong>envío</strong> (o entrega) en la <strong>cuarta semana</strong>.</p>
+
     <label for="cantidad">Cantidad de tarjetas <small>(una por colaborador, máximo 500)</small></label>
     <input type="number" id="cantidad" min="1" max="500" step="1" value="10" inputmode="numeric" required>
 
@@ -102,21 +130,24 @@
   <div class="card">
     <h2>Precio por tarjeta</h2>
     <table class="tramos" id="tabla">
-      <tr data-min="1" data-max="10"><td>1 a 10 tarjetas</td><td>$14</td></tr>
-      <tr data-min="11" data-max="50"><td>11 a 50 tarjetas</td><td>$13</td></tr>
-      <tr data-min="51" data-max="100"><td>51 a 100 tarjetas</td><td>$12</td></tr>
-      <tr data-min="101" data-max="500"><td>Más de 100 tarjetas</td><td>$11</td></tr>
+      <tr><th></th><th>Impresa</th><th>Solo digital</th></tr>
+      <tr data-min="1" data-max="10"><td>1 a 10 tarjetas</td><td class="p" data-m="fisica">$12</td><td class="p" data-m="digital">$8</td></tr>
+      <tr data-min="11" data-max="50"><td>11 a 50 tarjetas</td><td class="p" data-m="fisica">$11</td><td class="p" data-m="digital">$7</td></tr>
+      <tr data-min="51" data-max="100"><td>51 a 100 tarjetas</td><td class="p" data-m="fisica">$10</td><td class="p" data-m="digital">$6</td></tr>
+      <tr data-min="101" data-max="500"><td>Más de 100 tarjetas</td><td class="p" data-m="fisica">$9</td><td class="p" data-m="digital">$6</td></tr>
     </table>
-    <p class="nota">El precio del tramo aplica a todas las tarjetas del pedido. Para más de 500 tarjetas escríbanos por WhatsApp al 6093-3090.</p>
+    <p class="nota">El precio del tramo aplica a todas las tarjetas del pedido. Renovación anual: $5 por ficha activa (mínimo 5 fichas). Todos los precios son por tarjeta, más IVA. Envío de tarjetas impresas: $9.50 hasta 100 tarjetas · $12.50 si son más de 100 (más IVA); sin costo si las retira en persona. Solo digital: sin envío. Para más de 500 tarjetas escríbanos por WhatsApp al 6093-3090.</p>
   </div>
 
   <div class="card resumen">
     <h2>Resumen</h2>
     <div class="linea"><span id="rCant">10 tarjetas × $14.00</span><span class="mono" id="rSub">$140.00</span></div>
+    <div class="linea"><span id="rEnvioTxt">Envío (hasta 100 tarjetas)</span><span class="mono" id="rEnvio">$9.50</span></div>
     <div class="linea"><span>IVA (13%)</span><span class="mono" id="rIva">$18.20</span></div>
     <div class="linea total"><span>Total a pagar</span><span class="mono" id="rTot">$158.20</span></div>
     <button type="button" class="pagar" id="btnPagar">Pagar con ONVO Pay</button>
     <p class="nota">Será redirigido a la página segura de ONVO Pay para completar el pago (tarjeta o SINPE Móvil). Todos los pagos se procesan únicamente por ONVO Pay.</p>
+  </div>
   </div>
 </main>
 
@@ -126,7 +157,10 @@
   var logoDataUrl = '';
   var enviando = false;
 
-  function precioUnit(n){ return n <= 10 ? 14 : (n <= 50 ? 13 : (n <= 100 ? 12 : 11)); }
+  function modalidad(){ var r = document.querySelector('input[name=modalidad]:checked'); return r ? r.value : 'fisica'; }
+  function precioUnit(n, m){ if (m === 'digital') return n <= 10 ? 8 : (n <= 50 ? 7 : 6); return n <= 10 ? 12 : (n <= 50 ? 11 : (n <= 100 ? 10 : 9)); }
+  function retiro(){ return modalidad() === 'fisica' && $('retiroPersona').checked; }
+  function envioEmp(n, m){ return (m === 'digital' || retiro()) ? 0 : (n <= 100 ? 9.5 : 12.5); }
   function usd(c){ return '$' + (c/100).toFixed(2); }
   function recalcular(){
     var n = parseInt($('cantidad').value, 10);
@@ -135,13 +169,23 @@
     for (var i = 0; i < filas.length; i++) {
       var f = filas[i], mn = +f.getAttribute('data-min'), mx = +f.getAttribute('data-max');
       f.className = (ok && n >= mn && n <= mx) ? 'activo' : '';
+      var celdas = f.querySelectorAll('td.p');
+      for (var c = 0; c < celdas.length; c++) celdas[c].className = 'p' + (celdas[c].getAttribute('data-m') === modalidad() ? ' sel' : '');
     }
-    if (!ok) { $('rCant').textContent = '—'; $('rSub').textContent = '—'; $('rIva').textContent = '—'; $('rTot').textContent = '—'; return; }
-    var u = precioUnit(n), sub = u * n * 100, iva = Math.round(sub * 0.13);
-    $('rCant').textContent = n + (n === 1 ? ' tarjeta' : ' tarjetas') + ' × $' + u.toFixed(2);
-    $('rSub').textContent = usd(sub); $('rIva').textContent = usd(iva); $('rTot').textContent = usd(sub + iva);
+    $('bloqueRetiro').style.display = modalidad() === 'fisica' ? 'flex' : 'none';
+    $('plazosFisica').style.display = modalidad() === 'fisica' ? 'block' : 'none';
+    $('opFisica').className = 'op' + (modalidad() === 'fisica' ? ' on' : '');
+    $('opDigital').className = 'op' + (modalidad() === 'digital' ? ' on' : '');
+    if (!ok) { $('rCant').textContent = '—'; $('rSub').textContent = '—'; $('rIva').textContent = '—'; $('rTot').textContent = '—'; $('rEnvio').textContent = '—'; return; }
+    var u = precioUnit(n, modalidad()), sub0 = u * n * 100, env = Math.round(envioEmp(n, modalidad()) * 100), sub = sub0 + env, iva = Math.round(sub * 0.13);
+    $('rCant').textContent = n + (n === 1 ? ' tarjeta' : ' tarjetas') + (modalidad() === 'digital' ? ' (solo digital)' : ' (impresas)') + ' × $' + u.toFixed(2);
+    $('rSub').textContent = usd(sub0); $('rEnvio').textContent = usd(env);
+    $('rEnvioTxt').textContent = modalidad() === 'digital' ? 'Envío (solo digital: sin envío)' : (retiro() ? 'Envío (retiro en persona: sin envío)' : (n <= 100 ? 'Envío (hasta 100 tarjetas)' : 'Envío (más de 100 tarjetas)'));
+    $('rIva').textContent = usd(iva); $('rTot').textContent = usd(sub + iva);
   }
+  $('retiroPersona').addEventListener('change', recalcular);
   $('cantidad').addEventListener('input', recalcular);
+  Array.prototype.forEach.call(document.querySelectorAll('input[name=modalidad]'), function(r){ r.addEventListener('change', recalcular); });
   ['nombre','correo','telefono','cantidad','autoriza','logoFile'].forEach(function(id){ $(id).addEventListener('input', function(){ var m = $('msg'); m.textContent = ''; m.className = 'msg'; }); });
   recalcular();
 
@@ -200,12 +244,13 @@
     if (!/^[^\s@<>"']+@[^\s@<>"']+\.[^\s@<>"']{2,}$/.test(correo)) { mostrarError('Escriba un correo válido para la empresa.'); $('correo').focus(); return; }
     if (!Number.isInteger(n) || n < 1) { mostrarError('Indique cuántas tarjetas necesita (mínimo 1).'); $('cantidad').focus(); return; }
     if (n > 500) { mostrarError('Para más de 500 tarjetas escríbanos por WhatsApp al 6093-3090.'); return; }
+    if (retiro() && tel.length < 6) { mostrarError('Para coordinar el retiro en persona, escriba un teléfono de contacto.'); $('telefono').focus(); return; }
     if (!logoDataUrl) { mostrarError('Suba el logo de la empresa.'); return; }
     if (!$('autoriza').checked) { mostrarError('Marque la casilla que confirma que su empresa autoriza el uso del logo.'); return; }
     enviando = true; var b = $('btnPagar'); b.disabled = true; b.textContent = 'Preparando el pago…';
     fetch('/.netlify/functions/pedido-empresa', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ nombre: nombre, correo: correo, telefono: tel, cantidad: n, logoDataUrl: logoDataUrl, autorizaLogo: true })
+      body: JSON.stringify({ nombre: nombre, correo: correo, telefono: tel, cantidad: n, modalidad: modalidad(), retiroPersona: retiro(), logoDataUrl: logoDataUrl, autorizaLogo: true })
     }).then(function(r){ return r.json().then(function(j){ return { ok: r.ok, j: j }; }); })
       .then(function(res){
         if (!res.ok || !res.j || !res.j.url) throw new Error((res.j && res.j.error) || 'No se pudo crear el pago.');
@@ -215,12 +260,62 @@
       .catch(function(e){ mostrarError(e && e.message ? e.message : 'No se pudo crear el pago. Intente de nuevo.'); enviando = false; b.disabled = false; b.textContent = 'Pagar con ONVO Pay'; });
   });
 
+  // ---- RENOVACIÓN de una empresa (enlace del correo: ?renovar=<empresa>&t=<firma>) ----
+  var qr = new URLSearchParams(location.search), renovar = qr.get('renovar'), firma = qr.get('t');
+  function fechaLarga(iso){ return new Date(iso).toLocaleDateString('es-CR', { day: '2-digit', month: 'long', year: 'numeric', timeZone: 'America/Costa_Rica' }); }
+  function usd2(v){ return '$' + Number(v).toFixed(2); }
+  function esc(t){ var d = document.createElement('div'); d.textContent = t == null ? '' : String(t); return d.innerHTML; }
+  if (renovar) {
+    $('panelPedido').style.display = 'none';
+    var pan = $('panelRenovar'); pan.style.display = '';
+    document.querySelector('h1').textContent = 'Renovación anual';
+    document.querySelector('.lead').textContent = 'Renueve con un solo pago todas las fichas activas de su empresa y pague de forma segura con ONVO Pay.';
+    pan.innerHTML = '<div class="card"><p>Cargando…</p></div>';
+    fetch('/.netlify/functions/renovacion-empresa?e=' + encodeURIComponent(renovar) + '&t=' + encodeURIComponent(firma || ''))
+      .then(function(r){ return r.json().then(function(j){ return { ok: r.ok, j: j }; }); })
+      .then(function(res){
+        if (!res.ok) { pan.innerHTML = '<div class="card"><div class="msg err" style="display:block">' + esc((res.j && res.j.error) || 'No se pudo cargar la renovación.') + '</div></div>'; return; }
+        var j = res.j, h = '<div class="card renov"><h2>' + esc(j.nombre) + '</h2><dl>'
+          + '<dt>Vigencia actual hasta</dt><dd>' + fechaLarga(j.vencimiento) + '</dd>'
+          + '<dt>Fichas activas</dt><dd>' + j.activas + '</dd>'
+          + (j.abierta ? '<dt>Nuevo vencimiento</dt><dd>' + fechaLarga(j.nuevoVencimiento) + '</dd>' : '') + '</dl></div>';
+        if (j.abierta) {
+          h += '<div class="card resumen"><h2>Resumen</h2>'
+            + '<div class="linea"><span>' + j.fichasCobradas + ' ficha(s) × ' + usd2(j.precioUnitario) + (j.activas < j.fichasCobradas ? ' (mínimo ' + j.fichasCobradas + ' fichas)' : '') + '</span><span class="mono">' + usd2(j.subtotal) + '</span></div>'
+            + '<div class="linea"><span>IVA (13%)</span><span class="mono">' + usd2(j.iva) + '</span></div>'
+            + '<div class="linea total"><span>Total a pagar</span><span class="mono">' + usd2(j.totalUSD) + '</span></div>'
+            + '<div class="msg" id="msgR"></div><button type="button" class="pagar" id="btnRenovar">Renovar y pagar con ONVO Pay</button>'
+            + '<p class="nota">Si renueva antes de que venza no pierde ningún día: los 12 meses nuevos se suman al vencimiento actual. Todos los pagos se procesan únicamente por ONVO Pay.</p></div>';
+        } else if (j.motivo === 'antes') {
+          h += '<div class="card"><div class="banner cancel">Todavía no es momento de renovar: podrá hacerlo desde el ' + fechaLarga(j.desde) + ' (60 días antes del vencimiento). Le enviaremos un aviso por correo.</div></div>';
+        } else if (j.motivo === 'eliminadas') {
+          h += '<div class="card"><div class="banner cancel">El período de renovación de este grupo ya terminó. Escríbanos por WhatsApp al 6093-3090 y lo ayudamos.</div></div>';
+        } else {
+          h += '<div class="card"><div class="banner cancel">No hay fichas activas para renovar todavía.</div></div>';
+        }
+        pan.innerHTML = h;
+        var br = $('btnRenovar');
+        if (br) br.addEventListener('click', function(){
+          var m = $('msgR'); m.textContent = ''; m.className = 'msg'; br.disabled = true; br.textContent = 'Preparando el pago…';
+          fetch('/.netlify/functions/renovacion-empresa', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ e: renovar, t: firma }) })
+            .then(function(r){ return r.json().then(function(x){ return { ok: r.ok, x: x }; }); })
+            .then(function(r2){ if (!r2.ok || !r2.x || !r2.x.url) throw new Error((r2.x && r2.x.error) || 'No se pudo crear el pago.'); br.textContent = 'Redirigiendo a ONVO Pay…'; window.location.href = r2.x.url; })
+            .catch(function(e){ m.textContent = e && e.message ? e.message : 'No se pudo crear el pago.'; m.className = 'msg err'; br.disabled = false; br.textContent = 'Renovar y pagar con ONVO Pay'; });
+        });
+      })
+      .catch(function(){ pan.innerHTML = '<div class="card"><div class="msg err" style="display:block">No se pudo cargar la renovación. Intente de nuevo.</div></div>'; });
+  }
+
   // ---- regreso desde ONVO Pay ----
   var q = new URLSearchParams(location.search), pago = q.get('pago'), bn = $('bannerPago');
-  if (pago === 'exitoso') {
+  if (pago === 'exitoso' && renovar) {
+    bn.className = 'banner ok';
+    bn.innerHTML = '<b>¡Pago recibido!</b> En unos minutos recibirá en el correo de su empresa la confirmación de la renovación. Si no la ve, revise la carpeta de correo no deseado o escríbanos por WhatsApp al 6093-3090.';
+    $('panelRenovar').style.display = 'none';
+  } else if (pago === 'exitoso') {
     bn.className = 'banner ok';
     bn.innerHTML = '<b>¡Pago recibido!</b> En unos minutos recibirá en el correo de su empresa los enlaces para sus colaboradores. Si no lo ve, revise la carpeta de correo no deseado o escríbanos por WhatsApp al 6093-3090.';
-    document.getElementById('frm').style.display = 'none';
+    document.getElementById('panelPedido').style.display = 'none';
   } else if (pago === 'cancelado') {
     bn.className = 'banner cancel';
     bn.textContent = 'El pago fue cancelado y no se realizó ningún cobro. Puede volver a intentarlo cuando quiera.';

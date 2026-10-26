@@ -4,8 +4,11 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>VidaVitalQR Objetos · Ficha de Identificación</title>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<!-- 2026-10-26: html2canvas y jsPDF ahora se sirven desde el propio sitio (carpeta /vendor, mismas versiones 1.4.1 y 2.5.1) para no depender de un tercero; si por algún motivo el archivo propio no carga, se usa cdnjs como respaldo. -->
+<script src="/vendor/html2canvas-1.4.1.min.js"></script>
+<script>window.html2canvas||document.write('<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"><\/script>');</script>
+<script src="/vendor/jspdf-2.5.1.umd.min.js"></script>
+<script>(window.jspdf&&window.jspdf.jsPDF)||document.write('<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"><\/script>');</script>
 <style>
   :root{
     --navy:#0F2A3D;
@@ -947,7 +950,6 @@ $('photoRemove').addEventListener('click', e => {
     return 'VVOBJETO' + String(n).padStart(8,'0');
   }
   // Servicio gratuito de conteo compartido (sin necesidad de servidor propio).
-  const COUNTER_API = 'https://abacus.jasoncameron.dev';
   const COUNTER_NAMESPACE = 'vidavitalqr-objetos-cr-ficha-emergencia-2026';
   const COUNTER_KEY = 'aperturas';
   const LOCAL_FALLBACK_KEY = 'vidavitalqr_objetos_open_count_local';
@@ -1202,21 +1204,8 @@ $('photoRemove').addEventListener('click', e => {
     return;
   }
 
-  try{
-    fetch(`${COUNTER_API}/hit/${COUNTER_NAMESPACE}/${COUNTER_KEY}`)
-      .then(res => { if(!res.ok) throw new Error('respuesta no válida'); return res.json(); })
-      .then(data => {
-        $('counterNum').textContent = formatCounter(data.value);
-      })
-      .catch(() => {
-        // Sin conexión o el servicio no respondió: usa un contador local de respaldo
-        // (no compartido) para que la app siga funcionando.
-        $('counterNum').textContent = formatCounter(localFallback());
-      });
-  }catch(err){
-    // fetch no disponible en este contexto: usar respaldo local directamente
-    $('counterNum').textContent = formatCounter(localFallback());
-  }
+  // Contador de aperturas: ya no depende de un servicio externo; se usa solo el contador local de este navegador.
+  $('counterNum').textContent = formatCounter(localFallback());
 })();
 
 // ---- ubicación: provincias, cantones y distritos de Costa Rica (desplegables en cascada si el
@@ -1229,7 +1218,7 @@ $('photoRemove').addEventListener('click', e => {
   // Fuente: API pública "Ubicaciones de Costa Rica" (ubicaciones.paginasweb.cr), sin llave,
   // con CORS abierto — se consulta en vivo desde el navegador para mostrar siempre el listado
   // oficial de provincias → cantones → distritos, en lugar de una copia fija en el código.
-  const API_BASE = 'https://ubicaciones.paginasweb.cr';
+  const API_BASE = '/datos/ubicaciones';
   const PROVINCIAS = { 1: 'San José', 2: 'Alajuela', 3: 'Cartago', 4: 'Heredia', 5: 'Guanacaste', 6: 'Puntarenas', 7: 'Limón' };
 
   const paisEl = $('pais');
