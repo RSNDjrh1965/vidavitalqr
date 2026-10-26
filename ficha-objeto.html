@@ -5,9 +5,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>VidaVitalQR Objetos · Ficha de Identificación</title>
 <!-- 2026-10-26: html2canvas y jsPDF ahora se sirven desde el propio sitio (carpeta /vendor, mismas versiones 1.4.1 y 2.5.1) para no depender de un tercero; si por algún motivo el archivo propio no carga, se usa cdnjs como respaldo. -->
-<script src="/vendor/html2canvas-1.4.1.min.js"></script>
+<script src="/html2canvas-1.4.1.min.js"></script>
 <script>window.html2canvas||document.write('<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"><\/script>');</script>
-<script src="/vendor/jspdf-2.5.1.umd.min.js"></script>
+<script src="/jspdf-2.5.1.umd.min.js"></script>
 <script>(window.jspdf&&window.jspdf.jsPDF)||document.write('<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"><\/script>');</script>
 <style>
   :root{
@@ -1218,7 +1218,16 @@ $('photoRemove').addEventListener('click', e => {
   // Fuente: API pública "Ubicaciones de Costa Rica" (ubicaciones.paginasweb.cr), sin llave,
   // con CORS abierto — se consulta en vivo desde el navegador para mostrar siempre el listado
   // oficial de provincias → cantones → distritos, en lugar de una copia fija en el código.
-  const API_BASE = '/datos/ubicaciones';
+  const API_BASE = '';
+  function ubicFetch(p){
+    window.__ubic = window.__ubic || fetch('/ubicaciones-cr.json').then(function(r){ if(!r.ok) throw new Error('http'); return r.json(); });
+    return window.__ubic.then(function(d){
+      var m = String(p).match(/provincia\/(\d+)\/(?:canton\/(\d+)\/distritos|cantones)\.json/);
+      var x = m && d[m[1]] ? (m[2] ? d[m[1]].d[m[2]] : d[m[1]].c) : null;
+      return { ok: !!x, json: function(){ return Promise.resolve(x || {}); } };
+    });
+  }
+
   const PROVINCIAS = { 1: 'San José', 2: 'Alajuela', 3: 'Cartago', 4: 'Heredia', 5: 'Guanacaste', 6: 'Puntarenas', 7: 'Limón' };
 
   const paisEl = $('pais');
@@ -1254,7 +1263,7 @@ $('photoRemove').addEventListener('click', e => {
   async function cargarCantonesDeProvincia(provinciaId){
     cantonSelect.innerHTML = '<option value="">Cargando cantones…</option>';
     try {
-      const resp = await fetch(`${API_BASE}/provincia/${provinciaId}/cantones.json`);
+      const resp = await ubicFetch(`${API_BASE}/provincia/${provinciaId}/cantones.json`);
       if (!resp.ok) throw new Error('http');
       const cantones = await resp.json();
       cantonSelect.innerHTML = '<option value="">Seleccione un cantón…</option>';
@@ -1292,7 +1301,7 @@ $('photoRemove').addEventListener('click', e => {
   async function cargarDistritos(provinciaId, cantonId){
     distritoSelect.innerHTML = '<option value="">Cargando distritos…</option>';
     try {
-      const resp = await fetch(`${API_BASE}/provincia/${provinciaId}/canton/${cantonId}/distritos.json`);
+      const resp = await ubicFetch(`${API_BASE}/provincia/${provinciaId}/canton/${cantonId}/distritos.json`);
       if (!resp.ok) throw new Error('http');
       const distritos = await resp.json();
       distritoSelect.innerHTML = '<option value="">Seleccione un distrito…</option>';
@@ -1326,7 +1335,7 @@ $('photoRemove').addEventListener('click', e => {
     try {
       const provinciaIds = Object.keys(PROVINCIAS);
       const respuestas = await Promise.all(provinciaIds.map(id =>
-        fetch(`${API_BASE}/provincia/${id}/cantones.json`).then(r => (r.ok ? r.json() : {})).catch(() => ({}))
+        ubicFetch(`${API_BASE}/provincia/${id}/cantones.json`).then(r => (r.ok ? r.json() : {})).catch(() => ({}))
       ));
       for (let i = 0; i < provinciaIds.length; i++) {
         const cantones = respuestas[i];

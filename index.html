@@ -15,7 +15,7 @@
 <meta property="og:description" content="Información de emergencia de personas, mascotas y objetos, guardada en la nube y lista para mostrarse al escanear un código QR.">
 <meta property="og:image" content="https://vidavitalqr.com/blog/acompanante_familia.jpg">
 <meta name="twitter:card" content="summary_large_image">
-<link rel="stylesheet" href="/fonts/fonts.css">
+<link rel="stylesheet" href="/fonts.css">
 <style>
   :root{
     --ink:#12282B;
@@ -2456,7 +2456,16 @@
   // ---- API pública de ubicaciones de Costa Rica (misma que usan ficha.html / ficha-mascota.html
   //      / ficha-objeto.html), para los desplegables en cascada provincia → cantón → distrito del
   //      modal de dirección de envío. ----
-  var ENVIO_API_BASE = '/datos/ubicaciones';
+  var ENVIO_API_BASE = '';
+  function ubicFetch(p){
+    window.__ubic = window.__ubic || fetch('/ubicaciones-cr.json').then(function(r){ if(!r.ok) throw new Error('http'); return r.json(); });
+    return window.__ubic.then(function(d){
+      var m = String(p).match(/provincia\/(\d+)\/(?:canton\/(\d+)\/distritos|cantones)\.json/);
+      var x = m && d[m[1]] ? (m[2] ? d[m[1]].d[m[2]] : d[m[1]].c) : null;
+      return { ok: !!x, json: function(){ return Promise.resolve(x || {}); } };
+    });
+  }
+
   var ENVIO_PROVINCIAS = { 1: 'San José', 2: 'Alajuela', 3: 'Cartago', 4: 'Heredia', 5: 'Guanacaste', 6: 'Puntarenas', 7: 'Limón' };
 
   // ---- checkout demo: selección de productos y resumen dinámico ----
@@ -3461,7 +3470,7 @@
     aplicarModoTextoUbicacion(envioDistrito, document.getElementById('envioDistritoTxt'), false, false);
     envioCanton.innerHTML = '<option value="">' + (dicEnvio.envioOptCargandoCantones || 'Cargando cantones…') + '</option>';
     envioDistrito.innerHTML = '<option value="">' + (dicEnvio.envioOptSeleccioneCanton || 'Seleccione un cantón…') + '</option>';
-    fetch(ENVIO_API_BASE + '/provincia/' + provinciaId + '/cantones.json')
+    ubicFetch(ENVIO_API_BASE + '/provincia/' + provinciaId + '/cantones.json')
       .then(function(r){ if (!r.ok) throw new Error('http'); return r.json(); })
       .then(function(cantones){
         envioCanton.innerHTML = '<option value="">' + (getDic().envioOptSeleccione || 'Seleccione…') + '</option>';
@@ -3483,7 +3492,7 @@
 
   function cargarDistritosEnvio(provinciaId, cantonId){
     envioDistrito.innerHTML = '<option value="">' + (getDic().envioOptCargandoDistritos || 'Cargando distritos…') + '</option>';
-    fetch(ENVIO_API_BASE + '/provincia/' + provinciaId + '/canton/' + cantonId + '/distritos.json')
+    ubicFetch(ENVIO_API_BASE + '/provincia/' + provinciaId + '/canton/' + cantonId + '/distritos.json')
       .then(function(r){ if (!r.ok) throw new Error('http'); return r.json(); })
       .then(function(distritos){
         envioDistrito.innerHTML = '<option value="">' + (getDic().envioOptSeleccione || 'Seleccione…') + '</option>';
