@@ -12,7 +12,7 @@
 const { S3Client, PutObjectCommand } = require('@aws-sdk/client-s3');
 const { estaBloqueado, anotar, ipDe } = require('./lib/limite');
 
-const DESTINATARIO = 'vidavitalqr@zohomail.com';
+const DESTINATARIO = 'roljamher@hotmail.com';
 const REMITENTE = 'VidaVitalQR <ficha@vidavitalqr.com>';
 const BUCKET_RESUMEN = process.env.S3_BUCKET_RESUMEN || 'resumen-vidavitalqr';
 

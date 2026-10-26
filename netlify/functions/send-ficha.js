@@ -29,7 +29,7 @@ const { estaBloqueado, anotar, ipDe, folioSeguro } = require('./lib/limite');
 const { enRangoRegalo, firmaValida, claveRegalo } = require('./lib/regalo');
 const { esFolioEmpresa, leerJson, escribirJson, cargarFolioDeEmpresa, claveFolio, claveTarjeta, claveFichaCopia } = require('./lib/empresa');
 
-const DESTINATARIO = 'vidavitalqr@zohomail.com';
+const DESTINATARIO = 'roljamher@hotmail.com';
 const REMITENTE = 'VidaVitalQR <ficha@vidavitalqr.com>';
 
 // Nombres de los buckets (se pueden sobreescribir con variables de entorno si algún día cambian).

@@ -18,7 +18,7 @@ const { idEmpresaValido, leerJson, escribirJson, claveLote, claveAvisos } = requ
 
 const BUCKET_RESUMEN = process.env.S3_BUCKET_RESUMEN || 'resumen-vidavitalqr';
 const REMITENTE = 'VidaVitalQR <ficha@vidavitalqr.com>';
-const DESTINATARIO_JAMES = 'vidavitalqr@zohomail.com';
+const DESTINATARIO_JAMES = 'roljamher@hotmail.com';
 const WHATSAPP = '+506 6093-3090';
 
 function getS3Client() {
