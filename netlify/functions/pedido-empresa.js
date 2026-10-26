@@ -65,7 +65,7 @@ exports.handler = async (event) => {
   }
   await anotar(s3, BUCKET_RESUMEN, 'pedido-empresa-ip', ip, VENTANA);
 
-  const t = calcularTotales(datos.cantidad);
+  const t = calcularTotales(datos.cantidad, datos.modalidad, datos.retiroPersona);
   const monedaRecibida = String(p.moneda || 'USD').trim().toUpperCase();
   const moneda = monedaRecibida === 'CRC' ? 'CRC' : 'USD';
   if (moneda === 'CRC' && process.env.HABILITAR_PAGO_CRC !== 'true') {
@@ -99,8 +99,8 @@ exports.handler = async (event) => {
   try {
     await escribirJson(s3, BUCKET_RESUMEN, clavePedido(pedidoId), {
       id: pedidoId, estado: 'pendiente', creado: new Date().toISOString(),
-      nombre: datos.nombre, correo: datos.correo, telefono: datos.telefono, cantidad: datos.cantidad,
-      precioUnitario: t.precioUnitario, subtotal: t.subtotal, iva: t.iva, totalUSD: t.totalUSD,
+      nombre: datos.nombre, correo: datos.correo, telefono: datos.telefono, cantidad: datos.cantidad, modalidad: datos.modalidad, retiroPersona: datos.retiroPersona === true,
+      precioUnitario: t.precioUnitario, subtotalTarjetas: t.subtotalTarjetas, envio: t.envio, subtotal: t.subtotal, iva: t.iva, totalUSD: t.totalUSD,
       logoTipo: datos.logoTipo, logoBase64: datos.logoBase64,
       autorizaLogo: true, autorizaLogoFecha: new Date().toISOString(),
     });
@@ -117,13 +117,16 @@ exports.handler = async (event) => {
     captureMethod: 'automatic',
     lineItems: [{
       quantity: 1, unitAmount, currency: currencyOnvo,
-      description: `Identificador QR para empresas — ${datos.cantidad} tarjeta(s) a $${t.precioUnitario} c/u (incluye IVA 13%)`,
+      description: `Identificador QR para empresas (${datos.modalidad === 'digital' ? 'solo digital' : 'tarjeta impresa'}) — ${datos.cantidad} tarjeta(s) a $${t.precioUnitario} c/u${datos.modalidad === 'digital' ? '' : (datos.retiroPersona ? ' + retiro en persona (sin envío)' : ' + envío $' + t.envio.toFixed(2))} (incluye IVA 13%)`,
       priceType: 'one_time',
     }],
     metadata: {
       pedidoEmpresa: pedidoId,
       origen: 'vidavitalqr-empresas',
       cantidad: String(datos.cantidad),
+      modalidad: datos.modalidad,
+      envio: t.envio.toFixed(2),
+      retiroPersona: datos.retiroPersona ? 'si' : 'no',
       moneda: currencyOnvo,
       tipoCambioUsado: tipoCambioUsado ? String(tipoCambioUsado) : '',
       totalCRCInformativo: totalCRCInformativo ? String(totalCRCInformativo) : '',

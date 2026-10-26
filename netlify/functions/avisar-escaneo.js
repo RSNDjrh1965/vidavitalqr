@@ -8,10 +8,9 @@
 //
 // Ubicación que se incluye en el correo:
 //  - Si el permiso fue concedido: la ubicación exacta (coordenadas) que envió el navegador.
-//  - Si fue rechazado, no respondió a tiempo, o el navegador no soporta geolocalización: una
-//    ubicación aproximada calculada a partir de la IP de la conexión, dejando explícito que es
-//    aproximada y puede no ser exacta. Si ni siquiera eso se puede determinar, el correo se
-//    envía igual, sin sección de ubicación.
+//  - Si fue rechazado, no respondió a tiempo, o el navegador no soporta geolocalización: el correo
+//    se envía igual pero SIN ubicación y lo dice (2026-10-23: se dejó de enviar la ubicación
+//    aproximada por IP, porque podía llevar a lugares sin sentido).
 
 const { S3Client, GetObjectCommand } = require('@aws-sdk/client-s3');
 const { estaBloqueado, anotar, folioSeguro } = require('./lib/limite');
@@ -128,6 +127,7 @@ const TEXTOS_AVISO_ESCANEO = {
     ubicExactaNota: '(Precisión según el dispositivo de quien escaneó — puede no ser exacta.)',
     ubicAprox: (detalle) => `Ubicación aproximada de quien escaneó el código${detalle}`,
     ubicAproxNota: '(Esta ubicación es aproximada, calculada a partir de la conexión a internet — no es exacta, y quien escaneó no compartió su ubicación real.)',
+    ubicSin: 'La persona que escaneó el código no compartió su ubicación, por eso este aviso no incluye ninguna ubicación.',
     aproxEnLbl: (etiqueta) => ` (aproximadamente en ${etiqueta})`,
     fichaLbl: 'Ficha completa',
     hola: 'Hola',
@@ -146,6 +146,7 @@ const TEXTOS_AVISO_ESCANEO = {
     ubicExactaNota: '(Accuracy depends on the scanning device — may not be exact.)',
     ubicAprox: (detalle) => `Approximate location of the person who scanned the code${detalle}`,
     ubicAproxNota: '(This location is approximate, calculated from the internet connection — it is not exact, and the person who scanned did not share their real location.)',
+    ubicSin: 'The person who scanned the code did not share their location, so this notice does not include any location.',
     aproxEnLbl: (etiqueta) => ` (approximately in ${etiqueta})`,
     fichaLbl: 'Full profile',
     hola: 'Hello',
@@ -164,6 +165,7 @@ const TEXTOS_AVISO_ESCANEO = {
     ubicExactaNota: "(Précision selon l'appareil utilisé — peut ne pas être exacte.)",
     ubicAprox: (detalle) => `Position approximative de la personne qui a scanné le code${detalle}`,
     ubicAproxNota: "(Cette position est approximative, calculée à partir de la connexion internet — elle n'est pas exacte, et la personne n'a pas partagé sa position réelle.)",
+    ubicSin: "La personne qui a scanné le code n'a pas partagé sa localisation ; cet avis n'inclut donc aucune localisation.",
     aproxEnLbl: (etiqueta) => ` (environ à ${etiqueta})`,
     fichaLbl: 'Fiche complète',
     hola: 'Bonjour',
@@ -185,6 +187,7 @@ const TEXTOS_AVISO_ESCANEO = {
     ubicExactaNota: '(Precisão de acordo com o dispositivo de quem escaneou — pode não ser exata.)',
     ubicAprox: (detalle) => `Localização aproximada de quem escaneou o código${detalle}`,
     ubicAproxNota: '(Esta localização é aproximada, calculada a partir da conexão à internet — não é exata, e quem escaneou não compartilhou sua localização real.)',
+    ubicSin: 'A pessoa que escaneou o código não compartilhou sua localização, por isso este aviso não inclui nenhuma localização.',
     aproxEnLbl: (etiqueta) => ` (aproximadamente em ${etiqueta})`,
     fichaLbl: 'Ficha completa',
     hola: 'Olá',
@@ -222,11 +225,15 @@ async function avisarContactos(datos, ubicacionInfo) {
   // datos crudos que llegaron en ubicacionInfo ----
   let ubicacionArmada = null;
   if (ubicacionInfo && ubicacionInfo.tipo === 'exacta') {
-    ubicacionArmada = { prefijo: t.ubicExacta, url: ubicacionInfo.url, nota: t.ubicExactaNota };
+    const precisionTxt = Number.isFinite(ubicacionInfo.precision) && ubicacionInfo.precision > 0 ? ` ±${ubicacionInfo.precision} m` : '';
+    ubicacionArmada = { prefijo: t.ubicExacta, url: ubicacionInfo.url, nota: t.ubicExactaNota + precisionTxt };
   } else if (ubicacionInfo && ubicacionInfo.tipo === 'aproximada') {
     const detalle = ubicacionInfo.etiqueta ? t.aproxEnLbl(ubicacionInfo.etiqueta) : '';
     ubicacionArmada = { prefijo: t.ubicAprox(detalle), url: ubicacionInfo.url, nota: t.ubicAproxNota };
   }
+  // ---- 2026-10-23: si quien escaneó no compartió su ubicación, ya NO se manda una aproximada por IP
+  // (podía caer en lugares sin sentido); el correo lo dice claramente y no lleva ubicación ----
+  const sinUbicacionTexto = (ubicacionInfo && ubicacionInfo.tipo === 'sin') ? t.ubicSin : '';
 
   // ---- texto de ubicación en una sola línea (con la URL completa del mapa incrustada, como
   // antes) — para la versión en texto plano, donde el propio cliente de correo la detecta y la
@@ -243,7 +250,7 @@ async function avisarContactos(datos, ubicacionInfo) {
     '',
     explicacionTexto,
     '',
-    ubicacionTexto || '',
+    ubicacionTexto || sinUbicacionTexto,
     datos.pdfUrl ? `${t.fichaLbl}: ${urlAcortada(datos.pdfUrl)}` : '',
     '',
     notaFinalTexto,
@@ -256,7 +263,7 @@ async function avisarContactos(datos, ubicacionInfo) {
   // punto 48, sin cambios aquí.
   const ubicacionHtml = ubicacionArmada
     ? `<p>${escaparHtml(ubicacionArmada.prefijo)}: <a href="${escaparHtml(ubicacionArmada.url)}">${escaparHtml(ubicacionArmada.url)}</a><br>${escaparHtml(ubicacionArmada.nota)}</p>`
-    : '';
+    : (sinUbicacionTexto ? `<p>${escaparHtml(sinUbicacionTexto)}</p>` : '');
   const fichaHtml = datos.pdfUrl
     ? `<p><strong>${escaparHtml(t.fichaLbl)}:</strong> <a href="${escaparHtml(datos.pdfUrl)}">${escaparHtml(urlAcortada(datos.pdfUrl))}</a></p>`
     : '';
@@ -374,14 +381,12 @@ exports.handler = async (event) => {
   // (datos.idioma), y también puede armar tanto la línea de texto plano como el <a href> real de
   // la versión HTML — ver punto 53 y punto 54 de la bitácora) ----
   let ubicacionInfo = null;
-  if (lat !== null && lng !== null) {
-    ubicacionInfo = { tipo: 'exacta', url: enlaceMapa(lat, lng) };
+  if (lat !== null && lng !== null && Math.abs(lat) <= 90 && Math.abs(lng) <= 180) {
+    const precision = permitido && typeof payload.precision === 'number' ? Math.min(Math.round(payload.precision), 99999) : null;
+    ubicacionInfo = { tipo: 'exacta', url: enlaceMapa(lat, lng), precision };
   } else {
-    const ip = obtenerIp(event);
-    const aprox = await ubicacionPorIp(ip);
-    if (aprox) {
-      ubicacionInfo = { tipo: 'aproximada', url: enlaceMapa(aprox.lat, aprox.lng), etiqueta: aprox.etiqueta || '' };
-    }
+    // sin ubicación real: no se usa la aproximada por IP (ver avisarContactos)
+    ubicacionInfo = { tipo: 'sin' };
   }
 
   try {

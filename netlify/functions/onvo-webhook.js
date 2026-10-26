@@ -40,6 +40,7 @@ const { GetObjectCommand, PutObjectCommand } = require('@aws-sdk/client-s3');
 const { agregarIngreso } = require('./lib/ingresos');
 const { firmarFolio } = require('./lib/enlace-qr');
 const { procesarPedidoEmpresa } = require('./lib/pedido-empresa-pago');
+const { procesarRenovacionEmpresa } = require('./lib/renovacion-empresa-pago');
 
 const ONVO_API_BASE = 'https://api.onvopay.com/v1';
 // ---- reporte de pagos confirmados: este aviso llega solo al administrador (nunca se muestra ni
@@ -208,6 +209,22 @@ exports.handler = async (event) => {
   const montoBrutoReal = typeof data.amount === 'number' ? data.amount / 100 : null;
   const refNumber = (data.charges && data.charges[0] && data.charges[0].refNumber) || '';
 
+  // ---- 2026-10-22 (Etapa 3): renovación anual de una EMPRESA (metadata.renovacionEmpresa, lo pone renovacion-empresa.js). Se
+  // renuevan todas sus fichas activas; es idempotente por pago. Si falla, 500 para que ONVO reintente. ----
+  if (meta.renovacionEmpresa) {
+    try {
+      await procesarRenovacionEmpresa({
+        s3: getS3Client(), meta, paymentIntentId, modo, moneda, montoBrutoReal, refNumber, tipoCambioUsado,
+        agregarIngreso, registroKey: REGISTRO_INGRESOS_KEY,
+        medioPago: async () => { const sk = process.env.ONVO_SECRET_KEY; return sk ? await medioDePago(data.paymentMethodId, sk) : 'Desconocido'; },
+      });
+    } catch (err) {
+      console.error('onvo-webhook: error procesando la renovación de empresa —', err);
+      return { statusCode: 500, body: 'error' };
+    }
+    return { statusCode: 200, body: 'ok' };
+  }
+
   // ---- 2026-10-22 (Etapa 2 de empresas): si el pago es de un PEDIDO DE EMPRESA (metadata.pedidoEmpresa, lo pone
   // pedido-empresa.js), se crea el lote de folios y se avisa a la empresa y a James; no es un pago de productos del
   // carrito, así que NO pasa por la activación de fichas ni por el aviso normal. Si falla, se responde 500 para que
@@ -366,7 +383,7 @@ async function avisarClienteQrDigital(items, correoCliente) {
       `Su Identificador QR digital (folio ${folio}) ya está listo. En este enlace puede verlo y descargarlo como imagen, como PDF a tamaño de tarjeta (listo para imprimir), descargar solo el código QR o descargar la imagen para usarla como pantalla de bloqueo de su celular:`,
       enlace,
       '',
-      'Consejo: úsela como pantalla de bloqueo para tener su identificador siempre a la vista. En la página encontrará el botón "Descargar para pantalla de bloqueo" y los pasos para iPhone y Android (el celular no permite cambiarla automáticamente: la imagen queda guardada y usted la elige como fondo). Con la pantalla bloqueada se verán su foto y su código QR.',
+      'Consejo: úsela como pantalla de bloqueo para tener su identificador siempre a la vista. En la página encontrará el botón "Descargar para pantalla de bloqueo" y los pasos para iPhone y Android (el celular no permite cambiarla automáticamente: la imagen queda guardada y usted la elige como fondo). Con la pantalla bloqueada se verán su foto y su código QR. Si más adelante cambia el fondo de pantalla o actualiza el celular y la imagen se pierde, vuelva a ponerla desde sus fotos o descárguela otra vez con este mismo enlace.',
       '',
       'Guarde este correo: puede volver a abrir el mismo enlace cuando quiera. Es personal: quien tenga el enlace puede ver su tarjeta (con su foto), así que no lo comparta.',
       '',
@@ -405,7 +422,7 @@ async function avisarClienteQrDigital(items, correoCliente) {
       `Además de su Identificador QR físico (folio ${folio}), le obsequiamos su tarjeta en versión digital, para que la lleve siempre en el celular. En este enlace puede verla, descargarla como imagen o PDF, o descargar la imagen para usarla como pantalla de bloqueo:`,
       enlace,
       '',
-      'Consejo: úsela como pantalla de bloqueo para tener su identificador siempre a la vista. En la página encontrará el botón "Descargar para pantalla de bloqueo" y los pasos para iPhone y Android (el celular no permite cambiarla automáticamente: la imagen queda guardada y usted la elige como fondo). Con la pantalla bloqueada se verán su foto y su código QR.',
+      'Consejo: úsela como pantalla de bloqueo para tener su identificador siempre a la vista. En la página encontrará el botón "Descargar para pantalla de bloqueo" y los pasos para iPhone y Android (el celular no permite cambiarla automáticamente: la imagen queda guardada y usted la elige como fondo). Con la pantalla bloqueada se verán su foto y su código QR. Si más adelante cambia el fondo de pantalla o actualiza el celular y la imagen se pierde, vuelva a ponerla desde sus fotos o descárguela otra vez con este mismo enlace.',
       '',
       'Guarde este correo: puede volver a abrir el mismo enlace cuando quiera. Es personal: quien tenga el enlace puede ver su tarjeta (con su foto), así que no lo comparta.',
       '',

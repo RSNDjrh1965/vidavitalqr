@@ -3,13 +3,17 @@
 // admin-empresas.js y envía avisos por correo A LA EMPRESA, con copia oculta a James:
 //   - a los 3 meses del pago:  lista de folios que siguen "sin activar" (recordatorio para sus trabajadores)
 //   - a los 9 meses del pago:  lo mismo, con aviso de que faltan 3 meses para el vencimiento
+//   - 2026-10-22 (Etapa 3): a 30 días de vencer, y otra vez cuando vence (período de gracia), un aviso de RENOVACIÓN con el
+//     enlace para renovar y pagar en línea por ONVO (/empresas.html?renovar=...). Se anotan como renov30 / renovVenc.
 // Los avisos de VENCIMIENTO no se tocan: son los mismos de siempre (revisar-vigencia.js, a 30 y 7
 // días, vencida, gracia y eliminación) y también aplican a las fichas de empresa.
 // Cada aviso se envía UNA sola vez por año de vigencia (se anota en empresas/<id>/avisos.json; la
 // acción "renovar" de admin-empresas.js reinicia las marcas). La lista lleva SOLO folios: nunca
 // nombres ni datos de los trabajadores. Los lotes de PRUEBA no envían avisos.
 const { S3Client, ListObjectsV2Command } = require('@aws-sdk/client-s3');
-const { sumarMeses } = require('./lib/vigencia');
+const { sumarMeses, finGracia, MS_POR_DIA } = require('./lib/vigencia');
+const { firmarEmpresa } = require('./lib/enlace-qr');
+const { calcularRenovacion, PRECIO_RENOVACION, MIN_FICHAS_RENOVACION } = require('./lib/lote-empresa');
 const { idEmpresaValido, leerJson, escribirJson, claveLote, claveAvisos } = require('./lib/empresa');
 
 const BUCKET_RESUMEN = process.env.S3_BUCKET_RESUMEN || 'resumen-vidavitalqr';
@@ -56,6 +60,30 @@ async function enviar(apiKey, { to, asunto, texto }) {
   }
 }
 
+function enlaceRenovacion(id) {
+  const firma = firmarEmpresa(id);
+  return firma ? `${process.env.SITE_URL || 'https://vidavitalqr.com'}/empresas.html?renovar=${encodeURIComponent(id)}&t=${firma}` : '';
+}
+
+function textoRenovacion(lote, id, activas, vencida, venc) {
+  const pr = calcularRenovacion(activas);
+  const enlace = enlaceRenovacion(id);
+  return [
+    `Hola, equipo de ${lote.nombre}:`,
+    '',
+    vencida
+      ? `La vigencia de sus Identificadores QR de VidaVitalQR venció el ${fechaCorta(venc)}. Las fichas siguen mostrando la información esencial de emergencia durante 2 meses más; después se eliminan. Para mantenerlas, renueven ahora.`
+      : `La vigencia de sus Identificadores QR de VidaVitalQR vence el ${fechaCorta(venc)} (en unos 30 días). Pueden renovar desde ya y no se pierde ningún día: los 12 meses nuevos se suman al vencimiento actual.`,
+    '',
+    `Renovación anual de la empresa: $${PRECIO_RENOVACION} por ficha activa (mínimo ${MIN_FICHAS_RENOVACION} fichas) + IVA, con un solo pago por todo el grupo. Hoy tienen ${activas} ficha(s) activa(s): ${pr.fichasCobradas} × $${pr.precioUnitario} + IVA = $${pr.totalUSD.toFixed(2)}.`,
+    '',
+    ...(enlace ? ['Renueven aquí (pago seguro con ONVO Pay):', enlace, ''] : []),
+    `Cualquier consulta: WhatsApp ${WHATSAPP}.`,
+    '',
+    'Este correo fue generado automáticamente por VidaVitalQR.',
+  ].join('\n');
+}
+
 function textoSinActivar(lote, sinActivar, meses) {
   const restante = meses === 9
     ? 'Faltan 3 meses para que venza la vigencia de este lote.'
@@ -85,7 +113,7 @@ exports.handler = async () => {
     return { statusCode: 500, body: JSON.stringify({ error: err.message }) };
   }
   const ahora = new Date();
-  const resumen = { empresas: 0, aviso3: 0, aviso9: 0, errores: [] };
+  const resumen = { empresas: 0, aviso3: 0, aviso9: 0, renov30: 0, renovVenc: 0, errores: [] };
 
   let prefijos = [];
   try { prefijos = (await listar(s3, 'empresas/', '/')).prefijos; } catch (err) {
@@ -107,13 +135,26 @@ exports.handler = async () => {
       const venc = new Date(lote.vencimiento || sumarMeses(pago, 12));
 
       // folios del lote (se lee solo si hay algún aviso por evaluar)
-      const hayPendiente = (ahora >= hito3 && !avisos.aviso3) || (ahora >= hito9 && !avisos.aviso9);
+      const gracia = finGracia(lote.fechaPago);
+      const hayRenov30 = ahora >= new Date(venc.getTime() - 30 * MS_POR_DIA) && ahora < venc && !avisos.renov30;
+      const hayRenovVenc = ahora >= venc && (!gracia || ahora < gracia) && !avisos.renovVenc;
+      const hayPendiente = (ahora >= hito3 && !avisos.aviso3) || (ahora >= hito9 && !avisos.aviso9) || hayRenov30 || hayRenovVenc;
       if (!hayPendiente) continue;
       const { claves } = await listar(s3, `empresas/${id}/folios/`);
       const folios = [];
       for (const k of claves) { if (k.endsWith('.json')) { const r = await leerJson(s3, BUCKET_RESUMEN, k); if (r) folios.push(r); } }
       const sinActivar = folios.filter((f) => f.estado === 'sin_activar').map((f) => f.folio).sort();
       let cambio = false;
+
+      // aviso de RENOVACIÓN (Etapa 3): si se despliega tarde y ya venció, solo se manda el de vencimiento
+      if (hayRenov30 || hayRenovVenc) {
+        const activas = folios.filter((f) => f.estado === 'activa').length;
+        if (activas > 0 && firmarEmpresa(id)) {
+          const vencida = hayRenovVenc;
+          const ok = await enviar(apiKey, { to: lote.correo, asunto: vencida ? `Venció la vigencia — renueve sus Identificadores QR — ${lote.nombre}` : `Renueve sus Identificadores QR (vencen en 30 días) — ${lote.nombre}`, texto: textoRenovacion(lote, id, activas, vencida, venc) });
+          if (ok) { if (vencida) { avisos.renovVenc = true; avisos.renov30 = true; resumen.renovVenc++; } else { avisos.renov30 = true; resumen.renov30++; } cambio = true; }
+        } else { if (hayRenovVenc) avisos.renovVenc = true; avisos.renov30 = true; cambio = true; }
+      }
 
       // a los 9 meses se evalúa primero: si el sistema se despliega tarde, no se mandan dos avisos seguidos
       if (ahora >= hito9 && !avisos.aviso9) {

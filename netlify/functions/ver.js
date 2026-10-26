@@ -87,8 +87,8 @@ const TEXTOS = {
     idioma: 'Idioma',
     avisoSolicitud: 'Se solicita su permiso para enviar a la persona de contacto la ubicación actual de la persona y/o mascota en aprietos.',
     avisoUbicPrecisa: 'Gracias. Se notificó a los contactos de emergencia junto con su ubicación.',
-    avisoUbicAprox: 'No se compartió su ubicación exacta. Se notificó a los contactos de emergencia con una ubicación aproximada según su conexión a internet.',
-    ubicPreguntaTexto: '¿Autoriza compartir su ubicación exacta con los contactos de emergencia registrados en esta ficha? Si no autoriza, se les notificará igual, pero con una ubicación solo aproximada.',
+    avisoUbicAprox: 'No se compartió su ubicación. Se notificó a los contactos de emergencia, pero sin ubicación.',
+    ubicPreguntaTexto: 'Para que los contactos de emergencia sepan dónde se encuentra, ¿autoriza compartir su ubicación exacta? Si no autoriza, se les notificará igual, pero sin ubicación.',
     btnUbicSi: 'Sí, compartir ubicación exacta',
     btnUbicNo: 'No, usar solo aproximada',
     // ---- 2026-09-25: aviso de ficha vencida (ver lib/vigencia.js). Solo se muestra en el
@@ -126,8 +126,8 @@ const TEXTOS = {
     idioma: 'Language',
     avisoSolicitud: 'We are requesting your permission to send the contact person the current location of the person and/or pet in distress.',
     avisoUbicPrecisa: 'Thank you. The emergency contacts were notified along with your location.',
-    avisoUbicAprox: 'Your exact location was not shared. The emergency contacts were notified with an approximate location based on your internet connection.',
-    ubicPreguntaTexto: 'Do you authorize sharing your exact location with the emergency contacts registered on this record? If you do not authorize it, they will still be notified, but only with an approximate location.',
+    avisoUbicAprox: 'Your location was not shared. The emergency contacts were notified, but without a location.',
+    ubicPreguntaTexto: 'So the emergency contacts know where you are, do you authorize sharing your exact location? If you do not authorize it, they will still be notified, but without a location.',
     btnUbicSi: 'Yes, share exact location',
     btnUbicNo: 'No, use approximate only',
     bannerVencida: '⚠️ This record has expired. Essential emergency information (contacts and medical data) is still shown, but the photo and the full PDF record are hidden until the owner renews it — and it will be permanently deleted if not renewed in time.',
@@ -161,8 +161,8 @@ const TEXTOS = {
     idioma: 'Langue',
     avisoSolicitud: "Nous vous demandons la permission d'envoyer à la personne de contact la localisation actuelle de la personne et/ou de l'animal en détresse.",
     avisoUbicPrecisa: "Merci. Les contacts d'urgence ont été notifiés avec votre localisation.",
-    avisoUbicAprox: "Votre localisation exacte n'a pas été partagée. Les contacts d'urgence ont été notifiés avec une localisation approximative basée sur votre connexion internet.",
-    ubicPreguntaTexto: "Autorisez-vous le partage de votre localisation exacte avec les contacts d'urgence enregistrés sur cette fiche ? Si vous ne l'autorisez pas, ils seront tout de même notifiés, mais avec une localisation seulement approximative.",
+    avisoUbicAprox: "Votre localisation n'a pas été partagée. Les contacts d'urgence ont été notifiés, mais sans localisation.",
+    ubicPreguntaTexto: "Pour que les contacts d'urgence sachent où vous êtes, autorisez-vous le partage de votre localisation exacte ? Si vous ne l'autorisez pas, ils seront tout de même notifiés, mais sans localisation.",
     btnUbicSi: 'Oui, partager la localisation exacte',
     btnUbicNo: 'Non, utiliser seulement l\'approximative',
     bannerVencida: "⚠️ Cette fiche a expiré. Les informations d'urgence essentielles (contacts et données médicales) restent affichées, mais la photo et la fiche complète en PDF sont masquées jusqu'à ce que le titulaire la renouvelle — elle sera définitivement supprimée si elle n'est pas renouvelée à temps.",
@@ -196,8 +196,8 @@ const TEXTOS = {
     idioma: 'Idioma',
     avisoSolicitud: 'Solicitamos sua permissão para enviar ao contato a localização atual da pessoa e/ou animal em apuros.',
     avisoUbicPrecisa: 'Obrigado. Os contatos de emergência foram notificados junto com sua localização.',
-    avisoUbicAprox: 'Sua localização exata não foi compartilhada. Os contatos de emergência foram notificados com uma localização aproximada baseada na sua conexão à internet.',
-    ubicPreguntaTexto: 'Você autoriza compartilhar sua localização exata com os contatos de emergência registrados nesta ficha? Se não autorizar, eles ainda serão notificados, mas com uma localização apenas aproximada.',
+    avisoUbicAprox: 'Sua localização não foi compartilhada. Os contatos de emergência foram notificados, mas sem localização.',
+    ubicPreguntaTexto: 'Para que os contatos de emergência saibam onde você está, você autoriza compartilhar sua localização exata? Se não autorizar, eles ainda serão notificados, mas sem localização.',
     btnUbicSi: 'Sim, compartilhar localização exata',
     btnUbicNo: 'Não, usar apenas a aproximada',
     bannerVencida: '⚠️ Esta ficha está vencida. As informações essenciais de emergência (contatos e dados médicos) continuam sendo exibidas, mas a foto e a ficha completa em PDF ficam ocultas até que o titular a renove — e será excluída definitivamente se não for renovada a tempo.',
@@ -572,14 +572,14 @@ function paginaVisor(datos) {
   // propio diálogo nativo en ese momento, la primera vez); si responde "No", se avisa de una
   // vez con ubicación aproximada, sin siquiera intentar obtener coordenadas. Aplica igual para
   // fichas de persona, mascota y objeto. ----
-  function avisarEscaneo(lat, lng, permitido){
+  function avisarEscaneo(lat, lng, permitido, precision){
     if (!FOLIO) return;
     try {
       fetch('/.netlify/functions/avisar-escaneo', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         keepalive: true,
-        body: JSON.stringify({ folio: FOLIO, lat: lat, lng: lng, permitido: !!permitido }),
+        body: JSON.stringify({ folio: FOLIO, lat: lat, lng: lng, permitido: !!permitido, precision: precision }),
       }).catch(function(){});
     } catch (e) {}
   }
@@ -599,22 +599,29 @@ function paginaVisor(datos) {
       avisarEscaneo(null, null, false);
       return;
     }
+    // ---- 2026-10-23: se busca la ubicación REAL con GPS de alta precisión (hasta 20 s). Si el
+    // celular no la entrega a tiempo (error distinto a "permiso denegado"), se reintenta una vez
+    // con precisión normal y se acepta una lectura reciente. Si no se logra, el aviso sale SIN
+    // ubicación (ya no se manda una aproximada por IP, que podía caer en lugares sin sentido). ----
+    function exito(pos){
+      estadoUbicacion = 'concedida';
+      ocultarPromptUbicacion();
+      actualizarAvisoUbicacion();
+      avisarEscaneo(pos.coords.latitude, pos.coords.longitude, true, Math.round(pos.coords.accuracy || 0));
+    }
+    function fallo(){
+      estadoUbicacion = 'denegada';
+      ocultarPromptUbicacion();
+      actualizarAvisoUbicacion();
+      avisarEscaneo(null, null, false);
+    }
     navigator.geolocation.getCurrentPosition(
-      function (pos) {
-        estadoUbicacion = 'concedida';
-        ocultarPromptUbicacion();
-        actualizarAvisoUbicacion();
-        avisarEscaneo(pos.coords.latitude, pos.coords.longitude, true);
+      exito,
+      function (err) {
+        if (err && err.code === 1) { fallo(); return; } // permiso denegado: no se insiste
+        navigator.geolocation.getCurrentPosition(exito, fallo, { timeout: 10000, maximumAge: 60000, enableHighAccuracy: false });
       },
-      function () {
-        // el navegador rechazó el permiso (o no respondió a tiempo) aunque la persona haya
-        // aceptado en nuestra propia pregunta — se avisa igual, con ubicación aproximada.
-        estadoUbicacion = 'denegada';
-        ocultarPromptUbicacion();
-        actualizarAvisoUbicacion();
-        avisarEscaneo(null, null, false);
-      },
-      { timeout: 6000, maximumAge: 0, enableHighAccuracy: false }
+      { timeout: 20000, maximumAge: 0, enableHighAccuracy: true }
     );
   }
 

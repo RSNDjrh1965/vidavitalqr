@@ -70,9 +70,9 @@ const PRECIOS = {
   renewal_objeto:   { label: 'Renovación anual VidaVitalQR — Objeto',  price: 7.00, tipo: 'objeto',  renovacion: true },
   qr_only_personal: { label: 'Código QR (solo digital) — Personal',    price: 7.00, tipo: 'persona', renovacion: false },
   qr_only_objeto:   { label: 'Código QR (solo digital) — Objeto',      price: 7.00, tipo: 'objeto',  renovacion: false },
-  plate_personal:   { label: 'Placa con código QR — Personal',         price: 13.00, tipo: 'persona', renovacion: false },
-  plate_mascota:    { label: 'Placa con código QR — Mascota',          price: 13.00, tipo: 'mascota', renovacion: false },
-  plate_objeto:     { label: 'Placa con código QR — Objeto',           price: 13.00, tipo: 'objeto',  renovacion: false },
+  plate_personal:   { label: 'Placa con código QR — Personal',         price: 14.00, tipo: 'persona', renovacion: false },
+  plate_mascota:    { label: 'Placa con código QR — Mascota',          price: 14.00, tipo: 'mascota', renovacion: false },
+  plate_objeto:     { label: 'Placa con código QR — Objeto',           price: 14.00, tipo: 'objeto',  renovacion: false },
   bracelet:         { label: 'Pulsera con placa QR',                   price: 16.00, tipo: 'persona', renovacion: false },
   chain:            { label: 'Cadena con incrustación religiosa',      price: 19.00, tipo: 'persona', renovacion: false },
   idcard:           { label: 'Identificador QR',                      price: 14.00, tipo: 'persona', renovacion: false },
@@ -83,14 +83,14 @@ const PRECIOS = {
 const IVA_RATE = 0.13;
 const MAX_ITEMS_POR_PEDIDO = 20; // límite defensivo, muy por encima de lo que ofrece la página
 
-// ---- costo de envío: cargo único de $8.50 cuando el carrito incluye al menos un producto
-// físico, cubre hasta 5 productos físicos por dirección (van juntos en el mismo paquete); del 6.º en adelante se suma
+// ---- costo de envío: cargo único de $9.50 cuando el carrito incluye al menos un producto
+// físico, cubre hasta 10 productos físicos por dirección (van juntos en el mismo paquete); del 6.º en adelante se suma
 // otro cargo por cada grupo de hasta 5 — nunca se cobra un envío aparte por cada producto físico. Debe coincidir siempre con
 // SHIPPING_COST/ITEMS_FISICOS de index.html — si se cambia un lado, hay que cambiar el otro. Se
 // recalcula aquí siempre desde cero, nunca se confía en ningún monto de envío que mande el
 // navegador. ----
-const SHIPPING_COST = 8.50;
-const ENVIO_MAX_PRODUCTOS = 5; // cada paquete de hasta 5 productos físicos paga un cargo de SHIPPING_COST (igual que index.html)
+const SHIPPING_COST = 9.50;
+const ENVIO_MAX_PRODUCTOS = 10; // cada paquete de hasta 10 productos físicos paga un cargo de SHIPPING_COST (igual que index.html)
 const ITEMS_FISICOS = ['plate_personal', 'plate_mascota', 'plate_objeto', 'bracelet', 'chain', 'idcard'];
 
 // ---- estilos válidos de "Placa con código QR — Personal" (numerados 1-4 en el landing, ver
@@ -184,17 +184,17 @@ exports.handler = async (event) => {
   }
 
   // ---- costo de envío: se agrega una sola vez si el pedido incluye algún producto físico,
-  // nunca por separado por cada uno (cubre hasta 5 productos físicos por dirección) ----
+  // nunca por separado por cada uno (cubre hasta 10 productos físicos por dirección) ----
   const cantidadFisicos = items.filter((it) => ITEMS_FISICOS.indexOf(it.itemId) !== -1).length;
   const incluyeFisico = cantidadFisicos > 0;
-  // ---- 2026-10-19: un cargo de envío por cada grupo de hasta 5 productos físicos (1-5 => 1 cargo,
-  // 6-10 => 2 cargos, ...). Se recalcula aquí siempre; nunca se acepta un monto del navegador. ----
+  // ---- 2026-10-19: un cargo de envío por cada grupo de hasta 10 productos físicos (1-10 => 1 cargo,
+  // 11-20 => 2 cargos, ...). Se recalcula aquí siempre; nunca se acepta un monto del navegador. ----
   const paquetesEnvio = incluyeFisico ? Math.ceil(cantidadFisicos / ENVIO_MAX_PRODUCTOS) : 0;
   // ---- 2026-10-02: "retiro en persona" — a pedido de James. El mismo modal de "Dirección de
   // envío" de index.html, cuando el cliente marca que va a retirar en persona, manda esta
   // bandera aquí también (además de guardarla en guardar-envio.js) para que no se le cobre el
   // cargo de envío. No es un monto que mande el navegador (eso sigue sin aceptarse nunca) — es
-  // solo un sí/no entre los dos precios de envío ya fijos de este archivo (0 u 8.50), igual de
+  // solo un sí/no entre los dos precios de envío ya fijos de este archivo (0 u 9.50), igual de
   // confiable que cualquier otro identificador de producto que ya se valida aquí mismo. ----
   const retiroPersona = data.retiroPersona === true;
   const envio = (incluyeFisico && !retiroPersona) ? SHIPPING_COST * paquetesEnvio : 0;
