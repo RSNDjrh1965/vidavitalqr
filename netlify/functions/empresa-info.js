@@ -79,6 +79,8 @@ exports.handler = async (event) => {
         folio,
         nombre: lote.nombre || '',
         correo: lote.correo || '',
+        tarjetaTelefono: lote.tarjetaTelefono || '',
+        tarjetaCorreo: lote.tarjetaCorreo || '',
         logo,
         // 'sin_activar' es el único estado que deja llenar la ficha; 'activa' y 'eliminada' no
         estado: registroFolio.estado === 'sin_activar' ? 'sin_activar' : 'activa',

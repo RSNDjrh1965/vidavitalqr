@@ -99,7 +99,7 @@ exports.handler = async (event) => {
   try {
     await escribirJson(s3, BUCKET_RESUMEN, clavePedido(pedidoId), {
       id: pedidoId, estado: 'pendiente', creado: new Date().toISOString(),
-      nombre: datos.nombre, correo: datos.correo, telefono: datos.telefono, cantidad: datos.cantidad, modalidad: datos.modalidad, retiroPersona: datos.retiroPersona === true,
+      nombre: datos.nombre, correo: datos.correo, telefono: datos.telefono, tarjetaTelefono: datos.tarjetaTelefono, tarjetaCorreo: datos.tarjetaCorreo, cantidad: datos.cantidad, modalidad: datos.modalidad, retiroPersona: datos.retiroPersona === true,
       precioUnitario: t.precioUnitario, subtotalTarjetas: t.subtotalTarjetas, envio: t.envio, subtotal: t.subtotal, iva: t.iva, totalUSD: t.totalUSD,
       logoTipo: datos.logoTipo, logoBase64: datos.logoBase64,
       autorizaLogo: true, autorizaLogoFecha: new Date().toISOString(),

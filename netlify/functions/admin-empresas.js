@@ -144,6 +144,11 @@ async function crearLote(s3, p) {
   if (!Number.isInteger(cantidad) || cantidad < 1 || cantidad > MAX_FOLIOS_POR_LOTE) throw Object.assign(new Error(`La cantidad debe estar entre 1 y ${MAX_FOLIOS_POR_LOTE}.`), { codigo: 400 });
   const fechaPago = fechaPagoIso(p.fechaPago);
   if (!fechaPago) throw Object.assign(new Error('La fecha de pago no es válida (use AAAA-MM-DD).'), { codigo: 400 });
+  // teléfono / correo que se muestran en la tarjeta de los colaboradores (opcionales, independientes)
+  const tarjetaTelefono = String(p.tarjetaTelefono || '').replace(/\s+/g, ' ').trim();
+  const tarjetaCorreo = String(p.tarjetaCorreo || '').trim();
+  if (tarjetaTelefono && !/^[0-9+()\-. ]{6,20}$/.test(tarjetaTelefono)) throw Object.assign(new Error('El teléfono para la tarjeta no es válido (solo números, espacios, guion o +).'), { codigo: 400 });
+  if (tarjetaCorreo && (tarjetaCorreo.length > 50 || !emailValido(tarjetaCorreo))) throw Object.assign(new Error('El correo para la tarjeta no es válido (máximo 50 caracteres).'), { codigo: 400 });
 
   const m = /^data:([a-z+\/]+);base64,([A-Za-z0-9+\/=]+)$/.exec(String(p.logoDataUrl || ''));
   if (!m || !TIPOS_LOGO[m[1]]) throw Object.assign(new Error('El logo debe ser un archivo PNG, JPG o SVG.'), { codigo: 400 });
@@ -162,7 +167,7 @@ async function crearLote(s3, p) {
   await s3.send(new PutObjectCommand({ Bucket: BUCKET_RESUMEN, Key: logoKey, Body: logoBuf, ContentType: m[1] }));
   await registrarFolios(s3, empresaId, folios);
   await escribirJson(s3, BUCKET_RESUMEN, claveLote(empresaId), {
-    id: empresaId, nombre, correo, logoKey, prueba,
+    id: empresaId, nombre, correo, logoKey, prueba, tarjetaTelefono, tarjetaCorreo,
     fechaPago, vencimiento: fechaVencimiento(fechaPago).toISOString(),
     totalFolios: folios.length, creado: new Date().toISOString(),
     autorizaLogo: p.autorizaLogo === true,
