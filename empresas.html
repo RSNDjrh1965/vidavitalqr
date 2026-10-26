@@ -101,6 +101,18 @@
         <input type="tel" id="telefono" maxlength="30" autocomplete="tel">
       </div>
     </div>
+    <label>Datos de contacto en las tarjetas <small>(opcional)</small></label>
+    <p class="hint" style="margin:0 0 8px;font-size:.88rem;color:var(--muted)">Si lo desea, el teléfono y/o el correo que escriba aquí aparecerán en la tarjeta de todos sus colaboradores. Puede llenar solo uno o ninguno; lo que deje en blanco no aparece.</p>
+    <div class="fila">
+      <div>
+        <label for="tarjetaTelefono">Teléfono en la tarjeta</label>
+        <input type="tel" id="tarjetaTelefono" maxlength="20" autocomplete="off" placeholder="Ej.: 2222-3333">
+      </div>
+      <div>
+        <label for="tarjetaCorreo">Correo en la tarjeta</label>
+        <input type="email" id="tarjetaCorreo" maxlength="50" autocomplete="off" placeholder="Ej.: info@miempresa.com">
+      </div>
+    </div>
     <label>Tipo de tarjeta</label>
     <div class="modo" id="modo">
       <label class="op on" id="opFisica"><input type="radio" name="modalidad" value="fisica" checked><b>Tarjeta impresa</b><span>PVC con logo, foto, nombre, cargo y QR. Coordinamos la entrega con usted.</span></label>
@@ -186,7 +198,7 @@
   $('retiroPersona').addEventListener('change', recalcular);
   $('cantidad').addEventListener('input', recalcular);
   Array.prototype.forEach.call(document.querySelectorAll('input[name=modalidad]'), function(r){ r.addEventListener('change', recalcular); });
-  ['nombre','correo','telefono','cantidad','autoriza','logoFile'].forEach(function(id){ $(id).addEventListener('input', function(){ var m = $('msg'); m.textContent = ''; m.className = 'msg'; }); });
+  ['nombre','correo','telefono','tarjetaTelefono','tarjetaCorreo','cantidad','autoriza','logoFile'].forEach(function(id){ $(id).addEventListener('input', function(){ var m = $('msg'); m.textContent = ''; m.className = 'msg'; }); });
   recalcular();
 
   function mostrarError(t){ var m = $('msg'); m.textContent = t; m.className = 'msg err'; m.scrollIntoView({behavior:'smooth', block:'center'}); }
@@ -245,12 +257,15 @@
     if (!Number.isInteger(n) || n < 1) { mostrarError('Indique cuántas tarjetas necesita (mínimo 1).'); $('cantidad').focus(); return; }
     if (n > 500) { mostrarError('Para más de 500 tarjetas escríbanos por WhatsApp al 6093-3090.'); return; }
     if (retiro() && tel.length < 6) { mostrarError('Para coordinar el retiro en persona, escriba un teléfono de contacto.'); $('telefono').focus(); return; }
+    var tTel = $('tarjetaTelefono').value.trim(), tCor = $('tarjetaCorreo').value.trim();
+    if (tTel && !/^[0-9+()\-. ]{6,20}$/.test(tTel)) { mostrarError('El teléfono para la tarjeta no es válido (use números, espacios, guion o +).'); $('tarjetaTelefono').focus(); return; }
+    if (tCor && (tCor.length > 50 || !/^[^\s@<>"']+@[^\s@<>"']+\.[^\s@<>"']{2,}$/.test(tCor))) { mostrarError('El correo para la tarjeta no es válido (máximo 50 caracteres).'); $('tarjetaCorreo').focus(); return; }
     if (!logoDataUrl) { mostrarError('Suba el logo de la empresa.'); return; }
     if (!$('autoriza').checked) { mostrarError('Marque la casilla que confirma que su empresa autoriza el uso del logo.'); return; }
     enviando = true; var b = $('btnPagar'); b.disabled = true; b.textContent = 'Preparando el pago…';
     fetch('/.netlify/functions/pedido-empresa', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ nombre: nombre, correo: correo, telefono: tel, cantidad: n, modalidad: modalidad(), retiroPersona: retiro(), logoDataUrl: logoDataUrl, autorizaLogo: true })
+      body: JSON.stringify({ nombre: nombre, correo: correo, telefono: tel, tarjetaTelefono: tTel, tarjetaCorreo: tCor, cantidad: n, modalidad: modalidad(), retiroPersona: retiro(), logoDataUrl: logoDataUrl, autorizaLogo: true })
     }).then(function(r){ return r.json().then(function(j){ return { ok: r.ok, j: j }; }); })
       .then(function(res){
         if (!res.ok || !res.j || !res.j.url) throw new Error((res.j && res.j.error) || 'No se pudo crear el pago.');

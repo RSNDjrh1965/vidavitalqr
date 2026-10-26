@@ -2098,7 +2098,12 @@ async function generateTarjetaEmpresa(folio, fotoBase64, info, cargo, nombreComp
   const cargoTxt = String(cargo || '').trim();
   const nombreEmpresa = String((info && info.nombre) || '').trim();
   // logo: se calcula el tamaño exacto (html2canvas no respeta object-fit) para que quepa sin deformarse
-  const CAJA_LOGO_W = 428, CAJA_LOGO_H = 174;
+  // 2026-10-26: teléfono y/o correo de la empresa (opcionales). Sin ninguno, la tarjeta queda EXACTAMENTE como antes.
+  const cTel = String((info && info.tarjetaTelefono) || '').trim();
+  const cCor = String((info && info.tarjetaCorreo) || '').trim();
+  const nContacto = (cTel ? 1 : 0) + (cCor ? 1 : 0);
+  const ALTO_CAJA_LOGO = nContacto === 0 ? 200 : 168;
+  const CAJA_LOGO_W = 428, CAJA_LOGO_H = ALTO_CAJA_LOGO - 26;
   let logoHtml = '';
   // un SVG que solo trae viewBox (sin width/height) no se dibuja en html2canvas: se le agregan las medidas
   let logoSrc = info && info.logo;
@@ -2127,6 +2132,13 @@ async function generateTarjetaEmpresa(folio, fotoBase64, info, cargo, nombreComp
   const fotoCuadrada = await recortarFotoCuadrada(fotoBase64, 360);
   const fotoHtml = fotoCuadrada ? `<img src="${fotoCuadrada}" style="width:170px;height:170px;display:block">` : '';
 
+  // líneas de contacto en la franja verde: una sola línea "Tel. … · correo" si ambos caben; si no, dos líneas
+  let contactoHtml = '';
+  if (nContacto === 1) {
+    contactoHtml = `<div class="e-ct" data-ct="1" style="top:222px">${cTel ? 'Tel. ' + escHtml(cTel) : escHtml(cCor)}</div>`;
+  } else if (nContacto === 2) {
+    contactoHtml = `<div class="e-ct" data-ct="1" style="top:222px">${'Tel. ' + escHtml(cTel)} · ${escHtml(cCor)}</div>`;
+  }
   const holder = document.createElement('div');
   holder.style.position = 'fixed';
   holder.style.left = '-9999px';
@@ -2147,8 +2159,9 @@ async function generateTarjetaEmpresa(folio, fotoBase64, info, cargo, nombreComp
       .e-esc{left:-21px;top:438px;color:#d3552f;font-weight:700;letter-spacing:.12em;font-size:28px}
       .e-emerg{left:329px;top:438px;width:232px;color:#0a4949;font-weight:700;letter-spacing:.1em;font-size:25px}
       .e-band{position:absolute;left:0;top:588px;width:540px;height:268px;background:linear-gradient(180deg,#0a4949,#246666)}
-      .e-logobox{position:absolute;left:28px;top:16px;width:484px;height:200px;background:#fff;border-radius:18px;border:2.5px dashed #b9b09c;display:flex;align-items:center;justify-content:center;overflow:hidden}
-      .e-emp{position:absolute;left:20px;top:224px;width:500px;height:30px;line-height:30px;text-align:center;font-family:Georgia,'Times New Roman',serif;font-weight:700;font-size:23px;color:#fff;white-space:nowrap}
+      .e-logobox{position:absolute;left:28px;top:16px;width:484px;height:${ALTO_CAJA_LOGO}px;background:#fff;border-radius:18px;border:2.5px dashed #b9b09c;display:flex;align-items:center;justify-content:center;overflow:hidden}
+      .e-emp{position:absolute;left:20px;top:${nContacto === 0 ? 224 : 190}px;width:500px;height:30px;line-height:30px;text-align:center;font-family:Georgia,'Times New Roman',serif;font-weight:700;font-size:23px;color:#fff;white-space:nowrap}
+      .e-ct{position:absolute;left:20px;width:500px;height:26px;line-height:26px;text-align:center;color:#d6efec;font-weight:600;font-size:20px;white-space:nowrap}
       .e-bar{position:absolute;left:0;right:0;bottom:0;height:8px;background:linear-gradient(90deg,#0a4949,#d3552f)}
     </style>
     <div class="e-card" id="tarjetaEmpresaEl">
@@ -2159,7 +2172,7 @@ async function generateTarjetaEmpresa(folio, fotoBase64, info, cargo, nombreComp
       <div class="e-qrbox"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${n} ${n}" shape-rendering="crispEdges"><path fill="#004344" d="${qrPath}"/></svg></div>
       <div class="e-rot e-esc">ESCANEAR</div>
       <div class="e-rot e-emerg">EMERGENCIA</div>
-      <div class="e-band"><div class="e-logobox">${logoHtml}</div><div class="e-emp">${escHtml(nombreEmpresa)}</div></div>
+      <div class="e-band"><div class="e-logobox">${logoHtml}</div><div class="e-emp">${escHtml(nombreEmpresa)}</div>${contactoHtml}</div>
       <div class="e-bar"></div>
     </div>`;
   document.body.appendChild(holder);
@@ -2172,6 +2185,24 @@ async function generateTarjetaEmpresa(folio, fotoBase64, info, cargo, nombreComp
       el.style.fontSize = size + 'px';
       while (el.scrollWidth > el.clientWidth + 1 && size > min) { size -= 1; el.style.fontSize = size + 'px'; }
     });
+    // contacto: si el teléfono y el correo juntos no caben en una línea con letra legible (>= 16 px), se separan en dos líneas
+    const ct = holder.querySelector('[data-ct]');
+    if (ct) {
+      let size = 20;
+      ct.style.fontSize = size + 'px';
+      while (ct.scrollWidth > ct.clientWidth + 1 && size > 16) { size -= 1; ct.style.fontSize = size + 'px'; }
+      if (nContacto === 2 && ct.scrollWidth > ct.clientWidth + 1) {
+        ct.textContent = 'Tel. ' + cTel;
+        holder.querySelector('.e-emp').style.top = '182px';
+        ct.style.fontSize = '20px'; ct.style.top = '212px'; ct.style.height = '22px'; ct.style.lineHeight = '22px';
+        const ct2 = document.createElement('div');
+        ct2.className = 'e-ct'; ct2.textContent = cCor; ct2.style.top = '234px'; ct2.style.height = '22px'; ct2.style.lineHeight = '22px';
+        ct.parentNode.appendChild(ct2);
+        [ct, ct2].forEach(el => { let s2 = 20; el.style.fontSize = s2 + 'px'; while (el.scrollWidth > el.clientWidth + 1 && s2 > 12) { s2 -= 1; el.style.fontSize = s2 + 'px'; } });
+      } else if (nContacto === 1) {
+        while (ct.scrollWidth > ct.clientWidth + 1 && size > 12) { size -= 1; ct.style.fontSize = size + 'px'; }
+      }
+    }
     await Promise.all(Array.from(holder.querySelectorAll('img')).map(im => im.complete ? Promise.resolve() : new Promise(r => { im.onload = r; im.onerror = r; })));
     await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
     const canvas = await html2canvas(holder.querySelector('#tarjetaEmpresaEl'), { scale: 2, backgroundColor: '#FFFFFF', useCORS: true });
