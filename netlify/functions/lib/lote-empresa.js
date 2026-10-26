@@ -90,12 +90,23 @@ function enlaceDe(empresaId, folio) {
   return `${SITE_URL}/ficha.html?e=${encodeURIComponent(empresaId)}&f=${encodeURIComponent(folio)}`;
 }
 
+// 2026-10-26: teléfono y correo que la empresa (RR. HH.) decide mostrar en las tarjetas de todos sus colaboradores.
+// Ambos son opcionales e independientes: si se dejan en blanco, no aparecen en la tarjeta.
+function validarContactoTarjeta(p) {
+  const tarjetaTelefono = String(p.tarjetaTelefono || '').replace(/\s+/g, ' ').trim();
+  const tarjetaCorreo = String(p.tarjetaCorreo || '').trim();
+  if (tarjetaTelefono && (tarjetaTelefono.length > 20 || !/^[0-9+()\-. ]{6,20}$/.test(tarjetaTelefono))) throw error400('El teléfono para la tarjeta no es válido (solo números, espacios, guion o +; máximo 20 caracteres).');
+  if (tarjetaCorreo && (tarjetaCorreo.length > 50 || !emailValido(tarjetaCorreo))) throw error400('El correo para la tarjeta no es válido (máximo 50 caracteres).');
+  return { tarjetaTelefono, tarjetaCorreo };
+}
+
 // Valida y normaliza los datos del pedido. Lanza error {codigo:400} con un mensaje claro.
 function validarPedido(p) {
   const nombre = String(p.nombre || '').trim();
   const correo = String(p.correo || '').trim();
   const telefono = String(p.telefono || '').trim().slice(0, 30);
   const cantidad = parseInt(p.cantidad, 10);
+  const contactoTarjeta = validarContactoTarjeta(p);
   if (nombre.length < 2 || nombre.length > 80) throw error400('Escriba el nombre de la empresa (entre 2 y 80 letras).');
   if (!emailValido(correo)) throw error400('El correo de la empresa no es válido.');
   if (!Number.isInteger(cantidad) || cantidad < 1) throw error400('Indique cuántas tarjetas necesita (mínimo 1).');
@@ -112,7 +123,7 @@ function validarPedido(p) {
   if (MODALIDADES.indexOf(modalidad) === -1) throw error400('Elija si desea la tarjeta impresa o solo digital.');
   // retiro en persona: solo con tarjeta impresa (en digital no hay envío que evitar)
   const retiroPersona = modalidad === 'fisica' && p.retiroPersona === true;
-  return { nombre, correo, telefono, cantidad, modalidad, retiroPersona, logoTipo: m[1], logoBase64: m[2] };
+  return { nombre, correo, telefono, tarjetaTelefono: contactoTarjeta.tarjetaTelefono, tarjetaCorreo: contactoTarjeta.tarjetaCorreo, cantidad, modalidad, retiroPersona, logoTipo: m[1], logoBase64: m[2] };
 }
 
 async function reservarFolios(s3, cantidad, prueba) {
@@ -156,6 +167,7 @@ async function crearLoteDePedido(s3, datos, opciones) {
     totalFolios: folios.length, creado: ahora,
     autorizaLogo: true, autorizaLogoFecha: opciones.autorizaLogoFecha || ahora,
     origen: 'pedido-web', pedidoId: opciones.pedidoId || null, telefono: datos.telefono || '',
+    tarjetaTelefono: datos.tarjetaTelefono || '', tarjetaCorreo: datos.tarjetaCorreo || '',
     modalidad: datos.modalidad === 'digital' ? 'digital' : 'fisica',
     retiroPersona: datos.retiroPersona === true,
   });
@@ -166,6 +178,6 @@ const clavePedido = (id) => `empresas/_pedidos/${id}.json`;
 const PEDIDO_ID_RE = /^[a-z0-9]{12,40}$/;
 
 module.exports = {
-  BUCKET_RESUMEN, MAX_TARJETAS_POR_PEDIDO, MODALIDADES, PRECIO_RENOVACION, MIN_FICHAS_RENOVACION, precioPorTarjeta, envioEmpresa, ENVIO_EMPRESA_HASTA_100, ENVIO_EMPRESA_MAS_100, calcularTotales, calcularRenovacion, validarPedido, crearLoteDePedido,
+  BUCKET_RESUMEN, MAX_TARJETAS_POR_PEDIDO, MODALIDADES, PRECIO_RENOVACION, MIN_FICHAS_RENOVACION, precioPorTarjeta, envioEmpresa, ENVIO_EMPRESA_HASTA_100, ENVIO_EMPRESA_MAS_100, calcularTotales, calcularRenovacion, validarPedido, validarContactoTarjeta, crearLoteDePedido,
   enlaceDe, emailValido, clavePedido, PEDIDO_ID_RE,
 };

@@ -71,7 +71,7 @@ async function procesarPedidoEmpresa(ctx) {
   }
 
   const lote = await crearLoteDePedido(s3, {
-    nombre: pedido.nombre, correo: pedido.correo, telefono: pedido.telefono, cantidad: pedido.cantidad, modalidad: pedido.modalidad === 'digital' ? 'digital' : 'fisica', retiroPersona: pedido.retiroPersona === true,
+    nombre: pedido.nombre, correo: pedido.correo, telefono: pedido.telefono, tarjetaTelefono: pedido.tarjetaTelefono, tarjetaCorreo: pedido.tarjetaCorreo, cantidad: pedido.cantidad, modalidad: pedido.modalidad === 'digital' ? 'digital' : 'fisica', retiroPersona: pedido.retiroPersona === true,
     logoTipo: pedido.logoTipo, logoBase64: pedido.logoBase64,
   }, { prueba: modo === 'test', fechaPago: new Date().toISOString(), pedidoId, autorizaLogoFecha: pedido.autorizaLogoFecha });
 
