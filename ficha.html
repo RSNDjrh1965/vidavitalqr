@@ -548,6 +548,7 @@ const productoElegido = new URLSearchParams(window.location.search).get('product
 let esRenovacion = false;
 // ---- 2026-10-20: datos de la empresa cuando la ficha se abre con un enlace de empresa (o se actualiza una ficha de empresa) ----
 let empresaFicha = null;
+let regaloFicha = null; // 2026-10-26: ficha personal de obsequio/demostración { folio, k } (sin pago)
 
 // ---- ¿Es una actualización de datos gratuita (?actualizar=1)? Declarada aquí, en el ámbito
 //      global del script, por el mismo motivo que esRenovacion arriba: se necesita también al
@@ -1097,6 +1098,36 @@ $('photoRemove').addEventListener('click', e => {
       });
     return;
   }
+  // ---- 2026-10-26: ENLACE DE OBSEQUIO (?g=<folio>&k=<firma>) — ficha PERSONAL normal (sin logo, sin
+  // cargo) que James registró con su herramienta; no se paga. El folio y la firma vienen en el
+  // enlace; regalo-info.js confirma que sigue sin activar. ----
+  const regaloFolio = (params.get('g') || '').trim().toUpperCase();
+  const regaloK = (params.get('k') || '').trim();
+  if (regaloFolio && regaloK && !modoFicha && !empresaParam) {
+    $('counterNum').textContent = regaloFolio;
+    $('counterNum').dataset.pendiente = '';
+    $('btnEmail').disabled = true;
+    fetch('/.netlify/functions/regalo-info?g=' + encodeURIComponent(regaloFolio) + '&k=' + encodeURIComponent(regaloK))
+      .then(res => res.ok ? res.json() : Promise.reject(res.status))
+      .then(info => {
+        if (info.estado === 'activa') {
+          mostrarErrorEmpresa('Este obsequio ya fue activado. Para cambiar sus datos use la opción "Actualizar" con su folio y PIN en vidavitalqr.com.');
+          return;
+        }
+        regaloFicha = { folio: regaloFolio, k: regaloK };
+        $('empresaBannerLogoBox').style.display = 'none';
+        $('empresaBannerNombre').textContent = 'Ficha de obsequio — sin costo';
+        $('empresaBannerNombre').style.fontSize = '18px';
+        $('empresaBannerCorreo').textContent = 'Llene su ficha personal. Su vigencia es de 12 meses desde hoy.';
+        $('empresaBanner').style.background = '#2E7D6B';
+        $('empresaBanner').style.display = 'flex';
+        $('btnEmail').disabled = false;
+      })
+      .catch(() => {
+        mostrarErrorEmpresa('Este enlace de obsequio no es válido. Escriba por WhatsApp al +506 6093-3090.');
+      });
+    return;
+  }
   // (placaEstilo ahora se lee en el ámbito global del script, más arriba, para que también
   // esté disponible al enviar el formulario — ver la nota junto a su declaración.)
 
@@ -1363,8 +1394,29 @@ $('photoRemove').addEventListener('click', e => {
     return;
   }
 
-  // Contador de aperturas: ya no depende de un servicio externo; se usa solo el contador local de este navegador.
-  $('counterNum').textContent = formatCounter(localFallback());
+  // ---- 2026-10-26: el folio de una ficha NUEVA lo asigna el propio servidor (folio-nuevo.js), ya no
+  // un contador externo. Mientras llega el número el botón de enviar queda desactivado; si el
+  // servidor no responde se reintenta unas veces. NUNCA se inventa un folio en el navegador. ----
+  (function asignarFolio(){
+    const btn = $('btnEmail');
+    const el = $('counterNum');
+    el.textContent = T().pendiente;
+    el.dataset.pendiente = '1';
+    if (btn) btn.disabled = true;
+    let intentos = 0;
+    function pedir(){
+      fetch('/.netlify/functions/folio-nuevo?tipo=persona', { cache: 'no-store' })
+        .then(r => { if (!r.ok) throw new Error('http'); return r.json(); })
+        .then(d => {
+          if (!d || !(d.value > 0)) throw new Error('valor');
+          el.textContent = formatCounter(d.value);
+          el.dataset.pendiente = '';
+          if (btn) btn.disabled = false;
+        })
+        .catch(() => { if (++intentos < 6) setTimeout(pedir, 2500 * intentos); });
+    }
+    pedir();
+  })();
 })();
 
 // ---- tabla de medicamentos ----
@@ -2216,6 +2268,21 @@ function avisarOpenerYCerrar(tipo, folio){
 
 // ---- modo "Actualizar": es una edición gratuita de datos, no una compra — nunca debe llevar al
 // cliente al mockup de pago. Solo se le confirma que sus datos quedaron guardados. ----
+function mostrarRegaloExitoso(folio){
+  const overlay = document.createElement('div');
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(18,40,43,0.72);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px;';
+  overlay.innerHTML = `
+    <div style="background:#fff;border-radius:16px;max-width:420px;width:100%;padding:28px 26px;text-align:center;font-family:inherit;">
+      <div style="font-size:2.2rem;">🎁</div>
+      <h3 style="margin:10px 0 6px;">Su ficha quedó activa</h3>
+      <p style="margin:0 0 10px;color:#444;font-size:0.95rem;">Es un obsequio de VidaVitalQR: no hay ningún pago pendiente. Guarde su PIN, es personal. Su ficha dura 12 meses desde hoy.</p>
+      <p style="margin:0 0 18px;color:#6b6558;font-size:0.9rem;">Folio: <b>${escHtml(folio)}</b></p>
+      <button type="button" id="btnCerrarRegalo" class="select-btn" style="width:100%;">Listo</button>
+    </div>`;
+  document.body.appendChild(overlay);
+  document.getElementById('btnCerrarRegalo').addEventListener('click', () => { overlay.remove(); });
+}
+
 function mostrarActualizacionExitosa(){
   const overlay = document.createElement('div');
   overlay.style.cssText = 'position:fixed;inset:0;background:rgba(18,40,43,0.72);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px;';
@@ -2643,7 +2710,7 @@ $('btnEmail').addEventListener('click', async () => {
     const resp = await fetch('/.netlify/functions/send-ficha', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({ folio, filename, pdfBase64, nombreCompleto, tipo: 'Persona', fotoBase64, tarjetaBase64, placaEstilo, producto: productoElegido, contactos, datosVisor, datosFormulario, esRenovacionPago: esRenovacion, idioma: LANG_FICHA, correoTitular: $('correoTitular').value || '', pin: pinConfirmadoFicha, empresa: empresaFicha ? empresaFicha.id : undefined, consentimientoEmpresa: !!(empresaFicha && !esActualizacion && $('empresaConsentChk').checked) })
+      body: JSON.stringify({ folio, filename, pdfBase64, nombreCompleto, tipo: 'Persona', fotoBase64, tarjetaBase64, placaEstilo, producto: productoElegido, contactos, datosVisor, datosFormulario, esRenovacionPago: esRenovacion, idioma: LANG_FICHA, correoTitular: $('correoTitular').value || '', pin: pinConfirmadoFicha, empresa: empresaFicha ? empresaFicha.id : undefined, regalo: regaloFicha ? { k: regaloFicha.k } : undefined, consentimientoEmpresa: !!(empresaFicha && !esActualizacion && $('empresaConsentChk').checked) })
     });
 
     if(!resp.ok){
@@ -2684,6 +2751,9 @@ $('btnEmail').addEventListener('click', async () => {
       let bloqueoEmpresa = '';
       try { bloqueoEmpresa = await generateBloqueoEmpresa(tarjetaBase64); } catch (e) { console.warn('No se pudo generar la imagen de pantalla de bloqueo:', e); }
       mostrarEmpresaExitosa(folio, tarjetaBase64, bloqueoEmpresa);
+    } else if (regaloFicha) {
+      // ficha de obsequio: no hay paso de pago
+      mostrarRegaloExitoso(folio);
     } else if (!avisarOpenerYCerrar('persona', folio)) {
       goToPayment(folio);
     }

@@ -1254,8 +1254,29 @@ $('photoRemove').addEventListener('click', e => {
     return;
   }
 
-  // Contador de aperturas: ya no depende de un servicio externo; se usa solo el contador local de este navegador.
-  $('counterNum').textContent = formatCounter(localFallback());
+  // ---- 2026-10-26: el folio de una ficha NUEVA lo asigna el propio servidor (folio-nuevo.js), ya no
+  // un contador externo. Mientras llega el número el botón de enviar queda desactivado; si el
+  // servidor no responde se reintenta unas veces. NUNCA se inventa un folio en el navegador. ----
+  (function asignarFolio(){
+    const btn = $('btnEmail');
+    const el = $('counterNum');
+    el.textContent = T().pendiente;
+    el.dataset.pendiente = '1';
+    if (btn) btn.disabled = true;
+    let intentos = 0;
+    function pedir(){
+      fetch('/.netlify/functions/folio-nuevo?tipo=mascota', { cache: 'no-store' })
+        .then(r => { if (!r.ok) throw new Error('http'); return r.json(); })
+        .then(d => {
+          if (!d || !(d.value > 0)) throw new Error('valor');
+          el.textContent = formatCounter(d.value);
+          el.dataset.pendiente = '';
+          if (btn) btn.disabled = false;
+        })
+        .catch(() => { if (++intentos < 6) setTimeout(pedir, 2500 * intentos); });
+    }
+    pedir();
+  })();
 })();
 
 // ---- razas comunes (desplegable, filtradas según la especie seleccionada) ----

@@ -1322,6 +1322,8 @@
     padding:18px 22px;
     margin-bottom:34px;
   }
+  .price-callout-body{ min-width:0; }
+  .price-callout-body p + p{ margin-top:10px; }
   .price-callout-icn{ font-size:1.3rem; flex:none; line-height:1.4; }
   .price-callout p{ margin:0; color:var(--ink); font-size:0.96rem; line-height:1.55; }
 
@@ -1884,6 +1886,15 @@
         <span class="price-callout-icn">📦</span>
         <p><strong data-i18n="shippingCalloutStrong">El envío es un costo aparte.</strong> <span data-i18n="shippingCalloutText">Se cobra un cargo de $9.50 por pedido dentro de Costa Rica, que cubre hasta 10 productos físicos enviados a la misma dirección (si el pedido lleva más de 10, se suma otro cargo de $9.50 por cada grupo de hasta 10) — no es necesario pagar envío por cada artículo.</span></p>
       </div>
+      <div class="price-callout">
+        <span class="price-callout-icn">🏢</span>
+        <div class="price-callout-body">
+          <p data-i18n="empEnvio">Envío de tarjetas impresas: $9.50 hasta 100 tarjetas · $12.50 si son más de 100 (más IVA). Sin costo si las retira en persona. Solo digital: sin envío.</p>
+          <p data-i18n="empPlazos">Tarjeta impresa: después del pago, la empresa tiene 2 semanas para que sus colaboradores completen la ficha; la impresión se realiza en la tercera semana y el envío en la cuarta.</p>
+          <p data-i18n="empVentajaDigital">Solo digital: sin costo de envío, inmediata y siempre a mano en la pantalla de bloqueo del celular. Ideal para personal en campo (cuadrillas, ciclistas, repartidores) y la modalidad más económica.</p>
+          <p data-i18n="empPagoNota">El pedido se hace en línea y el pago se realiza únicamente por ONVO Pay.</p>
+        </div>
+      </div>
       <p style="max-width:760px; margin:-6px 0 30px; color:var(--ink-soft); font-size:0.92rem; line-height:1.6;"><span data-i18n="clarifyPre">La opción "Código QR (sin presentación física)" es para quien no necesita el código grabado en ninguna placa: lo recibe en digital y lo puede imprimir donde le resulte más conveniente — muy útil para quienes viven fuera de Costa Rica.</span></p>
       <div class="formats">
         <div class="fcard fcard-digital">
@@ -1966,10 +1977,6 @@
             <div class="ftier"><span class="fk" data-i18n="empTramo4">Más de 100 tarjetas</span><span class="fv">$9 · $6</span></div>
             <div class="ftier"><span class="fk" data-i18n="empRenov">Renovación anual (por ficha)</span><span class="fv">$5</span></div>
           </div>
-          <p class="fnota" style="margin:6px 0 0" data-i18n="empEnvio">Envío de tarjetas impresas: $9.50 hasta 100 tarjetas · $12.50 si son más de 100 (más IVA). Sin costo si las retira en persona. Solo digital: sin envío.</p>
-          <p class="fnota" style="margin:6px 0 0" data-i18n="empPlazos">Tarjeta impresa: después del pago, la empresa tiene 2 semanas para que sus colaboradores completen la ficha; la impresión se realiza en la tercera semana y el envío en la cuarta.</p>
-          <p class="fnota" style="margin:6px 0 0" data-i18n="empVentajaDigital">Solo digital: sin costo de envío, inmediata y siempre a mano en la pantalla de bloqueo del celular. Ideal para personal en campo (cuadrillas, ciclistas, repartidores) y la modalidad más económica.</p>
-          <p class="fnota" data-i18n="empPagoNota">El pedido se hace en línea y el pago se realiza únicamente por ONVO Pay.</p>
           <a class="link-btn" id="btnPedidoEmpresas" href="empresas.html" style="background:var(--teal-deep);color:#fff;border-color:var(--teal-deep)"><span data-i18n="btnPedidoEmpresas">Hacer mi pedido</span></a>
           <a class="link-btn" id="btnCotizarEmpresas" style="margin-top:8px" href="https://wa.me/50660933090?text=Hola%2C%20quiero%20cotizar%20tarjetas%20Identificador%20QR%20para%20mi%20empresa." target="_blank" rel="noopener"><span data-i18n="btnCotizarEmpresas">Cotizar por WhatsApp</span></a>
         </div>
