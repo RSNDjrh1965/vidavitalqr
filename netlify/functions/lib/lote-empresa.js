@@ -21,21 +21,55 @@ const MAX_LOGO_BYTES = 400 * 1024;
 const TIPOS_LOGO = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/svg+xml': 'svg' };
 const IVA_RATE = 0.13;
 
-// ---- precio POR TARJETA según la cantidad del pedido (acordado con James, 2026-10-22). El precio del
-// tramo aplica a TODAS las tarjetas del pedido. Debe coincidir con la tabla de index.html y empresas.html. ----
-function precioPorTarjeta(cantidad) {
-  if (cantidad <= 10) return 14;
-  if (cantidad <= 50) return 13;
-  if (cantidad <= 100) return 12;
-  return 11;
+// ---- precio POR TARJETA según la cantidad del pedido y la modalidad (acordado con James, 2026-10-22; ver
+// claude/precios-empresas-propuesta-2026-10-22-vidavitalqr.md). El precio del tramo aplica a TODAS las tarjetas del
+// pedido. Debe coincidir con las tablas de index.html y empresas.html.
+//   fisica : tarjeta impresa (la imprime y entrega James)      1-10 $12 · 11-50 $11 · 51-100 $10 · 101-500 $9
+//   digital: sin impresión (cada colaborador la descarga)       1-10 $8  · 11-50 $7  · 51-500  $6
+// Renovación anual de la empresa: $5 por ficha activa, con un mínimo de 5 fichas (para que el cargo fijo de
+// ONVO no se coma la renovación de grupos muy pequeños). ----
+const MODALIDADES = ['fisica', 'digital'];
+const TRAMOS = {
+  fisica: [[10, 12], [50, 11], [100, 10], [Infinity, 9]],
+  digital: [[10, 8], [50, 7], [Infinity, 6]],
+};
+const PRECIO_RENOVACION = 5;
+const MIN_FICHAS_RENOVACION = 5;
+
+// ---- envío de tarjetas IMPRESAS (2026-10-23, tarifas de James; se cobra la base y el IVA se suma después):
+// hasta 100 tarjetas $9.50; más de 100 $12.50. Solo digital: sin envío. Con "retiro en persona": sin envío. ----
+const ENVIO_EMPRESA_HASTA_100 = 9.5;
+const ENVIO_EMPRESA_MAS_100 = 12.5;
+const TOPE_ENVIO_BASE = 100;
+
+function envioEmpresa(cantidad, modalidad, retiroPersona) {
+  if (modalidad === 'digital' || retiroPersona === true) return 0;
+  return cantidad <= TOPE_ENVIO_BASE ? ENVIO_EMPRESA_HASTA_100 : ENVIO_EMPRESA_MAS_100;
+}
+
+function precioPorTarjeta(cantidad, modalidad) {
+  const tramos = TRAMOS[modalidad === 'digital' ? 'digital' : 'fisica'];
+  for (const [tope, precio] of tramos) if (cantidad <= tope) return precio;
+  return tramos[tramos.length - 1][1];
+}
+
+function totalesEnCentavos(unit, cantidad, envio) {
+  const tarjetasCents = Math.round(unit * cantidad * 100);
+  const envioCents = Math.round((envio || 0) * 100);
+  const subtotalCents = tarjetasCents + envioCents;
+  const ivaCents = Math.round(subtotalCents * IVA_RATE);
+  return { precioUnitario: unit, subtotalTarjetas: tarjetasCents / 100, envio: envioCents / 100, subtotal: subtotalCents / 100, iva: ivaCents / 100, totalUSD: (subtotalCents + ivaCents) / 100 };
 }
 
 // cálculo en centavos enteros (igual que crear-pago.js)
-function calcularTotales(cantidad) {
-  const unit = precioPorTarjeta(cantidad);
-  const subtotalCents = Math.round(unit * cantidad * 100);
-  const ivaCents = Math.round(subtotalCents * IVA_RATE);
-  return { precioUnitario: unit, subtotal: subtotalCents / 100, iva: ivaCents / 100, totalUSD: (subtotalCents + ivaCents) / 100 };
+function calcularTotales(cantidad, modalidad, retiroPersona) {
+  return totalesEnCentavos(precioPorTarjeta(cantidad, modalidad), cantidad, envioEmpresa(cantidad, modalidad, retiroPersona));
+}
+
+// renovación: se cobra por cada ficha activa, con un mínimo de MIN_FICHAS_RENOVACION
+function calcularRenovacion(fichasActivas) {
+  const cobradas = Math.max(Number(fichasActivas) || 0, MIN_FICHAS_RENOVACION);
+  return Object.assign({ fichasCobradas: cobradas }, totalesEnCentavos(PRECIO_RENOVACION, cobradas));
 }
 
 function error400(msg) { return Object.assign(new Error(msg), { codigo: 400 }); }
@@ -74,7 +108,11 @@ function validarPedido(p) {
   if (m[1] === 'image/svg+xml' && /<script|onload\s*=|onerror\s*=|javascript:/i.test(logoBuf.toString('utf-8'))) {
     throw error400('El SVG del logo contiene código no permitido.');
   }
-  return { nombre, correo, telefono, cantidad, logoTipo: m[1], logoBase64: m[2] };
+  const modalidad = String(p.modalidad || 'fisica').trim().toLowerCase();
+  if (MODALIDADES.indexOf(modalidad) === -1) throw error400('Elija si desea la tarjeta impresa o solo digital.');
+  // retiro en persona: solo con tarjeta impresa (en digital no hay envío que evitar)
+  const retiroPersona = modalidad === 'fisica' && p.retiroPersona === true;
+  return { nombre, correo, telefono, cantidad, modalidad, retiroPersona, logoTipo: m[1], logoBase64: m[2] };
 }
 
 async function reservarFolios(s3, cantidad, prueba) {
@@ -118,6 +156,8 @@ async function crearLoteDePedido(s3, datos, opciones) {
     totalFolios: folios.length, creado: ahora,
     autorizaLogo: true, autorizaLogoFecha: opciones.autorizaLogoFecha || ahora,
     origen: 'pedido-web', pedidoId: opciones.pedidoId || null, telefono: datos.telefono || '',
+    modalidad: datos.modalidad === 'digital' ? 'digital' : 'fisica',
+    retiroPersona: datos.retiroPersona === true,
   });
   return { empresaId, folios, fechaPago, enlaces: folios.map((f) => ({ folio: f, enlace: enlaceDe(empresaId, f) })) };
 }
@@ -126,6 +166,6 @@ const clavePedido = (id) => `empresas/_pedidos/${id}.json`;
 const PEDIDO_ID_RE = /^[a-z0-9]{12,40}$/;
 
 module.exports = {
-  BUCKET_RESUMEN, MAX_TARJETAS_POR_PEDIDO, precioPorTarjeta, calcularTotales, validarPedido, crearLoteDePedido,
+  BUCKET_RESUMEN, MAX_TARJETAS_POR_PEDIDO, MODALIDADES, PRECIO_RENOVACION, MIN_FICHAS_RENOVACION, precioPorTarjeta, envioEmpresa, ENVIO_EMPRESA_HASTA_100, ENVIO_EMPRESA_MAS_100, calcularTotales, calcularRenovacion, validarPedido, crearLoteDePedido,
   enlaceDe, emailValido, clavePedido, PEDIDO_ID_RE,
 };

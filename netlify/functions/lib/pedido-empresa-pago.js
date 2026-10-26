@@ -4,8 +4,15 @@
 // el ingreso. Es idempotente: si ONVO reintenta el webhook, el pedido ya "pagado" no se procesa dos veces.
 // Si algo falla ANTES de crear el lote, se lanza el error (el webhook responde 500 y ONVO reintenta).
 const { leerJson, escribirJson } = require('./empresa');
-const { BUCKET_RESUMEN, crearLoteDePedido, clavePedido, PEDIDO_ID_RE } = require('./lote-empresa');
+const { BUCKET_RESUMEN, crearLoteDePedido, clavePedido, PEDIDO_ID_RE, PRECIO_RENOVACION, MIN_FICHAS_RENOVACION } = require('./lote-empresa');
+const { firmarEmpresa } = require('./enlace-qr');
 
+const SITE_URL = process.env.SITE_URL || 'https://vidavitalqr.com';
+const enlaceRenovacion = (empresaId) => `${SITE_URL}/empresas.html?renovar=${encodeURIComponent(empresaId)}&t=${firmarEmpresa(empresaId)}`;
+
+// plazos de la tarjeta impresa (acordados con James, 2026-10-23); los aplica preparar-impresion.js
+const PLAZOS = ' Plazos: después del pago, la empresa tiene 2 semanas para que todos sus colaboradores completen la ficha; la impresión se realiza en la tercera semana posterior al pago y el envío (o entrega) en la cuarta. Le enviaremos un recordatorio con los folios pendientes antes de la impresión; las fichas que se completen después se imprimen en un lote adicional.';
+const RECORDATORIO_FONDO = ' Si alguien cambia el fondo de pantalla o actualiza su celular y la imagen se pierde, puede volver a ponerla desde sus fotos, o descargarla otra vez desde su ficha.';
 const DESTINATARIO = 'roljamher@hotmail.com';
 const REMITENTE = 'VidaVitalQR <ficha@vidavitalqr.com>';
 
@@ -64,7 +71,7 @@ async function procesarPedidoEmpresa(ctx) {
   }
 
   const lote = await crearLoteDePedido(s3, {
-    nombre: pedido.nombre, correo: pedido.correo, telefono: pedido.telefono, cantidad: pedido.cantidad,
+    nombre: pedido.nombre, correo: pedido.correo, telefono: pedido.telefono, cantidad: pedido.cantidad, modalidad: pedido.modalidad === 'digital' ? 'digital' : 'fisica', retiroPersona: pedido.retiroPersona === true,
     logoTipo: pedido.logoTipo, logoBase64: pedido.logoBase64,
   }, { prueba: modo === 'test', fechaPago: new Date().toISOString(), pedidoId, autorizaLogoFecha: pedido.autorizaLogoFecha });
 
@@ -82,19 +89,27 @@ async function procesarPedidoEmpresa(ctx) {
   const listaEnlaces = lote.enlaces.map((e, i) => `${i + 1}. ${e.folio}\n   ${e.enlace}`).join('\n');
   const csvB64 = Buffer.from(csvDe(lote.enlaces), 'utf-8').toString('base64');
   const etiquetaPrueba = modo === 'test' ? ' (MODO PRUEBA)' : '';
+  const digital = pedido.modalidad === 'digital';
+  const retiro = pedido.retiroPersona === true && !digital;
+  const linkRenov = firmarEmpresa(lote.empresaId) ? enlaceRenovacion(lote.empresaId) : '';
 
   // ---- correo a la empresa ----
   if (apiKey) {
     const texto = [
-      `Gracias por su pedido en VidaVitalQR. Recibimos el pago de ${pedido.cantidad} tarjeta(s) Identificador QR para ${pedido.nombre}.`,
+      `Gracias por su pedido en VidaVitalQR. Recibimos el pago de ${pedido.cantidad} tarjeta(s) Identificador QR ${digital ? '(solo digital, sin impresión) ' : ''}para ${pedido.nombre}.`,
       '',
       'Cómo seguir:',
       '1. Reparta un enlace a cada colaborador (abajo, y también en el archivo adjunto "enlaces.csv").',
       '2. Cada colaborador abre SU enlace en su celular y llena su ficha: foto, nombres, cargo, datos de emergencia y la casilla de privacidad. Cada enlace sirve para UNA sola persona.',
       '3. Al terminar, el colaborador recibe su PIN personal (la empresa no lo conoce) y puede descargar su tarjeta como imagen para la pantalla de bloqueo del celular.',
-      `4. Cuando sus colaboradores hayan completado sus fichas, nos pondremos en contacto con usted para coordinar la entrega de las tarjetas impresas.`,
+      digital
+        ? '4. Esta modalidad no incluye tarjetas impresas: cada colaborador conserva su tarjeta digital (imagen) y su imagen de pantalla de bloqueo en su celular.' + RECORDATORIO_FONDO
+        : (retiro
+          ? '4. Usted eligió retirar las tarjetas en persona (sin costo de envío). Cuando sus colaboradores hayan completado sus fichas, nos pondremos en contacto con usted para coordinar dónde y cuándo retirarlas.' + PLAZOS
+          : '4. Cuando sus colaboradores hayan completado sus fichas, nos pondremos en contacto con usted para coordinar la entrega de las tarjetas impresas.' + PLAZOS),
       '',
-      `Vigencia: 12 meses desde hoy. La renovación la realiza la empresa con un solo pago por todo el grupo; le avisaremos antes de que venza. También le avisaremos si pasan los meses y hay enlaces sin usar.`,
+      `Vigencia: 12 meses desde hoy. La renovación la realiza la empresa con un solo pago por todo el grupo ($${PRECIO_RENOVACION} por ficha activa, mínimo ${MIN_FICHAS_RENOVACION} fichas, más IVA); le avisaremos antes de que venza. También le avisaremos si pasan los meses y hay enlaces sin usar.`,
+      ...(linkRenov ? ['', 'Enlace para renovar (guárdelo; sirve cuando se acerque el vencimiento):', linkRenov] : []),
       '',
       `Enlaces (${lote.enlaces.length}):`,
       listaEnlaces,
@@ -114,13 +129,17 @@ async function procesarPedidoEmpresa(ctx) {
     '',
     `Empresa: ${pedido.nombre}`,
     `Correo: ${pedido.correo}${pedido.telefono ? '   Teléfono: ' + pedido.telefono : ''}`,
-    `Tarjetas: ${pedido.cantidad} a $${pedido.precioUnitario} c/u — subtotal $${pedido.subtotal}, IVA $${pedido.iva}, total $${pedido.totalUSD}`,
+    `Modalidad: ${digital ? 'SOLO DIGITAL (no hay que imprimir ni enviar nada)' : 'TARJETA IMPRESA (hay que imprimir y coordinar la entrega)'}`,
+    ...(retiro ? ['⚠ RETIRO EN PERSONA — NO enviar por correo postal: la empresa pasa a retirar las tarjetas (coordinar con su teléfono).'] : []),
+    `Tarjetas: ${pedido.cantidad} a $${pedido.precioUnitario} c/u${pedido.envio ? ' + envío $' + pedido.envio : ''} — subtotal $${pedido.subtotal}, IVA $${pedido.iva}, total $${pedido.totalUSD}`,
     `Folios: ${lote.folios[0]} a ${lote.folios[lote.folios.length - 1]}`,
     `Carpeta en S3: empresas/${lote.empresaId}/`,
     `Logo autorizado por la empresa (casilla marcada el ${pedido.autorizaLogoFecha}).`,
     `Pago ONVO: ${paymentIntentId} — modo ${modo}`,
     '',
-    'Ya se creó el lote y se enviaron los enlaces a la empresa. Pendiente de su parte: cuando los colaboradores completen las fichas, imprimir y coordinar la entrega.',
+    digital
+      ? 'Ya se creó el lote y se enviaron los enlaces a la empresa. Es solo digital: no queda nada pendiente de su parte.'
+      : 'Ya se creó el lote y se enviaron los enlaces a la empresa. Pendiente de su parte: cuando los colaboradores completen las fichas, imprimir y coordinar la entrega.',
     '',
     'Enlaces:',
     listaEnlaces,

@@ -32,4 +32,19 @@ function firmaValida(folio, firma) {
   }
 }
 
-module.exports = { firmarFolio, firmaValida };
+// ---- 2026-10-22 (Etapa 3): enlace permanente de RENOVACIÓN de una empresa (/empresas.html?renovar=<id>&t=<firma>).
+// Solo permite ver el resumen de la renovación y pagarla por ONVO; no da acceso a ningún dato de los colaboradores. ----
+function firmarEmpresa(empresaId) {
+  const clave = claveSecreta();
+  if (!clave) return '';
+  return crypto.createHmac('sha256', clave).update('empresa-renovar:' + String(empresaId || '').toLowerCase()).digest('hex').slice(0, 32);
+}
+
+function firmaEmpresaValida(empresaId, firma) {
+  const esperada = firmarEmpresa(empresaId);
+  const recibida = String(firma || '');
+  if (!esperada || recibida.length !== esperada.length) return false;
+  try { return crypto.timingSafeEqual(Buffer.from(esperada), Buffer.from(recibida)); } catch (e) { return false; }
+}
+
+module.exports = { firmarFolio, firmaValida, firmarEmpresa, firmaEmpresaValida };
