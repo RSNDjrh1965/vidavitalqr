@@ -26,6 +26,7 @@ const { generarPin, hashPin, pinValido } = require('./lib/pin');
 const { fechaVencimiento } = require('./lib/vigencia');
 const { estaBloqueado, anotar, ipDe, folioSeguro } = require('./lib/limite');
 // ---- 2026-10-20: tarjetas para empresas (folios VVITALQRE#######) — ver lib/empresa.js ----
+const { enRangoRegalo, firmaValida, claveRegalo } = require('./lib/regalo');
 const { esFolioEmpresa, leerJson, escribirJson, cargarFolioDeEmpresa, claveFolio, claveTarjeta, claveFichaCopia } = require('./lib/empresa');
 
 const DESTINATARIO = 'vidavitalqr@zohomail.com';
@@ -115,7 +116,7 @@ function carpetaTipo(tipo, folio) {
 // — nunca se cambia solo, para no dejar al usuario sin acceso. Si el registro es de una versión
 // anterior que solo guardaba el hash (sin el texto plano), se genera un PIN nuevo esta vez, para
 // que a partir de ahora también quede recuperable.
-async function cargarOCrearLogin(s3, folio, datosFormulario, carpeta, resetCreado, correoTitular, producto, placaEstilo, pinProvisto, empresaCtx) {
+async function cargarOCrearLogin(s3, folio, datosFormulario, carpeta, resetCreado, correoTitular, producto, placaEstilo, pinProvisto, empresaCtx, regaloCtx) {
   const key = `${carpeta}/login/${folio}.json`;
   const keyLegacy = `login/${folio}.json`;
   let registro = null;
@@ -184,7 +185,7 @@ async function cargarOCrearLogin(s3, folio, datosFormulario, carpeta, resetCread
   // desactivar de golpe ninguna ficha que ya estaba funcionando y pagada.
   // ---- 2026-10-20: una ficha de EMPRESA nace ya activa (la empresa pagó el lote por adelantado
   // y el folio ya estaba registrado), así que no pasa por el flujo de "pago pendiente". ----
-  const activoFinal = !registro ? (empresaCtx ? true : false) : (registro.activo === false ? false : true);
+  const activoFinal = !registro ? ((empresaCtx || regaloCtx) ? true : false) : (registro.activo === false ? false : true);
 
   // "creado" marca el inicio de la vigencia anual (12 meses). Se conserva tal cual en una
   // actualización normal de datos; solo se reinicia a "ahora" cuando el envío viene marcado
@@ -257,6 +258,7 @@ async function cargarOCrearLogin(s3, folio, datosFormulario, carpeta, resetCread
     vigencia: { avisos },
     actualizado: new Date().toISOString(),
   };
+  if (regaloCtx || (registro && registro.regalo)) nuevoRegistro.regalo = true;
   if (esDeEmpresa) {
     nuevoRegistro.empresa = (registro && registro.empresa) || empresaCtx.id;
     const consent = (registro && registro.consentimiento) || (empresaCtx && empresaCtx.consentimiento) || null;
@@ -271,11 +273,11 @@ async function cargarOCrearLogin(s3, folio, datosFormulario, carpeta, resetCread
     Body: Buffer.from(JSON.stringify(nuevoRegistro), 'utf-8'),
     ContentType: 'application/json',
   };
-  if (!registro && empresaCtx) escrituraLogin.IfNoneMatch = '*';
+  if (!registro && (empresaCtx || regaloCtx)) escrituraLogin.IfNoneMatch = '*';
   try {
     await s3.send(new PutObjectCommand(escrituraLogin));
   } catch (errPut) {
-    if (!registro && empresaCtx && (errPut.name === 'PreconditionFailed' || errPut.$metadata?.httpStatusCode === 412)) {
+    if (!registro && (empresaCtx || regaloCtx) && (errPut.name === 'PreconditionFailed' || errPut.$metadata?.httpStatusCode === 412)) {
       const errYa = new Error('Este folio ya fue activado por otro envío.');
       errYa.folioEmpresaYaActivado = true;
       throw errYa;
@@ -889,7 +891,7 @@ exports.handler = async (event) => {
     return { statusCode: 400, headers, body: JSON.stringify({ error: 'JSON inválido.' }) };
   }
 
-  const { folio: folioCliente, pdfBase64, nombreCompleto, tipo, fotoBase64, tarjetaBase64, placaEstilo: placaEstiloEnviado, contactos: contactosCliente, datosVisor, datosFormulario, esRenovacionPago, correoTitular, producto, pin: pinRecibido, empresa: empresaRecibida, consentimientoEmpresa } = payload;
+  const { folio: folioCliente, pdfBase64, nombreCompleto, tipo, fotoBase64, tarjetaBase64, placaEstilo: placaEstiloEnviado, contactos: contactosCliente, datosVisor, datosFormulario, esRenovacionPago, correoTitular, producto, pin: pinRecibido, empresa: empresaRecibida, consentimientoEmpresa, regalo: regaloRecibido } = payload;
   // 2026-10-13: estilo de placa efectivo. Si este guardado no lo trae (por ejemplo una actualización de
   // datos, que no pasa por la elección de producto), se usa el que ya quedó guardado en el registro de
   // la ficha (ver más abajo, tras cargarOCrearLogin), para que igual se regeneren los códigos SVG/PNG.
@@ -992,9 +994,33 @@ exports.handler = async (event) => {
       }
     }
 
+    // ---- 2026-10-26: FICHA PERSONAL DE OBSEQUIO / DEMOSTRACIÓN (folios 120 a 450, sin pago). Solo se
+    // puede CREAR si James la registró antes con su herramienta (regalos/<folio>.json, estado
+    // sin_activar) Y el envío trae la firma correcta del enlace. Una ficha de obsequio que ya
+    // existe se actualiza con su PIN como cualquier otra (esta rama no interviene). ----
+    let regaloCtx = null;
+    if (!empresaCtx && enRangoRegalo(folio)) {
+      const regReg = await leerJson(s3, BUCKET_RESUMEN, claveRegalo(folio));
+      if (regReg) {
+        const loginRegalo = (await leerJson(s3, BUCKET_RESUMEN, `${carpeta}/login/${folio}.json`)) || (await leerJson(s3, BUCKET_RESUMEN, `login/${folio}.json`));
+        if (!loginRegalo) {
+          if (regReg.estado !== 'sin_activar') {
+            return { statusCode: 403, headers, body: JSON.stringify({ error: 'Este obsequio ya fue activado. Para cambiar datos use la opción Actualizar con su folio y PIN.' }) };
+          }
+          if (!firmaValida(folio, regaloRecibido && regaloRecibido.k)) {
+            return { statusCode: 403, headers, body: JSON.stringify({ error: 'Este enlace de obsequio no es válido. Escriba por WhatsApp al +506 6093-3090.' }) };
+          }
+          regaloCtx = { nueva: true, registro: regReg };
+        }
+      }
+    }
+
     empresaCtxCorreo = empresaCtx;
     if (folio) {
-      const login = await cargarOCrearLogin(s3, folio, datosFormulario, carpeta, esRenovacionPago === true, correoTitular, producto, placaEstilo, pinRecibido, empresaCtx);
+      const login = await cargarOCrearLogin(s3, folio, datosFormulario, carpeta, esRenovacionPago === true, correoTitular, producto, placaEstilo, pinRecibido, empresaCtx, regaloCtx);
+      if (regaloCtx && regaloCtx.nueva) {
+        await escribirJson(s3, BUCKET_RESUMEN, claveRegalo(folio), Object.assign({}, regaloCtx.registro, { estado: 'activa', activadoEn: new Date().toISOString() }));
+      }
       if (empresaCtx && empresaCtx.nueva) {
         // el folio pasa a "activa" apenas queda creado el acceso (PIN) de la ficha
         await escribirJson(s3, BUCKET_RESUMEN, claveFolio(empresaCtx.id, folio), { folio, estado: 'activa', activadoEn: new Date().toISOString(), creado: empresaCtx.registradoEn || null });

@@ -11,12 +11,17 @@
 //   agregar-folios { empresaId, cantidad }       Más folios para una empresa ya existente.
 //   estado         { empresaId }                 Folios del lote, su estado y sus enlaces.
 //   listar         {}                            Todas las empresas registradas.
+//   crear-regalos  { cantidad (1-30), nota? }   FICHAS PERSONALES de obsequio/demostración (sin pago): toma
+//                                                los siguientes folios libres del 120 al 450 y devuelve un enlace por folio.
+//   listar-regalos {}                            Todos los obsequios con su estado, vencimiento y enlace.
+//   (Los obsequios NO se renuevan gratis: al vencer se renuevan pagando como cualquier ficha personal.)
 //   renovar        { empresaId, fechaPago }      Renovación POR EMPRESA (un solo pago): reinicia los
 //                                                12 meses de todas las fichas activadas y del lote.
 //
 // Contadores: los folios REALES empiezan en el 100; las PRUEBAS usan del 1 al 99 (máximo 99 folios
 // de prueba en total). Nunca se repite un folio: el contador solo avanza.
 const { S3Client, PutObjectCommand, ListObjectsV2Command } = require('@aws-sdk/client-s3');
+const { FOLIO_MIN, FOLIO_MAX, formatoFolioPersonal, firmaRegalo, enRangoRegalo, claveRegalo } = require('./lib/regalo');
 const crypto = require('crypto');
 const { estaBloqueado, anotar, ipDe, claveIgual } = require('./lib/limite');
 const { fechaVencimiento } = require('./lib/vigencia');
@@ -250,6 +255,66 @@ async function renovar(s3, p) {
   return { empresaId, nombre: lote.nombre, fechaPago, vencimiento: venc, fichasRenovadas: renovadas, errores };
 }
 
+// ---------- Fichas personales de OBSEQUIO / DEMOSTRACIÓN (2026-10-26) — ver lib/regalo.js ----------
+function enlaceRegalo(folio) {
+  return `${SITE_URL}/ficha.html?g=${encodeURIComponent(folio)}&k=${firmaRegalo(folio)}`;
+}
+
+async function existeJson(s3, key) {
+  return !!(await leerJson(s3, BUCKET_RESUMEN, key));
+}
+
+// ¿el folio ya tiene ficha (registro de acceso) en alguna de las dos ubicaciones?
+async function folioConFicha(s3, folio) {
+  return (await existeJson(s3, `personas/login/${folio}.json`)) || (await existeJson(s3, `login/${folio}.json`));
+}
+
+async function crearRegalos(s3, p) {
+  if (!firmaRegalo('VVITALQR00000120')) throw Object.assign(new Error('Falta configurar ADMIN_KEY (mínimo 12 caracteres).'), { codigo: 500 });
+  const cantidad = parseInt(p.cantidad, 10);
+  if (!(cantidad >= 1 && cantidad <= 30)) throw Object.assign(new Error('La cantidad debe estar entre 1 y 30.'), { codigo: 400 });
+  const nota = String(p.nota || '').trim().slice(0, 80);
+  const ahora = new Date().toISOString();
+  const creados = [];
+  for (let n = FOLIO_MIN; n <= FOLIO_MAX && creados.length < cantidad; n++) {
+    const folio = formatoFolioPersonal(n);
+    if (await existeJson(s3, claveRegalo(folio))) continue;       // ya es un obsequio
+    if (await folioConFicha(s3, folio)) continue;                  // lo usa una ficha real
+    try {
+      await s3.send(new PutObjectCommand({
+        Bucket: BUCKET_RESUMEN, Key: claveRegalo(folio), ContentType: 'application/json', IfNoneMatch: '*',
+        Body: Buffer.from(JSON.stringify({ folio, estado: 'sin_activar', creado: ahora, nota }), 'utf-8'),
+      }));
+      creados.push(folio);
+    } catch (err) {
+      if (err && (err.name === 'PreconditionFailed' || (err.$metadata && err.$metadata.httpStatusCode === 412))) continue;
+      throw err;
+    }
+  }
+  if (!creados.length) throw Object.assign(new Error(`Ya no quedan folios de obsequio libres (${FOLIO_MIN} a ${FOLIO_MAX}).`), { codigo: 400 });
+  return { folios: creados, enlaces: creados.map((f) => ({ folio: f, enlace: enlaceRegalo(f) })), solicitados: cantidad };
+}
+
+async function listarRegalos(s3) {
+  const { claves } = await listarClaves(s3, 'regalos/');
+  const lista = [];
+  for (const k of claves) {
+    if (!k.endsWith('.json')) continue;
+    const r = await leerJson(s3, BUCKET_RESUMEN, k);
+    if (!r || !enRangoRegalo(r.folio)) continue;
+    let estado = r.estado === 'activa' ? 'activa' : 'sin_activar';
+    let vencimiento = '';
+    if (estado === 'activa') {
+      const login = (await leerJson(s3, BUCKET_RESUMEN, `personas/login/${r.folio}.json`)) || (await leerJson(s3, BUCKET_RESUMEN, `login/${r.folio}.json`));
+      if (login && login.creado) vencimiento = fechaVencimiento(login.creado).toISOString();
+      else estado = 'eliminada';
+    }
+    lista.push({ folio: r.folio, estado, nota: r.nota || '', creado: r.creado || '', activadoEn: r.activadoEn || '', vencimiento, enlace: enlaceRegalo(r.folio) });
+  }
+  lista.sort((a, b) => String(a.folio).localeCompare(String(b.folio)));
+  return { regalos: lista, rango: `${FOLIO_MIN} a ${FOLIO_MAX}` };
+}
+
 exports.handler = async (event) => {
   const headers = {
     'Access-Control-Allow-Origin': '*',
@@ -294,6 +359,8 @@ exports.handler = async (event) => {
       case 'estado': resultado = await estadoLote(s3, p); break;
       case 'listar': resultado = await listarEmpresas(s3); break;
       case 'renovar': resultado = await renovar(s3, p); break;
+      case 'crear-regalos': resultado = await crearRegalos(s3, p); break;
+      case 'listar-regalos': resultado = await listarRegalos(s3); break;
       default: return { statusCode: 400, headers, body: JSON.stringify({ error: 'Acción desconocida.' }) };
     }
     return { statusCode: 200, headers, body: JSON.stringify({ ok: true, ...resultado }) };
