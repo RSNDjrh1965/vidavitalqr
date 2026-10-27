@@ -1,0 +1,164 @@
+<!doctype html>
+<html lang="es"><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="robots" content="noindex,nofollow">
+<meta name="theme-color" content="#12292d">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Programación">
+<link rel="manifest" href="programacion.webmanifest">
+<link rel="icon" href="programacion-icono-192.png">
+<link rel="apple-touch-icon" href="programacion-icono-180.png">
+<title>Programación de ventas VidaVitalQR</title>
+<style>
+:root{--bg:#f6f2e8;--panel:#fffdf7;--ink:#12292d;--mute:#5d6b6a;--line:#d9d2bf;--accent:#c4562f;--hl:#fbe9c9;--done:#2e7d6b;
+--prep:#12292d;--obs:#2e7d6b;--obs2:#7fb5a6;--emp:#c4562f;--emp2:#8f3a1c;--per:#b8860b;--per2:#dcc07a;--mas:#6a5acd;--red:#2a6f97;--red2:#7fb0cf;--opc:#b9b5a8;--bal:#12292d}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#10191b;--panel:#172326;--ink:#ecebe3;--mute:#9db0ae;--line:#2c3d40;--accent:#ea8a63;--hl:#3a3220;--done:#5fc4a8;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#10191b;--panel:#172326;--ink:#ecebe3;--mute:#9db0ae;--line:#2c3d40;--accent:#ea8a63;--hl:#3a3220;--done:#5fc4a8;color-scheme:dark}
+body{background:var(--bg);color:var(--ink);font-family:system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;padding-block:18px 40px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));font-size:15px;line-height:1.4}
+h1{font-size:1.5rem;margin:0 0 4px;text-wrap:balance}
+.sub{color:var(--mute);margin:0 0 14px}
+.top{display:flex;flex-wrap:wrap;gap:12px 20px;align-items:end;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:12px 14px;margin-bottom:12px}
+.top label{display:flex;flex-direction:column;gap:4px;font-size:.8rem;text-transform:uppercase;letter-spacing:.05em;color:var(--mute)}
+input[type=date]{font:inherit;font-size:1rem;padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--ink)}
+.prog{flex:1;min-width:180px}
+.bar{height:10px;background:var(--line);border-radius:6px;overflow:hidden}
+.bar i{display:block;height:100%;background:var(--done);width:0}
+.pt{font-size:.85rem;color:var(--mute);margin-top:4px;font-variant-numeric:tabular-nums}
+.st{font-size:.85rem;color:var(--mute);min-height:1.2em;margin:0 0 8px}
+.wrap{overflow-x:auto;border:1px solid var(--line);border-radius:10px;background:var(--panel)}
+table{border-collapse:separate;border-spacing:0;min-width:1000px;width:100%}
+th,td{border-bottom:1px solid var(--line);border-right:1px solid var(--line);padding:0;vertical-align:middle}
+th{padding:8px 6px;font-size:.85rem;text-align:center;background:var(--panel);position:sticky;top:0}
+th small{display:block;font-weight:400;color:var(--mute);font-variant-numeric:tabular-nums}
+th.hoy,td.hoy{background:var(--hl)}
+.lab{position:sticky;left:0;background:var(--panel);z-index:2;min-width:190px;max-width:190px;padding:8px 10px;text-align:left;font-size:.88rem}
+.lab small{display:block;color:var(--accent);font-size:.68rem;letter-spacing:.06em;text-transform:uppercase}
+.cell{height:50px;padding:5px 4px}
+.cell.hoy{background:var(--hl)}
+.b{display:flex;align-items:center;gap:6px;width:100%;height:100%;border:0;border-radius:6px;color:#fff;font:inherit;font-size:.74rem;line-height:1.15;padding:3px 7px;text-align:left;cursor:pointer;overflow:hidden}
+.b span.ck{flex:none;width:15px;height:15px;border:2px solid currentColor;border-radius:4px;display:inline-grid;place-items:center;font-size:.7rem;line-height:1}
+.b.done{opacity:.55;text-decoration:line-through}
+.b.done span.ck::after{content:"✓"}
+.dk{color:#12292d}
+td.span{padding:5px 4px}
+.meta td{background:var(--panel);font-size:.75rem;color:var(--mute);padding:6px 6px;vertical-align:top}
+.meta td strong{color:var(--ink)}
+textarea{width:100%;box-sizing:border-box;min-height:70px;font:inherit;font-size:.8rem;padding:6px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--ink);resize:vertical}
+.leg{display:flex;flex-wrap:wrap;gap:6px 14px;margin:12px 0 0;font-size:.8rem;color:var(--mute)}
+.leg i{display:inline-block;width:11px;height:11px;border-radius:3px;margin-right:5px;vertical-align:-1px}
+.ro{font-size:.85rem;color:var(--accent);margin:0 0 8px}
+
+#login[hidden]{display:none}
+#login{position:fixed;inset:0;background:var(--bg);display:grid;place-items:center;padding:20px;z-index:10}
+#login form{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:22px;max-width:360px;width:100%;display:flex;flex-direction:column;gap:12px}
+#login h2{margin:0;font-size:1.2rem}
+#login input[type=password]{font:inherit;font-size:1rem;padding:10px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--ink)}
+#login button{font:inherit;font-size:1rem;padding:10px;border:0;border-radius:8px;background:var(--accent);color:#fff;cursor:pointer}
+#login label.r{display:flex;gap:8px;align-items:center;font-size:.85rem;color:var(--mute)}
+#err{color:var(--accent);font-size:.85rem;min-height:1.1em;margin:0}
+.salir{background:none;border:0;color:var(--mute);font:inherit;font-size:.8rem;text-decoration:underline;cursor:pointer;padding:0}
+</style></head><body>
+<div id="login"><form id="fl"><h2>Programación de ventas</h2><p class="sub" style="margin:0">Escriba su clave de administración.</p>
+<input type="password" id="clave" autocomplete="current-password" placeholder="Clave" aria-label="Clave">
+<label class="r"><input type="checkbox" id="rec" checked> Recordar en este aparato</label>
+<p id="err"></p><button type="submit">Entrar</button></form></div>
+<h1>Programación de ventas VidaVitalQR</h1>
+<p class="sub">8 semanas seguidas. Elija la fecha de inicio y las demás semanas se acomodan solas. Toque una barra para marcarla como lista.</p>
+<div class="top">
+  <label for="inicio">Inicio de la semana 1<input type="date" id="inicio"></label>
+  <div class="prog"><div class="bar"><i id="barra"></i></div><div class="pt" id="pt"></div></div>
+</div>
+<p class="st" id="st"></p>
+<div class="wrap"><table id="tabla"></table></div>
+<div class="leg" id="leg"></div>
+<p style="margin-top:16px"><button class="salir" id="salir" type="button">Salir de este aparato</button></p>
+<script>
+(function(){
+var API='/.netlify/functions/programacion';
+var FILAS=[
+['PREPARACIÓN','Pruebas del sitio y carpeta de venta',[[1,1,'Pruebas y carpeta','prep']]],
+['PREPARACIÓN','Pedir la impresora de tarjetas',[[1,1,'Hacer pedido','prep']]],
+['PREPARACIÓN','Texto de venta y lista de empresas',[[1,2,'Texto de venta + lista de 30 empresas','prep']]],
+['OBSEQUIOS','Fichas de obsequio a personas clave',[[2,2,'Entregar 10 a 15','obs'],[3,5,'Pedir opinión y permiso para testimonio','obs2']]],
+['EMPRESAS','Contactar empresas (10 por semana)',[[3,5,'Llamar, visitar y demostrar en el celular','emp']]],
+['EMPRESAS','Seguimiento y lote de prueba',[[6,6,'2.º contacto','emp'],[7,7,'Entregar pedido','emp2']]],
+['PERSONAS','Muestras en grupos y lugares',[[4,4,'3 grupos o lugares','per'],[5,8,'Repetir donde haya respuesta','per2']]],
+['MASCOTAS','Placas de muestra en veterinarias',[[5,5,'Veterinarias','mas']]],
+['REDES','Publicar piezas de Canva',[[2,2,'Ciclistas y adultos','red'],[3,3,'Mascotas','red'],[4,4,'Objetos y proceso','red'],[7,7,'Privacidad','red']]],
+['REDES','Testimonios y casos reales',[[5,6,'Publicar testimonios (con permiso)','red2'],[7,7,'Caso de empresa','red2']]],
+['REDES','Pauta pagada pequeña (opcional)',[[5,8,'Solo si decide hacerla','opc']]],
+['BALANCE','Revisar ventas, costo y tiempo',[[8,8,'Decidir y ajustar','bal']]]];
+var METAS=['Todo el flujo probado sin errores','10 obsequios entregados','10 empresas contactadas / 2 demostraciones','5 ventas a personas','3 veterinarias / 3 testimonios','1.er pedido de empresa','1 caso de empresa publicado','Decisión por escrito'];
+var LEG=[['prep','Preparación'],['obs','Obsequios'],['emp','Empresas'],['per','Personas'],['mas','Mascotas'],['red','Redes'],['opc','Opcional'],['bal','Balance']];
+var DK={obs2:1,per2:1,red2:1,opc:1};
+function $(i){return document.getElementById(i)}
+function mk(t,c,x){var e=document.createElement(t);if(c)e.className=c;if(x!=null)e.textContent=x;return e}
+function pd(s){var p=s.split('-');return new Date(+p[0],+p[1]-1,+p[2])}
+var DIAS=['dom','lun','mar','mié','jue','vie','sáb'],MES=['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
+function fm(d){return DIAS[d.getDay()]+' '+d.getDate()+' '+MES[d.getMonth()]}
+function fc(d){return d.getDate()+' '+MES[d.getMonth()]}
+function semHoy(){var i=pd(E.inicio),h=new Date();h=new Date(h.getFullYear(),h.getMonth(),h.getDate());var n=Math.floor((h-i)/864e5);return n<0?0:(n>=56?0:Math.floor(n/7)+1)}
+function estado(t){$('st').textContent=t}
+function render(){
+ var ini=pd(E.inicio),hoy=semHoy(),T=$('tabla');T.innerHTML='';
+ var hd=mk('tr');var l=mk('th','lab','Tarea');hd.appendChild(l);
+ for(var w=1;w<=8;w++){var a=new Date(ini);a.setDate(a.getDate()+7*(w-1));var b=new Date(a);b.setDate(b.getDate()+6);
+  var th=mk('th',w===hoy?'hoy':'');th.appendChild(document.createTextNode('Semana '+w));th.appendChild(mk('small','',fc(a)+' – '+fc(b)));hd.appendChild(th)}
+ T.appendChild(hd);
+ var total=0,ok=0;
+ FILAS.forEach(function(f,ri){
+  var tr=mk('tr'),lb=mk('td','lab');lb.appendChild(mk('small','',f[0]));lb.appendChild(document.createTextNode(f[1]));tr.appendChild(lb);
+  var w=1,segs=f[2];
+  while(w<=8){
+   var s=null;segs.forEach(function(x,si){if(x[0]===w)s={x:x,id:ri+'-'+si}});
+   if(s){var len=s.x[1]-s.x[0]+1,td=mk('td','span'+(hoy>=s.x[0]&&hoy<=s.x[1]&&len===1?' hoy':''));td.colSpan=len;
+    var on=E.hechas.indexOf(s.id)>=0;total++;if(on)ok++;
+    var bt=mk('button','b'+(on?' done':'')+(DK[s.x[3]]?' dk':''));bt.type='button';bt.style.background='var(--'+s.x[3]+')';
+    bt.setAttribute('aria-pressed',on);bt.dataset.id=s.id;
+    bt.appendChild(mk('span','ck'));bt.appendChild(mk('span','',s.x[2]));
+    (function(i){bt.onclick=function(){toggle(i)}})(s.id);td.appendChild(bt);tr.appendChild(td);w+=len}
+   else{tr.appendChild(mk('td','cell'+(w===hoy?' hoy':'')));w++}
+  }
+  T.appendChild(tr)});
+ var m=mk('tr','meta');m.appendChild(mk('td','lab','Meta de la semana'));
+ for(w=1;w<=8;w++){var c=mk('td',w===hoy?'hoy':'');c.appendChild(mk('strong','',METAS[w-1]));m.appendChild(c)}T.appendChild(m);
+ var r=mk('tr','meta');r.appendChild(mk('td','lab','Resultado real'));
+ for(w=1;w<=8;w++){var c2=mk('td',w===hoy?'hoy':''),ta=mk('textarea');ta.id='nota'+w;ta.placeholder='Anote aquí';ta.value=E.notas[w]||'';
+  (function(n,t){t.oninput=function(){E.notas[n]=t.value;programar()}})(w,ta);c2.appendChild(ta);r.appendChild(c2)}T.appendChild(r);
+ var p=total?Math.round(ok*100/total):0;$('barra').style.width=p+'%';$('pt').textContent=ok+' de '+total+' tareas listas ('+p+'%)'+(hoy?' · hoy es la semana '+hoy:'');
+ $('inicio').value=E.inicio}
+var E={inicio:'',hechas:[],notas:{}},rev=0,clave='',timer=null,sucio=false,guardando=false;
+function sel(){var d=new Date();var dow=(d.getDay()+6)%7;d.setDate(d.getDate()-dow);return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')}
+function llamar(cuerpo){return fetch(API,{method:'POST',headers:{'Content-Type':'application/json','x-admin-key':clave},body:JSON.stringify(cuerpo)}).then(function(r){return r.json().then(function(j){j.status=r.status;return j})})}
+function aplicar(e){E=e&&e.inicio?{inicio:e.inicio,hechas:e.hechas||[],notas:e.notas||{}}:{inicio:sel(),hechas:[],notas:{}};render()}
+function entrar(){
+ estado('Cargando…');
+ return llamar({accion:'leer'}).then(function(j){
+  if(j.status===401||j.status===429||j.status===500){$('login').hidden=false;$('err').textContent=j.error||'Error';try{localStorage.removeItem('vvq_prog_clave')}catch(e){}return false}
+  if(!j.ok){estado(j.error||'No se pudo cargar.');return false}
+  rev=j.rev;aplicar(j.estado);$('login').hidden=true;estado('Al día.');return true
+ }).catch(function(){estado('Sin conexión. Reintente.');return false})}
+function programar(){sucio=true;estado('Cambios sin guardar…');clearTimeout(timer);timer=setTimeout(guardar,1200)}
+function guardar(){
+ if(guardando){timer=setTimeout(guardar,800);return}
+ guardando=true;sucio=false;estado('Guardando…');
+ llamar({accion:'guardar',estado:E,rev:rev}).then(function(j){
+  guardando=false;
+  if(j.status===409){if(sucio){estado('Otro aparato guardó antes; se cargó su versión.')}rev=j.rev;aplicar(j.estado);sucio=false;estado('Otro aparato había guardado antes; se cargó la versión más reciente. Repita su último cambio si hace falta.');return}
+  if(!j.ok){sucio=true;estado((j.error||'No se pudo guardar')+'. Se reintentará.');timer=setTimeout(guardar,5000);return}
+  rev=j.rev;if(sucio)programar();else estado('Guardado.')
+ }).catch(function(){guardando=false;sucio=true;estado('Sin conexión. Se reintentará.');timer=setTimeout(guardar,5000)})}
+function toggle(id){var i=E.hechas.indexOf(id);if(i>=0)E.hechas.splice(i,1);else E.hechas.push(id);render();programar()}
+$('inicio').onchange=function(){if(this.value){E.inicio=this.value;render();programar()}};
+var lg=$('leg');LEG.forEach(function(x){var s=mk('span');var i=mk('i');i.style.background='var(--'+x[0]+')';s.appendChild(i);s.appendChild(document.createTextNode(x[1]));lg.appendChild(s)});
+$('fl').onsubmit=function(ev){ev.preventDefault();clave=$('clave').value;if(!clave)return;$('err').textContent='';
+ entrar().then(function(ok){if(ok){try{if($('rec').checked)localStorage.setItem('vvq_prog_clave',clave);else localStorage.removeItem('vvq_prog_clave')}catch(e){}$('clave').value=''}})};
+$('salir').onclick=function(){try{localStorage.removeItem('vvq_prog_clave')}catch(e){}clave='';location.reload()};
+document.addEventListener('visibilitychange',function(){if(!document.hidden&&clave&&!sucio&&!guardando)llamar({accion:'leer'}).then(function(j){if(j.ok&&j.rev!==rev){rev=j.rev;aplicar(j.estado);estado('Actualizado desde otro aparato.')}}).catch(function(){})});
+render();
+try{var g=localStorage.getItem('vvq_prog_clave');if(g){clave=g;$('login').hidden=true;entrar().then(function(ok){if(!ok&&!$('login').hidden)clave=''})}}catch(e){}
+})();
+</script>
+</body></html>
