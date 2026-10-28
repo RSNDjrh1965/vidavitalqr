@@ -4,6 +4,13 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex, nofollow">
+<meta name="theme-color" content="#12292d">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Opiniones">
+<link rel="manifest" href="admin-opiniones.webmanifest">
+<link rel="icon" href="admin-opiniones-icono-192.png">
+<link rel="apple-touch-icon" href="admin-opiniones-icono-180.png">
 <title>Opiniones pendientes — VidaVitalQR</title>
 <style>
   :root{
@@ -97,6 +104,7 @@
   <div class="card" id="loginBox">
     <label for="pwInput" data-i18n="lblPassword">Contraseña de administración</label>
     <input type="password" id="pwInput" autocomplete="current-password">
+    <label class="rec" style="display:flex;gap:8px;align-items:center;margin:-4px 0 12px"><input type="checkbox" id="recClave" checked style="width:auto;margin:0"> Recordar la clave en este aparato</label>
     <button class="btn-primary" id="btnEntrar" data-i18n="btnVer">Ver opiniones pendientes</button>
     <p class="msg" id="loginMsg"></p>
   </div>
@@ -104,6 +112,7 @@
   <div id="listaBox" hidden>
     <div class="toolbar">
       <button class="btn-primary" id="btnRefrescar" data-i18n="btnActualizar">Actualizar lista</button>
+      <button id="salirBtn" type="button" style="background:none;border:0;color:#5b6b6a;text-decoration:underline;cursor:pointer;margin-left:12px">Salir de este aparato</button>
     </div>
     <div id="listaContenido"></div>
   </div>
@@ -272,6 +281,7 @@
         if (err && err.message === 'unauthorized') {
           listaBox.hidden = true;
           loginBox.hidden = false;
+          try { localStorage.removeItem('vvq_admin_clave'); } catch (e) {}
           loginMsg.textContent = T().passwordIncorrecta;
           loginMsg.className = 'msg err';
         } else {
@@ -337,6 +347,7 @@
   btnEntrar.addEventListener('click', function(){
     pw = pwInput.value || '';
     if (!pw) { loginMsg.textContent = T().escribaPassword; loginMsg.className = 'msg err'; return; }
+    try { if (document.getElementById('recClave').checked) localStorage.setItem('vvq_admin_clave', pw); else localStorage.removeItem('vvq_admin_clave'); } catch (e) {}
     loginMsg.textContent = '';
     loginBox.hidden = true;
     listaBox.hidden = false;
@@ -348,6 +359,17 @@
   });
 
   btnRefrescar.addEventListener('click', cargarPendientes);
+
+  // ---- 2026-10-28: abrir como app — si la clave quedó recordada en este aparato, entra sola ----
+  var salirBtn = document.getElementById('salirBtn');
+  if (salirBtn) salirBtn.addEventListener('click', function(){
+    try { localStorage.removeItem('vvq_admin_clave'); } catch (e) {}
+    location.reload();
+  });
+  try {
+    var guardada = localStorage.getItem('vvq_admin_clave');
+    if (guardada) { pwInput.value = guardada; btnEntrar.click(); }
+  } catch (e) {}
 </script>
 </body>
 </html>

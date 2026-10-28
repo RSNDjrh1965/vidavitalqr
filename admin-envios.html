@@ -5,6 +5,13 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>VidaVitalQR — Etiquetas de envío (panel privado)</title>
 <meta name="robots" content="noindex, nofollow">
+<meta name="theme-color" content="#12292d">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Envíos">
+<link rel="manifest" href="admin-envios.webmanifest">
+<link rel="icon" href="admin-envios-icono-192.png">
+<link rel="apple-touch-icon" href="admin-envios-icono-180.png">
 <style>
   :root{
     --navy:#0F2A3D; --navy-light:#1B4863; --paper:#F7F5F0; --card:#FFFFFF;
@@ -121,10 +128,12 @@
   <div class="card no-print">
     <label for="pwInput">Contraseña de administración</label>
     <input type="password" id="pwInput" autocomplete="current-password">
+    <label class="rec" style="display:flex;gap:8px;align-items:center;margin:-4px 0 12px"><input type="checkbox" id="recClave" checked style="width:auto;margin:0"> Recordar la clave en este aparato</label>
     <label for="folioInput">Folio de la ficha</label>
     <input type="text" id="folioInput" placeholder="Ej. VVITALQR-000123">
     <button id="buscarBtn">Buscar dirección de envío</button>
     <div id="msg"></div>
+    <p style="margin:10px 0 0"><button id="olvidarBtn" type="button" style="background:none;border:0;color:#5b6b6a;text-decoration:underline;cursor:pointer;padding:0">Olvidar la clave en este aparato</button></p>
   </div>
 
   <div id="etiquetaWrap">
@@ -177,6 +186,14 @@
   var descargaMsg = document.getElementById('descargaMsg');
   var etiquetaEl = document.getElementById('etiqueta');
   var folioActual = '';
+  // ---- 2026-10-28: abrir como app — la clave recordada en este aparato se escribe sola ----
+  try { var guardadaClave = localStorage.getItem('vvq_admin_clave'); if (guardadaClave) pwInput.value = guardadaClave; } catch (e) {}
+  var olvidarBtn = document.getElementById('olvidarBtn');
+  if (olvidarBtn) olvidarBtn.addEventListener('click', function(){
+    try { localStorage.removeItem('vvq_admin_clave'); } catch (e) {}
+    pwInput.value = '';
+    msg.className = 'ok'; msg.textContent = 'Clave olvidada en este aparato.';
+  });
 
   function tipoDeFolio(folio){
     var f = (folio || '').toUpperCase();
@@ -220,10 +237,12 @@
           : '';
         etiquetaWrap.style.display = 'block';
         descargaMsg.textContent = '';
+        try { if (document.getElementById('recClave').checked) localStorage.setItem('vvq_admin_clave', pw); else localStorage.removeItem('vvq_admin_clave'); } catch (e) {}
         msg.className = 'ok';
         msg.textContent = 'Dirección encontrada.';
       })
       .catch(function(err){
+        if (err && err.message === 'Contraseña incorrecta.') { try { localStorage.removeItem('vvq_admin_clave'); } catch (e) {} }
         msg.className = 'error';
         msg.textContent = err.message || 'No se pudo consultar la dirección.';
       })
