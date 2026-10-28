@@ -101,7 +101,7 @@ exports.handler = async (event) => {
       id: pedidoId, estado: 'pendiente', creado: new Date().toISOString(),
       nombre: datos.nombre, correo: datos.correo, telefono: datos.telefono, tarjetaTelefono: datos.tarjetaTelefono, tarjetaCorreo: datos.tarjetaCorreo, cantidad: datos.cantidad, modalidad: datos.modalidad, retiroPersona: datos.retiroPersona === true,
       precioUnitario: t.precioUnitario, subtotalTarjetas: t.subtotalTarjetas, envio: t.envio, subtotal: t.subtotal, iva: t.iva, totalUSD: t.totalUSD,
-      logoTipo: datos.logoTipo, logoBase64: datos.logoBase64,
+      logoTipo: datos.logoTipo, logoBase64: datos.logoBase64, factura: datos.factura,
       autorizaLogo: true, autorizaLogoFecha: new Date().toISOString(),
     });
   } catch (err) {

@@ -41,6 +41,7 @@ const { agregarIngreso } = require('./lib/ingresos');
 const { firmarFolio } = require('./lib/enlace-qr');
 const { procesarPedidoEmpresa } = require('./lib/pedido-empresa-pago');
 const { procesarRenovacionEmpresa } = require('./lib/renovacion-empresa-pago');
+const { facturaDeMetadata, lineasFactura } = require('./lib/factura');
 
 const ONVO_API_BASE = 'https://api.onvopay.com/v1';
 // ---- reporte de pagos confirmados: este aviso llega solo al administrador (nunca se muestra ni
@@ -270,7 +271,7 @@ exports.handler = async (event) => {
   }
 
   // ---- 2) Avisar por correo al administrador (mismo destinatario que ya recibe los demás avisos) ----
-  await avisarAdministrador({ items, folios, sessionId: paymentIntentId, modo, envio, retiroPersona, moneda, tipoCambioUsado, totalUSDReportado, totalCRCInformativo });
+  await avisarAdministrador({ items, folios, sessionId: paymentIntentId, modo, envio, retiroPersona, moneda, tipoCambioUsado, totalUSDReportado, totalCRCInformativo, factura: facturaDeMetadata(meta.factura) });
 
   // ---- 3) Registrar el ingreso, solo para pagos reales (nunca los de prueba, para no ensuciar
   // el Registro de Ingresos con cifras que no son dinero real) ----
@@ -623,7 +624,7 @@ async function resolverNombreCliente(folio) {
   }
 }
 
-async function avisarAdministrador({ items, folios, sessionId, modo, envio, retiroPersona, moneda, tipoCambioUsado, totalUSDReportado, totalCRCInformativo }) {
+async function avisarAdministrador({ items, folios, sessionId, modo, envio, retiroPersona, moneda, tipoCambioUsado, totalUSDReportado, totalCRCInformativo, factura }) {
   const apiKey = process.env.RESEND_API_KEY;
   if (!apiKey) {
     console.error('onvo-webhook: falta RESEND_API_KEY — no se pudo avisar por correo del pago confirmado.');
@@ -655,6 +656,7 @@ async function avisarAdministrador({ items, folios, sessionId, modo, envio, reti
     'Sesión de ONVO Pay: ' + sessionId,
     'Modo: ' + modo + (modo === 'test' ? ' (pago de prueba, sin dinero real)' : ''),
     lineaMoneda.trimEnd(),
+    ...(factura ? ['', ...lineasFactura(factura)] : []),
     '',
     'Nota: este aviso confirma que el pago llegó correctamente, pero todavía no marca ninguna',
     'ficha como renovada de forma automática en el sistema ni desbloquea nada en el visor',
@@ -681,6 +683,10 @@ async function avisarAdministrador({ items, folios, sessionId, modo, envio, reti
     '<p style="margin:0 0 8px 0;font-weight:bold;">Producto(s) comprado(s):</p>',
     listaItemsHtml,
     '</div>',
+    (factura ? '<div style="background:#fff8e6;border:1px solid #f0d9a0;border-radius:8px;padding:12px 16px;margin:14px 0;"><p style="margin:0 0 6px 0;font-weight:bold;">Factura electrónica solicitada — datos para emitirla:</p>'
+      + '<strong>Cédula:</strong> ' + escaparHtml(factura.cedula) + '<br><strong>Nombre o razón social:</strong> ' + escaparHtml(factura.nombre)
+      + '<br><strong>Correo para enviar la factura:</strong> ' + escaparHtml(factura.correo) + '<br><strong>Teléfono:</strong> ' + escaparHtml(factura.telefono)
+      + '<br><strong>Código de actividad económica:</strong> ' + escaparHtml(factura.actividad) + '</div>' : ''),
     '<p><strong>Folios asociados:</strong> ' + escaparHtml(folios || '(ninguno)') + '<br>',
     '<strong>Sesión de ONVO Pay:</strong> ' + escaparHtml(sessionId) + '<br>',
     '<strong>Modo:</strong> ' + escaparHtml(modo) + (modo === 'test' ? ' (pago de prueba, sin dinero real)' : '') +

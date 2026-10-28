@@ -34,6 +34,7 @@
 // Queda protegido por la variable de entorno HABILITAR_PAGO_CRC (debe valer exactamente "true").
 
 const { S3Client, GetObjectCommand } = require('@aws-sdk/client-s3');
+const { validarFactura, pideFactura } = require('./lib/factura');
 
 const ONVO_API_BASE = 'https://api.onvopay.com/v1';
 const BUCKET_RESUMEN = process.env.S3_BUCKET_RESUMEN || 'resumen-vidavitalqr';
@@ -197,6 +198,14 @@ exports.handler = async (event) => {
   // solo un sí/no entre los dos precios de envío ya fijos de este archivo (0 u 9.50), igual de
   // confiable que cualquier otro identificador de producto que ya se valida aquí mismo. ----
   const retiroPersona = data.retiroPersona === true;
+  // ---- 2026-10-28: factura electrónica OPCIONAL (el cliente marca "necesito factura"). Los datos se validan aquí y viajan
+  // en la metadata del pago; el webhook se los pasa a James en su correo de aviso. No cambia ningún monto. ----
+  let facturaMeta = '';
+  if (pideFactura(data)) {
+    const rf = validarFactura(data.factura);
+    if (rf.error) return { statusCode: 400, body: JSON.stringify({ error: rf.error }) };
+    facturaMeta = JSON.stringify(rf.factura);
+  }
   const envio = (incluyeFisico && !retiroPersona) ? SHIPPING_COST * paquetesEnvio : 0;
 
   const subtotalProductos = items.reduce((sum, it) => sum + it.price, 0);
@@ -300,6 +309,7 @@ exports.handler = async (event) => {
       // que este pedido NO hay que mandarlo por correo — el cliente pasa a recogerlo en persona.
       retiroPersona: (incluyeFisico && retiroPersona) ? 'si' : '',
       origen: 'vidavitalqr-carrito',
+      factura: facturaMeta,
       // 2026-10-02: se agrega también aquí (además del campo "customerEmail" de arriba, que es
       // el que usa ONVO para su propia confirmación) porque no está documentado con certeza que
       // ONVO reenvíe "customerEmail" dentro del evento "payment-intent.succeeded" que recibe

@@ -38,7 +38,7 @@
 // sin ningún aviso solo por haberse creado antes de que existiera el campo nuevo.
 
 const { S3Client, ListObjectsV2Command, GetObjectCommand, PutObjectCommand, DeleteObjectCommand } = require('@aws-sdk/client-s3');
-const { idEmpresaValido, escribirJson, claveFolio, claveTarjeta, claveFichaCopia, ARCHIVOS_FICHA_COPIA } = require('./lib/empresa');
+const { idEmpresaValido, leerJson, escribirJson, claveFolio, claveTarjeta, claveFichaCopia, ARCHIVOS_FICHA_COPIA } = require('./lib/empresa');
 const { fechaVencimiento, finGracia, calcularEstado, diasEntre } = require('./lib/vigencia');
 const { marcarFilaComoEliminada } = require('./lib/xlsx-resumen');
 
@@ -385,12 +385,23 @@ async function procesarFicha(s3, apiKey, ahora, carpeta, key, contadores) {
     || '';
   const nombre = nombreDesdeDatosFormulario(registro.datosFormulario, carpeta);
   const tipo = tipoFichaTexto(carpeta);
-  const enlace = urlRenovacion(carpeta);
+  // ---- 2026-10-28: ficha de empresa dada de BAJA (la empresa no la incluyó en su renovación; ver lib/renovacion-empresa.js).
+  // Sigue EXACTAMENTE la misma cronología y los mismos correos que las demás; solo cambia que el enlace lleva al sitio
+  // (no a "renovar", porque ya no la puede renovar la empresa ni el trabajador) y que cada correo empieza con una nota
+  // aclarando que, para continuar con VidaVitalQR, debe solicitar su código de forma individual. ----
+  let esBaja = false;
+  if (registro.empresa && idEmpresaValido(registro.empresa)) {
+    try { const frBaja = await leerJson(s3, BUCKET_RESUMEN, claveFolio(registro.empresa, folio)); esBaja = !!(frBaja && frBaja.baja); }
+    catch (err) { /* sin dato: se trata como una ficha normal */ }
+  }
+  const NOTA_BAJA = `IMPORTANTE: su empresa ya no renueva esta ficha (su folio fue dado de baja). Si desea continuar con VidaVitalQR, debe solicitar su código de forma individual en ${SITE_URL} — los enlaces de este correo llevan a esa página.\n\n`;
+  const enlace = esBaja ? SITE_URL : urlRenovacion(carpeta);
   const fechaVencTexto = formatearFechaCR(venc);
   const fechaGraciaTexto = formatearFechaCR(gracia);
 
   async function intentarAviso(flag, contenido) {
     if (avisosPrevios[flag]) return;
+    if (esBaja) contenido = { asunto: contenido.asunto, texto: NOTA_BAJA + contenido.texto };
     const enviado = correoDestino ? await enviarCorreo(apiKey, correoDestino, contenido) : false;
     // si no hay correo destino registrado (ficha muy antigua sin ningún correo utilizable), se
     // marca igual como "enviado" para no reintentar por siempre algo que nunca va a poder

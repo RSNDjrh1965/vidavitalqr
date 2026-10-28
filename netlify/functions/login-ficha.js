@@ -8,6 +8,7 @@
 
 const { S3Client, GetObjectCommand } = require('@aws-sdk/client-s3');
 const { pinValido } = require('./lib/pin');
+const { idEmpresaValido, leerJson, claveFolio } = require('./lib/empresa');
 const { estaBloqueado, anotar, ipDe, folioSeguro } = require('./lib/limite');
 
 const BUCKET_RESUMEN = process.env.S3_BUCKET_RESUMEN || 'resumen-vidavitalqr';
@@ -105,6 +106,13 @@ exports.handler = async (event) => {
       return respuestaInvalida;
     }
 
+    // ---- 2026-10-28: ficha de empresa dada de baja por su empresa (no la renueva); la ficha lo usa para decir
+    // al trabajador que, si desea continuar, solicite su código de forma individual ----
+    let bajaEmpresa = false;
+    if (registro.empresa && idEmpresaValido(registro.empresa)) {
+      try { const frBaja = await leerJson(s3, BUCKET_RESUMEN, claveFolio(registro.empresa, folio)); bajaEmpresa = !!(frBaja && frBaja.baja); } catch (errBaja) { /* sin dato: como una ficha normal */ }
+    }
+
     return {
       statusCode: 200,
       headers,
@@ -129,6 +137,7 @@ exports.handler = async (event) => {
         // 2026-10-20: id de la empresa si es una ficha de empresa (VVITALQRE...); la ficha lo usa para
         // mostrar el recuadro de la empresa y regenerar la tarjeta con su logo al actualizar.
         empresa: registro.empresa || '',
+        bajaEmpresa: bajaEmpresa,
       }),
     };
   } catch (err) {
