@@ -50,9 +50,11 @@ exports.handler = async (event) => {
     return { statusCode: 400, headers, body: JSON.stringify({ error: 'JSON inválido.' }) };
   }
 
-  const passwordEsperada = process.env.ADMIN_OPINIONES_PASSWORD;
-  if (!passwordEsperada) {
-    return { statusCode: 500, headers, body: JSON.stringify({ error: 'Falta configurar ADMIN_OPINIONES_PASSWORD en Netlify.' }) };
+  // ---- 2026-10-28: acepta la clave de administración general (ADMIN_KEY, la misma de admin-empresas y
+  // programacion) O la propia de este panel (ADMIN_OPINIONES_PASSWORD, que sigue funcionando igual). ----
+  const clavesAdmin = [process.env.ADMIN_KEY, process.env.ADMIN_OPINIONES_PASSWORD].filter((c) => c);
+  if (!clavesAdmin.length) {
+    return { statusCode: 500, headers, body: JSON.stringify({ error: 'Falta configurar ADMIN_KEY (o ADMIN_OPINIONES_PASSWORD) en Netlify.' }) };
   }
   // ---- 2026-10-09 (revisión de seguridad): comparación en tiempo constante + máximo 10 contraseñas
   // incorrectas cada 15 minutos por conexión (ver lib/limite.js) ----
@@ -62,7 +64,7 @@ exports.handler = async (event) => {
   if (s3Admin && await estaBloqueado(s3Admin, BUCKET_RESUMEN, 'admin-ip', ipAdmin, 10, 15 * 60 * 1000)) {
     return { statusCode: 429, headers, body: JSON.stringify({ error: 'Demasiados intentos. Espere unos minutos.' }) };
   }
-  if (!claveIgual(payload.password, passwordEsperada)) {
+  if (!clavesAdmin.some((c) => claveIgual(payload.password, c))) {
     if (s3Admin) await anotar(s3Admin, BUCKET_RESUMEN, 'admin-ip', ipAdmin, 15 * 60 * 1000);
     return { statusCode: 401, headers, body: JSON.stringify({ error: 'Contraseña incorrecta.' }) };
   }
