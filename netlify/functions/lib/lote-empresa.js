@@ -9,6 +9,7 @@
 const crypto = require('crypto');
 const { PutObjectCommand } = require('@aws-sdk/client-s3');
 const { fechaVencimiento } = require('./vigencia');
+const { validarFactura } = require('./factura');
 const { idEmpresaValido, formatoFolioEmpresa, leerJson, escribirJson, claveLote, claveFolio, CLAVE_CONTADOR } = require('./empresa');
 
 const BUCKET_RESUMEN = process.env.S3_BUCKET_RESUMEN || 'resumen-vidavitalqr';
@@ -119,11 +120,14 @@ function validarPedido(p) {
   if (m[1] === 'image/svg+xml' && /<script|onload\s*=|onerror\s*=|javascript:/i.test(logoBuf.toString('utf-8'))) {
     throw error400('El SVG del logo contiene código no permitido.');
   }
+  // factura electrónica (2026-10-28): para empresas los 5 datos son OBLIGATORIOS (así nunca queda un pago sin datos para facturar)
+  const rf = validarFactura(p.factura);
+  if (rf.error) throw error400(rf.error);
   const modalidad = String(p.modalidad || 'fisica').trim().toLowerCase();
   if (MODALIDADES.indexOf(modalidad) === -1) throw error400('Elija si desea la tarjeta impresa o solo digital.');
   // retiro en persona: solo con tarjeta impresa (en digital no hay envío que evitar)
   const retiroPersona = modalidad === 'fisica' && p.retiroPersona === true;
-  return { nombre, correo, telefono, tarjetaTelefono: contactoTarjeta.tarjetaTelefono, tarjetaCorreo: contactoTarjeta.tarjetaCorreo, cantidad, modalidad, retiroPersona, logoTipo: m[1], logoBase64: m[2] };
+  return { nombre, correo, telefono, tarjetaTelefono: contactoTarjeta.tarjetaTelefono, tarjetaCorreo: contactoTarjeta.tarjetaCorreo, cantidad, modalidad, retiroPersona, logoTipo: m[1], logoBase64: m[2], factura: rf.factura };
 }
 
 async function reservarFolios(s3, cantidad, prueba) {
@@ -170,6 +174,7 @@ async function crearLoteDePedido(s3, datos, opciones) {
     tarjetaTelefono: datos.tarjetaTelefono || '', tarjetaCorreo: datos.tarjetaCorreo || '',
     modalidad: datos.modalidad === 'digital' ? 'digital' : 'fisica',
     retiroPersona: datos.retiroPersona === true,
+    factura: datos.factura || null,
   });
   return { empresaId, folios, fechaPago, enlaces: folios.map((f) => ({ folio: f, enlace: enlaceDe(empresaId, f) })) };
 }

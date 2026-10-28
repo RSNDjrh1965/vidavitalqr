@@ -6,6 +6,7 @@
 const { leerJson, escribirJson } = require('./empresa');
 const { BUCKET_RESUMEN, crearLoteDePedido, clavePedido, PEDIDO_ID_RE, PRECIO_RENOVACION, MIN_FICHAS_RENOVACION } = require('./lote-empresa');
 const { firmarEmpresa } = require('./enlace-qr');
+const { lineasFactura } = require('./factura');
 
 const SITE_URL = process.env.SITE_URL || 'https://vidavitalqr.com';
 const enlaceRenovacion = (empresaId) => `${SITE_URL}/empresas.html?renovar=${encodeURIComponent(empresaId)}&t=${firmarEmpresa(empresaId)}`;
@@ -72,7 +73,7 @@ async function procesarPedidoEmpresa(ctx) {
 
   const lote = await crearLoteDePedido(s3, {
     nombre: pedido.nombre, correo: pedido.correo, telefono: pedido.telefono, tarjetaTelefono: pedido.tarjetaTelefono, tarjetaCorreo: pedido.tarjetaCorreo, cantidad: pedido.cantidad, modalidad: pedido.modalidad === 'digital' ? 'digital' : 'fisica', retiroPersona: pedido.retiroPersona === true,
-    logoTipo: pedido.logoTipo, logoBase64: pedido.logoBase64,
+    logoTipo: pedido.logoTipo, logoBase64: pedido.logoBase64, factura: pedido.factura,
   }, { prueba: modo === 'test', fechaPago: new Date().toISOString(), pedidoId, autorizaLogoFecha: pedido.autorizaLogoFecha });
 
   // se marca pagado de inmediato (y se descarta el logo del pedido: ya quedó en la carpeta de la empresa)
@@ -109,6 +110,10 @@ async function procesarPedidoEmpresa(ctx) {
           : '4. Cuando sus colaboradores hayan completado sus fichas, nos pondremos en contacto con usted para coordinar la entrega de las tarjetas impresas.' + PLAZOS),
       '',
       `Vigencia: 12 meses desde hoy. La renovación la realiza la empresa con un solo pago por todo el grupo ($${PRECIO_RENOVACION} por ficha activa, mínimo ${MIN_FICHAS_RENOVACION} fichas, más IVA); le avisaremos antes de que venza. También le avisaremos si pasan los meses y hay enlaces sin usar.`,
+      '',
+      'IMPORTANTE para la renovación: si algún colaborador ya no está en la empresa, anote su folio (VVITALQRE…) y escríbalo en el formulario de renovación; esa ficha no se cobra. Si esa persona desea continuar con VidaVitalQR, debe solicitar su código de forma individual en https://vidavitalqr.com.',
+      'Instructivo para empresas (cómo repartir las fichas, plazos, renovación y bajas): https://vidavitalqr.com/instructivo-empresas.html',
+      ...(pedido.factura ? ['', `Factura electrónica: la emitiremos a nombre de ${pedido.factura.nombre} (cédula ${pedido.factura.cedula}) y la enviaremos a ${pedido.factura.correo}.`] : []),
       ...(linkRenov ? ['', 'Enlace para renovar (guárdelo; sirve cuando se acerque el vencimiento):', linkRenov] : []),
       '',
       `Enlaces (${lote.enlaces.length}):`,
@@ -136,6 +141,7 @@ async function procesarPedidoEmpresa(ctx) {
     `Carpeta en S3: empresas/${lote.empresaId}/`,
     `Logo autorizado por la empresa (casilla marcada el ${pedido.autorizaLogoFecha}).`,
     `Pago ONVO: ${paymentIntentId} — modo ${modo}`,
+    ...(pedido.factura ? ['', ...lineasFactura(pedido.factura)] : []),
     '',
     digital
       ? 'Ya se creó el lote y se enviaron los enlaces a la empresa. Es solo digital: no queda nada pendiente de su parte.'
