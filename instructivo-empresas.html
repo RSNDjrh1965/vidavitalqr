@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Instructivo para empresas — VidaVitalQR</title>
+<meta name="robots" content="noindex">
+<style>
+  :root{ --ink:#12282B; --ink-soft:#2C4247; --paper:#F7F4EE; --card:#FFFFFF; --teal:#1F4448; --sage:#8FAFA6; --line:#DAD3C4; --muted:#6C7A76; --accent:#C1552F; --ok:#2E7D6B; --err:#B3261E; }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--paper);color:var(--ink);font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;line-height:1.5}
+  header{background:var(--teal);color:#F7F4EE;padding:14px 20px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+  header .marca{font-family:Georgia,"Times New Roman",serif;font-weight:700;font-size:1.25rem}
+  header .marca i{font-style:normal;color:var(--sage)}
+  header a{color:#F7F4EE;font-size:.9rem}
+  main{max-width:820px;margin:0 auto;padding:28px 16px 60px}
+  h1{font-family:Georgia,"Times New Roman",serif;font-size:1.7rem;margin:0 0 6px}
+  .lead{color:var(--ink-soft);margin:0 0 20px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:22px 20px;box-shadow:0 16px 38px -26px rgba(18,40,43,.35);margin-bottom:18px}
+  .card h2{font-size:1.05rem;margin:0 0 12px}
+  label{display:block;font-weight:600;font-size:.9rem;margin:14px 0 4px}
+  label small{font-weight:400;color:var(--muted)}
+  input[type=text],input[type=email],input[type=tel],input[type=number]{width:100%;padding:11px 12px;border:1px solid var(--line);border-radius:10px;font-size:1rem;background:#fff;color:var(--ink)}
+  input:focus{outline:2px solid var(--sage);border-color:var(--sage)}
+  .fila{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  @media (max-width:640px){ .fila{grid-template-columns:1fr} }
+  .tramos{width:100%;border-collapse:collapse;font-size:.92rem}
+  .tramos td{padding:7px 4px;border-bottom:1px solid var(--line)}
+  .tramos td:last-child{text-align:right;font-family:ui-monospace,Menlo,monospace}
+  .tramos tr.activo{background:#EAF2EF;font-weight:700}
+  .logo-box{display:flex;gap:14px;align-items:center;flex-wrap:wrap}
+  .logo-prev{width:130px;height:86px;border:1.5px dashed var(--line);border-radius:10px;background:#fff;display:flex;align-items:center;justify-content:center;overflow:hidden;color:var(--muted);font-size:.78rem;text-align:center}
+  .logo-prev img{max-width:100%;max-height:100%;object-fit:contain}
+  .chk{display:flex;gap:10px;align-items:flex-start;margin-top:16px;font-size:.92rem}
+  .chk input{margin-top:4px;width:18px;height:18px;flex:none}
+  .resumen .linea{display:flex;justify-content:space-between;padding:6px 0;font-size:.95rem}
+  .resumen .total{border-top:2px solid var(--ink);margin-top:6px;padding-top:10px;font-weight:700;font-size:1.15rem}
+  .resumen .mono{font-family:ui-monospace,Menlo,monospace}
+  button.pagar{width:100%;margin-top:16px;padding:14px;border-radius:100px;border:0;background:var(--teal);color:#fff;font-weight:700;font-size:1rem;cursor:pointer}
+  button.pagar:disabled{opacity:.55;cursor:not-allowed}
+  .msg{margin-top:12px;padding:10px 12px;border-radius:10px;font-size:.92rem;display:none}
+  .msg.err{display:block;background:#FDECEA;color:var(--err);border:1px solid #F5C6C2}
+  .banner{border-radius:12px;padding:14px 16px;margin-bottom:18px;font-size:.95rem}
+  .banner.ok{background:#E6F4EF;border:1px solid #BFE0D5;color:#14513F}
+  .banner.cancel{background:#FFF4E5;border:1px solid #F3D9AE;color:#6B4A00}
+  ol.pasos{margin:0;padding-left:20px;color:var(--ink-soft);font-size:.92rem}
+  ol.pasos li{margin:4px 0}
+  .nota{color:var(--muted);font-size:.82rem;margin-top:10px}
+  .tramos th{font-size:.78rem;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);text-align:right;padding:4px;font-weight:600}
+  .tramos th:first-child{text-align:left}
+  .tramos td.p{text-align:right;font-family:ui-monospace,Menlo,monospace}
+  .tramos td.sel{font-weight:700;color:var(--teal)}
+  .modo{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:4px}
+  @media (max-width:640px){ .modo{grid-template-columns:1fr} }
+  .modo label.op{display:block;margin:0;border:1.5px solid var(--line);border-radius:12px;padding:12px 14px;cursor:pointer;font-weight:400;background:#fff}
+  .modo label.op b{display:block;font-size:.98rem}
+  .modo label.op span{display:block;font-size:.84rem;color:var(--muted);margin-top:2px}
+  .modo input{position:absolute;opacity:0;pointer-events:none}
+  .modo label.op.on{border-color:var(--teal);background:#EAF2EF;box-shadow:0 0 0 2px var(--sage) inset}
+  .renov dl{margin:0;display:grid;grid-template-columns:auto 1fr;gap:6px 16px;font-size:.95rem}
+  .renov dt{color:var(--muted)} .renov dd{margin:0;text-align:right;font-weight:600}
+</style>
+<style>
+ .card ol,.card ul{margin:0 0 4px;padding-left:22px;color:var(--ink-soft)} .card li{margin:6px 0}
+ .aviso{background:#FFF4E5;border:1px solid #F3D9AE;color:#6B4A00;border-radius:12px;padding:12px 14px;margin-top:12px;font-size:.95rem}
+ @media print{header{display:none}}
+</style>
+</head>
+<body>
+<header>
+  <div class="marca">Vida<i>Vital</i>QR</div>
+  <a href="/">&larr; Volver a la página principal</a>
+</header>
+<main>
+  <h1>Instructivo para empresas</h1>
+  <p class="lead">Guía corta para repartir las tarjetas Identificador QR entre sus colaboradores y mantenerlas al día.</p>
+
+  <div class="card"><h2>1. Entregar las fichas a sus colaboradores</h2>
+    <ol>
+      <li>Con su correo de confirmación recibió una lista de enlaces (y el archivo <b>enlaces.csv</b>). Cada enlace sirve para <b>una sola persona</b>.</li>
+      <li>Reparta un enlace a cada colaborador, por ejemplo por WhatsApp o correo.</li>
+      <li>Cada colaborador abre <b>su</b> enlace en el celular y llena su ficha: foto, nombres, cargo, datos de emergencia y la casilla de privacidad.</li>
+      <li>Al terminar, el colaborador recibe su <b>PIN personal</b>. La empresa no lo conoce ni lo necesita.</li>
+      <li>Cada persona queda con un <b>folio</b> que empieza con <b>VVITALQRE</b> (la E identifica que es de empresa). Anótelo junto al nombre del colaborador: lo necesitará si esa persona sale de la empresa.</li>
+    </ol>
+  </div>
+
+  <div class="card"><h2>2. Qué ve y qué no ve la empresa</h2>
+    <ul>
+      <li>La empresa <b>no</b> ve los datos médicos ni de emergencia de sus colaboradores, ni sus PIN.</li>
+      <li>Cada colaborador es dueño de su ficha y puede corregirla con su folio y su PIN.</li>
+    </ul>
+  </div>
+
+  <div class="card"><h2>3. Plazos del pedido</h2>
+    <ul>
+      <li>Después del pago, sus colaboradores tienen <b>2 semanas</b> para completar la ficha.</li>
+      <li>La impresión se hace en la tercera semana y el envío o la entrega en la cuarta. Le enviaremos un recordatorio con los folios pendientes antes de imprimir.</li>
+      <li>Las fichas que se completen después se imprimen en un lote adicional.</li>
+    </ul>
+  </div>
+
+  <div class="card"><h2>4. Vigencia y renovación anual</h2>
+    <ul>
+      <li>Las fichas duran <b>12 meses</b> desde la fecha de pago.</li>
+      <li>La <b>empresa</b> renueva todo el grupo con un solo pago: <b>$5 por ficha activa</b> (mínimo 5 fichas) más IVA 13%, con ONVO Pay.</li>
+      <li>El enlace de renovación viene en su correo de confirmación. Se activa 60 días antes del vencimiento y le avisaremos por correo.</li>
+      <li>Si pasa la fecha, hay 2 meses de gracia. Después de ese plazo las fichas se eliminan.</li>
+    </ul>
+  </div>
+
+  <div class="card"><h2>5. Si un colaborador ya no está en la empresa</h2>
+    <ol>
+      <li>Al renovar, en el recuadro <b>“¿Alguien ya no trabaja en su empresa?”</b> escriba el folio de cada persona que salió (uno por línea).</li>
+      <li>Toque <b>Actualizar resumen</b>: verá cuántas fichas se renuevan y el nuevo total. Esas fichas <b>no se cobran</b>.</li>
+      <li>La ficha dada de baja sigue funcionando hasta su fecha de vencimiento y después se elimina, igual que las demás. Esa persona recibe los mismos avisos de vencimiento.</li>
+      <li>Le avisamos por correo a cada persona dada de baja que su empresa ya no renovará su ficha.</li>
+    </ol>
+    <div class="aviso"><b>Importante:</b> si un colaborador dado de baja desea seguir usando su código, <b>debe solicitarlo de forma individual</b> en vidavitalqr.com (la renovación individual cuesta $7 al año). Por favor avísele cuando salga de la empresa.</div>
+  </div>
+
+  <div class="card"><h2>Factura electrónica</h2>
+    <p style="margin:0">Al hacer el pedido usted indica los datos de facturación (cédula jurídica, razón social, correo, teléfono y código de actividad económica). Emitimos la factura electrónica con esos datos y se la enviamos al correo que indicó. En las renovaciones usamos los mismos datos; si cambian, avísenos por WhatsApp.</p>
+  </div>
+
+  <div class="card"><h2>¿Dudas?</h2>
+    <p style="margin:0">Escríbanos por WhatsApp al <b>6093-3090</b>.</p>
+  </div>
+</main>
+</body>
+</html>

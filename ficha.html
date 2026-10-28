@@ -1209,7 +1209,9 @@ $('photoRemove').addEventListener('click', e => {
           // aquí; en "actualizar" se muestra el recuadro de la empresa y se conserva su tarjeta. ----
           if (data.empresa) {
             if (esRenovacion) {
-              alert('Las fichas de empresa las renueva su empresa, con un solo pago por todo el grupo. Consulte con su empresa o escriba por WhatsApp al +506 6093-3090.');
+              alert(data.bajaEmpresa
+                ? 'Su empresa ya no renueva esta ficha (su folio fue dado de baja). Si desea continuar con VidaVitalQR, debe solicitar su código de forma individual en vidavitalqr.com. Para dudas escriba por WhatsApp al +506 6093-3090.'
+                : 'Las fichas de empresa las renueva su empresa, con un solo pago por todo el grupo. Consulte con su empresa o escriba por WhatsApp al +506 6093-3090.');
               btn.disabled = false;
               btn.textContent = textoOriginal;
               return;

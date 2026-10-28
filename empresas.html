@@ -68,7 +68,7 @@
 </header>
 <main>
   <h1>Identificador QR para empresas</h1>
-  <p class="lead">Tarjetas de identificación para sus colaboradores, con el logo de su empresa, foto, nombre, cargo y código QR de emergencia. Haga su pedido aquí y pague de forma segura en línea con ONVO Pay.</p>
+  <p class="lead">Tarjetas de identificación para sus colaboradores, con el logo de su empresa, foto, nombre, cargo y código QR de emergencia. Haga su pedido aquí y pague de forma segura en línea con ONVO Pay. <a href="/instructivo-empresas.html">Ver instructivo para empresas</a>.</p>
 
   <div id="bannerPago"></div>
 
@@ -113,6 +113,30 @@
         <input type="email" id="tarjetaCorreo" maxlength="50" autocomplete="off" placeholder="Ej.: info@miempresa.com">
       </div>
     </div>
+    <label>Datos para la factura electrónica</label>
+    <p class="hint" style="margin:0 0 8px;font-size:.88rem;color:var(--muted)">Le emitiremos la factura electrónica con estos datos y se la enviaremos al correo que indique aquí.</p>
+    <div class="fila">
+      <div>
+        <label for="fCedula">Cédula jurídica</label>
+        <input type="text" id="fCedula" maxlength="20" inputmode="numeric" autocomplete="off" placeholder="Ej.: 3-101-123456" required>
+      </div>
+      <div>
+        <label for="fNombre">Nombre o razón social</label>
+        <input type="text" id="fNombre" maxlength="100" autocomplete="organization" required>
+      </div>
+    </div>
+    <div class="fila">
+      <div>
+        <label for="fCorreo">Correo para enviar la factura</label>
+        <input type="email" id="fCorreo" maxlength="80" autocomplete="off" required>
+      </div>
+      <div>
+        <label for="fTelefono">Teléfono</label>
+        <input type="tel" id="fTelefono" maxlength="25" autocomplete="off" required>
+      </div>
+    </div>
+    <label for="fActividad">Código de actividad económica <small>(el que tiene registrado ante Hacienda)</small></label>
+    <input type="text" id="fActividad" maxlength="10" inputmode="numeric" autocomplete="off" placeholder="Ej.: 711001" required>
     <label>Tipo de tarjeta</label>
     <div class="modo" id="modo">
       <label class="op on" id="opFisica"><input type="radio" name="modalidad" value="fisica" checked><b>Tarjeta impresa</b><span>PVC con logo, foto, nombre, cargo y QR. Coordinamos la entrega con usted.</span></label>
@@ -260,12 +284,18 @@
     var tTel = $('tarjetaTelefono').value.trim(), tCor = $('tarjetaCorreo').value.trim();
     if (tTel && !/^[0-9+()\-. ]{6,20}$/.test(tTel)) { mostrarError('El teléfono para la tarjeta no es válido (use números, espacios, guion o +).'); $('tarjetaTelefono').focus(); return; }
     if (tCor && (tCor.length > 50 || !/^[^\s@<>"']+@[^\s@<>"']+\.[^\s@<>"']{2,}$/.test(tCor))) { mostrarError('El correo para la tarjeta no es válido (máximo 50 caracteres).'); $('tarjetaCorreo').focus(); return; }
+    var fac = { cedula: $('fCedula').value.replace(/[\s-]/g, ''), nombre: $('fNombre').value.trim(), correo: $('fCorreo').value.trim(), telefono: $('fTelefono').value.trim(), actividad: $('fActividad').value.replace(/[\s.-]/g, '') };
+    if (!/^\d{9,12}$/.test(fac.cedula)) { mostrarError('Escriba la cédula jurídica para la factura (solo números, de 9 a 12 dígitos).'); $('fCedula').focus(); return; }
+    if (fac.nombre.length < 3) { mostrarError('Escriba el nombre o la razón social para la factura.'); $('fNombre').focus(); return; }
+    if (!/^[^\s@<>"']+@[^\s@<>"']+\.[^\s@<>"']{2,}$/.test(fac.correo)) { mostrarError('Escriba un correo válido para enviar la factura.'); $('fCorreo').focus(); return; }
+    if (fac.telefono.replace(/\D/g, '').length < 8) { mostrarError('Escriba un teléfono válido para la factura.'); $('fTelefono').focus(); return; }
+    if (!/^\d{4,7}$/.test(fac.actividad)) { mostrarError('El código de actividad económica debe tener de 4 a 7 números.'); $('fActividad').focus(); return; }
     if (!logoDataUrl) { mostrarError('Suba el logo de la empresa.'); return; }
     if (!$('autoriza').checked) { mostrarError('Marque la casilla que confirma que su empresa autoriza el uso del logo.'); return; }
     enviando = true; var b = $('btnPagar'); b.disabled = true; b.textContent = 'Preparando el pago…';
     fetch('/.netlify/functions/pedido-empresa', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ nombre: nombre, correo: correo, telefono: tel, tarjetaTelefono: tTel, tarjetaCorreo: tCor, cantidad: n, modalidad: modalidad(), retiroPersona: retiro(), logoDataUrl: logoDataUrl, autorizaLogo: true })
+      body: JSON.stringify({ nombre: nombre, correo: correo, telefono: tel, tarjetaTelefono: tTel, tarjetaCorreo: tCor, cantidad: n, modalidad: modalidad(), retiroPersona: retiro(), logoDataUrl: logoDataUrl, autorizaLogo: true, factura: fac })
     }).then(function(r){ return r.json().then(function(j){ return { ok: r.ok, j: j }; }); })
       .then(function(res){
         if (!res.ok || !res.j || !res.j.url) throw new Error((res.j && res.j.error) || 'No se pudo crear el pago.');
@@ -295,12 +325,15 @@
           + '<dt>Fichas activas</dt><dd>' + j.activas + '</dd>'
           + (j.abierta ? '<dt>Nuevo vencimiento</dt><dd>' + fechaLarga(j.nuevoVencimiento) + '</dd>' : '') + '</dl></div>';
         if (j.abierta) {
-          h += '<div class="card resumen"><h2>Resumen</h2>'
-            + '<div class="linea"><span>' + j.fichasCobradas + ' ficha(s) × ' + usd2(j.precioUnitario) + (j.activas < j.fichasCobradas ? ' (mínimo ' + j.fichasCobradas + ' fichas)' : '') + '</span><span class="mono">' + usd2(j.subtotal) + '</span></div>'
-            + '<div class="linea"><span>IVA (13%)</span><span class="mono">' + usd2(j.iva) + '</span></div>'
-            + '<div class="linea total"><span>Total a pagar</span><span class="mono">' + usd2(j.totalUSD) + '</span></div>'
-            + '<div class="msg" id="msgR"></div><button type="button" class="pagar" id="btnRenovar">Renovar y pagar con ONVO Pay</button>'
-            + '<p class="nota">Si renueva antes de que venza no pierde ningún día: los 12 meses nuevos se suman al vencimiento actual. Todos los pagos se procesan únicamente por ONVO Pay.</p></div>';
+          h += '<div class="card"><h2>¿Alguien ya no trabaja en su empresa?</h2>'
+            + '<p class="nota" style="margin-top:0">Si algún colaborador ya no está con ustedes, escriba aquí su folio (uno por línea, por ejemplo <b>VVITALQRE0000123</b>). Esa ficha <b>no se renueva ni se cobra</b>: seguirá funcionando hasta su fecha de vencimiento y después se elimina como las demás. Le avisaremos al colaborador que, si desea continuar, debe solicitar su código de forma individual.</p>'
+            + '<textarea id="txtBajas" rows="4" style="width:100%;box-sizing:border-box;font:inherit;padding:10px;border:1px solid var(--line);border-radius:10px" placeholder="Un folio por línea (opcional)"></textarea>'
+            + '<div class="msg" id="msgB"></div><div id="listaBajas"></div>'
+            + '<button type="button" class="pagar" id="btnCalc" style="background:transparent;color:inherit;border:1px solid var(--line);margin-top:10px">Actualizar resumen</button></div>'
+            + '<div class="card resumen" id="zonaResumen"></div>';
+        }
+        if (j.abierta) {
+          // (el contenido del resumen se pinta abajo con pintarResumen)
         } else if (j.motivo === 'antes') {
           h += '<div class="card"><div class="banner cancel">Todavía no es momento de renovar: podrá hacerlo desde el ' + fechaLarga(j.desde) + ' (60 días antes del vencimiento). Le enviaremos un aviso por correo.</div></div>';
         } else if (j.motivo === 'eliminadas') {
@@ -309,14 +342,48 @@
           h += '<div class="card"><div class="banner cancel">No hay fichas activas para renovar todavía.</div></div>';
         }
         pan.innerHTML = h;
-        var br = $('btnRenovar');
-        if (br) br.addEventListener('click', function(){
-          var m = $('msgR'); m.textContent = ''; m.className = 'msg'; br.disabled = true; br.textContent = 'Preparando el pago…';
-          fetch('/.netlify/functions/renovacion-empresa', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ e: renovar, t: firma }) })
-            .then(function(r){ return r.json().then(function(x){ return { ok: r.ok, x: x }; }); })
-            .then(function(r2){ if (!r2.ok || !r2.x || !r2.x.url) throw new Error((r2.x && r2.x.error) || 'No se pudo crear el pago.'); br.textContent = 'Redirigiendo a ONVO Pay…'; window.location.href = r2.x.url; })
-            .catch(function(e){ m.textContent = e && e.message ? e.message : 'No se pudo crear el pago.'; m.className = 'msg err'; br.disabled = false; br.textContent = 'Renovar y pagar con ONVO Pay'; });
-        });
+        if (j.abierta) {
+          var bajasOk = true; // el resumen está al día con el texto de bajas
+          var txt = $('txtBajas'), zona = $('zonaResumen');
+          function pintarResumen(d){
+            var sinCobro = d.activasNetas < 1;
+            zona.innerHTML = '<h2>Resumen</h2>'
+              + (d.bajasValidas && d.bajasValidas.length ? '<div class="linea"><span>Fichas activas</span><span class="mono">' + d.activas + '</span></div><div class="linea"><span>Bajas (no se renuevan)</span><span class="mono">− ' + d.bajasValidas.length + '</span></div>' : '')
+              + '<div class="linea"><span>' + d.fichasCobradas + ' ficha(s) × ' + usd2(d.precioUnitario) + (d.activasNetas < d.fichasCobradas ? ' (mínimo ' + d.fichasCobradas + ' fichas)' : '') + '</span><span class="mono">' + usd2(d.subtotal) + '</span></div>'
+              + '<div class="linea"><span>IVA (13%)</span><span class="mono">' + usd2(d.iva) + '</span></div>'
+              + '<div class="linea total"><span>Total a pagar</span><span class="mono">' + usd2(d.totalUSD) + '</span></div>'
+              + '<div class="msg" id="msgR"></div><button type="button" class="pagar" id="btnRenovar">Renovar y pagar con ONVO Pay</button>'
+              + '<p class="nota">Si renueva antes de que venza no pierde ningún día: los 12 meses nuevos se suman al vencimiento actual. Todos los pagos se procesan únicamente por ONVO Pay.</p>';
+            var lb = '';
+            if (d.bajasValidas && d.bajasValidas.length) lb += '<p class="nota"><b>No se renovarán (' + d.bajasValidas.length + '):</b> ' + d.bajasValidas.map(esc).join(', ') + '</p>';
+            if (d.bajasIgnoradas && d.bajasIgnoradas.length) lb += '<p class="nota">Ya no están activas (no hace falta anotarlas): ' + d.bajasIgnoradas.map(function(x){ return esc(x.folio || x); }).join(', ') + '</p>';
+            if (d.bajasInvalidas && d.bajasInvalidas.length) lb += '<div class="msg err" style="display:block">Revise estos folios: ' + d.bajasInvalidas.map(function(x){ return esc(x.folio) + ' (' + esc(x.motivo) + ')'; }).join('; ') + '</div>';
+            $('listaBajas').innerHTML = lb;
+            var br = $('btnRenovar');
+            var bloqueado = (d.bajasInvalidas && d.bajasInvalidas.length) || sinCobro;
+            if (sinCobro) { var mm = $('msgR'); mm.textContent = 'Con esas bajas no queda ninguna ficha por renovar. Revise la lista.'; mm.className = 'msg err'; }
+            br.disabled = !!bloqueado;
+            br.addEventListener('click', function(){
+              if (!bajasOk) { var m0 = $('msgR'); m0.textContent = 'Toque primero "Actualizar resumen" para ver el total con las bajas.'; m0.className = 'msg err'; return; }
+              var m = $('msgR'); m.textContent = ''; m.className = 'msg'; br.disabled = true; br.textContent = 'Preparando el pago…';
+              fetch('/.netlify/functions/renovacion-empresa', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ e: renovar, t: firma, bajas: txt.value }) })
+                .then(function(r){ return r.json().then(function(x){ return { ok: r.ok, x: x }; }); })
+                .then(function(r2){ if (!r2.ok || !r2.x || !r2.x.url) throw new Error((r2.x && r2.x.error) || 'No se pudo crear el pago.'); br.textContent = 'Redirigiendo a ONVO Pay…'; window.location.href = r2.x.url; })
+                .catch(function(e){ m.textContent = e && e.message ? e.message : 'No se pudo crear el pago.'; m.className = 'msg err'; br.disabled = false; br.textContent = 'Renovar y pagar con ONVO Pay'; });
+            });
+          }
+          function calcular(){
+            var bc = $('btnCalc'); bc.disabled = true; bc.textContent = 'Calculando…';
+            fetch('/.netlify/functions/renovacion-empresa', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ e: renovar, t: firma, accion: 'calcular', bajas: txt.value }) })
+              .then(function(r){ return r.json().then(function(x){ return { ok: r.ok, x: x }; }); })
+              .then(function(r2){ if (!r2.ok) throw new Error((r2.x && r2.x.error) || 'No se pudo calcular.'); bajasOk = true; pintarResumen(r2.x); })
+              .catch(function(e){ var mb = $('msgB'); mb.textContent = e && e.message ? e.message : 'No se pudo calcular.'; mb.className = 'msg err'; })
+              .then(function(){ bc.disabled = false; bc.textContent = 'Actualizar resumen'; });
+          }
+          $('btnCalc').addEventListener('click', calcular);
+          txt.addEventListener('input', function(){ bajasOk = false; var b2 = $('btnRenovar'); if (b2) b2.disabled = true; });
+          pintarResumen(j);
+        }
       })
       .catch(function(){ pan.innerHTML = '<div class="card"><div class="msg err" style="display:block">No se pudo cargar la renovación. Intente de nuevo.</div></div>'; });
   }
