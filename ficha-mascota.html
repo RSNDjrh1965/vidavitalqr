@@ -586,6 +586,8 @@ const TEXTOS_FICHA = {
     paginaAdicional: 'página adicional en el PDF',
     archivoAdjunto: (nombre) => `Archivo adjunto: ${nombre}`,
     errorMainCanvas: 'El navegador no pudo generar la imagen de la ficha (mainCanvas vacío). Prueba en otro navegador o desactiva bloqueadores de anuncios/privacidad y vuelve a intentar.',
+    pieFrase: 'Su información de emergencia, a un escaneo de distancia.',
+    pieSub: 'Conozca VidaVitalQR · vidavitalqr.com',
     pinModalTitulo: 'Guarda tu PIN de acceso',
     pinModalTexto: (folio) => `Con el folio (<b>${folio}</b>) y este PIN podrás entrar más adelante a actualizar la ficha de tu mascota sin llenar el formulario de nuevo.`,
     pinModalAdvertencia: 'Este PIN es único y es indispensable para poder actualizar la ficha en el futuro — guárdalo en un lugar seguro, ya que nadie más podrá verlo.',
@@ -672,6 +674,8 @@ const TEXTOS_FICHA = {
     paginaAdicional: 'extra page in the PDF',
     archivoAdjunto: (nombre) => `Attached file: ${nombre}`,
     errorMainCanvas: 'Your browser could not generate the card image (empty canvas). Try another browser or disable ad/privacy blockers and try again.',
+    pieFrase: 'Your emergency information, one scan away.',
+    pieSub: 'Visit VidaVitalQR · vidavitalqr.com',
     pinModalTitulo: 'Save your access PIN',
     pinModalTexto: (folio) => `With the folio (<b>${folio}</b>) and this PIN you'll be able to come back later to update your pet's card without filling out the form again.`,
     pinModalAdvertencia: 'This PIN is unique and required to update the card in the future — keep it somewhere safe, since no one else will be able to see it.',
@@ -758,6 +762,8 @@ const TEXTOS_FICHA = {
     paginaAdicional: 'page supplémentaire dans le PDF',
     archivoAdjunto: (nombre) => `Fichier joint : ${nombre}`,
     errorMainCanvas: 'Le navigateur n\'a pas pu générer l\'image de la fiche (canevas vide). Essayez un autre navigateur ou désactivez les bloqueurs de publicité/confidentialité et réessayez.',
+    pieFrase: 'Vos informations d\'urgence, à un scan de distance.',
+    pieSub: 'Découvrir VidaVitalQR · vidavitalqr.com',
     pinModalTitulo: 'Enregistrez votre PIN d\'accès',
     pinModalTexto: (folio) => `Avec le folio (<b>${folio}</b>) et ce PIN, vous pourrez revenir plus tard mettre à jour la fiche de votre animal sans remplir le formulaire à nouveau.`,
     pinModalAdvertencia: 'Ce PIN est unique et indispensable pour mettre à jour la fiche à l\'avenir — conservez-le en lieu sûr, car personne d\'autre ne pourra le voir.',
@@ -844,6 +850,8 @@ const TEXTOS_FICHA = {
     paginaAdicional: 'página extra no PDF',
     archivoAdjunto: (nombre) => `Arquivo anexado: ${nombre}`,
     errorMainCanvas: 'O navegador não conseguiu gerar a imagem da ficha (canvas vazio). Tente outro navegador ou desative bloqueadores de anúncios/privacidade e tente novamente.',
+    pieFrase: 'Suas informações de emergência, a um scan de distância.',
+    pieSub: 'Conheça a VidaVitalQR · vidavitalqr.com',
     pinModalTitulo: 'Guarde seu PIN de acesso',
     pinModalTexto: (folio) => `Com o folio (<b>${folio}</b>) e este PIN você poderá entrar depois para atualizar a ficha da sua mascota sem preencher o formulário novamente.`,
     pinModalAdvertencia: 'Este PIN é único e indispensável para atualizar a ficha no futuro — guarde-o em local seguro, pois mais ninguém poderá vê-lo.',
@@ -1660,6 +1668,29 @@ function buildPrintAttachments(){
 }
 
 // ---- generar el PDF real (diseño de la ficha + páginas de fotos .jpg) ----
+
+// ---- 2026-10-30: pie de marca al final de la ficha en el PDF (logo + frase + QR de vidavitalqr.com).
+// Es solo publicidad de la marca: va en el margen inferior de la última página de la ficha (no en las
+// páginas de adjuntos), y si falla por cualquier motivo se omite sin afectar la generación del PDF. ----
+const PIE_LOGO_DATA = 'data:image/png;base64,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';
+const PIE_QR_DATA = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAASwAAAEsAQAAAABRBrPYAAABXklEQVR42u1aO3LFQAgTmdfj+98uN4ATKAX7fWlShjdiXNgLlTSIBQwscwIgCYAxPqd94U+msP8QBjjL4GRch9sl3LqFmZk9N79p5Z4u4dY1bDCbBud4F279wl7XVxo8AHDmqXBryum+DHkYAKc5i1QKt45haWXvCgwcLuHWKU/5pr0Ap/ZuVwq3fr3M1Y361deol2nHaXHHwwa/xTXAAEO4NeN08OhkFINHwha54rQXpxwyW+SugVKdz1QVbs04PRX4VN2jqgq3Znek61J0vqycVZ42zNOxlAnsqsqTZeHWbY6UD9OYY9ZQQySr/tTD0ijcemnvrzK6MxTK07b33rMzPZ69QhWnrcJs2QOk8dv28vQRbj3rqQ+dtTngJbCXMmnwMOHWrpdZHQ2w9Fa4fUYYSXvA2Ko7yRVunxLmRJpmDi370/vIxu8rT21RTbg17E+vwrp0OI7Br3DrFPYDURgd6On6QbcAAAAASUVORK5CYII=';
+const PIE_H = 58;
+function dibujarPieMarca(pdf, PAGE_W, PAGE_H, MARGIN){
+  try{
+    const t = T();
+    const top = PAGE_H - MARGIN - PIE_H;
+    pdf.addImage(PIE_LOGO_DATA, 'PNG', MARGIN + 6, top + 8, 78, 78 * 495 / 820);
+    pdf.setTextColor(31, 68, 72); pdf.setFont('helvetica', 'bold'); pdf.setFontSize(9);
+    const lineas = pdf.splitTextToSize(t.pieFrase || '', PAGE_W - MARGIN * 2 - 78 - 6 - 70 - 40);
+    pdf.text(lineas, MARGIN + 100, top + 20);
+    pdf.setTextColor(108, 122, 118); pdf.setFont('helvetica', 'normal'); pdf.setFontSize(8);
+    pdf.text(t.pieSub || '', MARGIN + 100, top + 20 + lineas.length * 11 + 2);
+    const sz = 46, qx = PAGE_W - MARGIN - 6 - sz, qy = top + 6;
+    pdf.setDrawColor(218, 211, 196); pdf.setFillColor(255, 255, 255);
+    pdf.roundedRect(qx - 4, qy - 4, sz + 8, sz + 8, 4, 4, 'FD');
+    pdf.addImage(PIE_QR_DATA, 'PNG', qx, qy, sz, sz);
+  }catch(e){ console.warn('pie de marca omitido:', e); }
+}
 async function generatePdfBlob(){
   const { jsPDF } = window.jspdf;
   const noPrintEls = Array.from(document.querySelectorAll('.no-print')).filter(el => el.id !== 'openCounter');
@@ -1688,7 +1719,11 @@ async function generatePdfBlob(){
   // incluida la fotografía— fuera de la hoja).
   const scaleToPage = usableW / mainCanvas.width;
   // Altura (en px del canvas) que corresponde exactamente a una página completa ya escalada.
-  const sliceHeightPx = usableH / scaleToPage;
+  // 2026-10-30: si el pie de marca NO cabe debajo de la última página con el corte normal, se acorta
+  // el alto de cada página lo justo para reservarle ese espacio; si cabe, el corte queda exactamente igual que antes.
+  let sliceHeightPx = usableH / scaleToPage;
+  { const restoPx = (mainCanvas.height % sliceHeightPx) || sliceHeightPx;
+    if (MARGIN + restoPx * scaleToPage + 8 > PAGE_H - MARGIN - PIE_H) sliceHeightPx = (usableH - PIE_H - 8) / scaleToPage; }
 
   const pdf = new jsPDF({ unit: 'pt', format: [PAGE_W, PAGE_H] });
   let y = 0;
@@ -1711,6 +1746,7 @@ async function generatePdfBlob(){
 
     y += sliceH;
   }
+  dibujarPieMarca(pdf, PAGE_W, PAGE_H, MARGIN);
 
   // ---- páginas de adjuntos: #printAttachments normalmente está oculto (solo se muestra
   // al imprimir vía @media print), así que hay que mostrarlo temporalmente aquí; si no,
