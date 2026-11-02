@@ -81,6 +81,7 @@ exports.handler = async (event) => {
         correo: lote.correo || '',
         tarjetaTelefono: lote.tarjetaTelefono || '',
         tarjetaCorreo: lote.tarjetaCorreo || '',
+        tarjetaColor: /^#[0-9A-F]{6}$/.test(String(lote.tarjetaColor || '')) ? lote.tarjetaColor : '',
         logo,
         // 'sin_activar' es el único estado que deja llenar la ficha; 'activa' y 'eliminada' no
         estado: registroFolio.estado === 'sin_activar' ? 'sin_activar' : 'activa',
