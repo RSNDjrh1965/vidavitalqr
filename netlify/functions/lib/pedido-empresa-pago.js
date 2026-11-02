@@ -72,7 +72,7 @@ async function procesarPedidoEmpresa(ctx) {
   }
 
   const lote = await crearLoteDePedido(s3, {
-    nombre: pedido.nombre, correo: pedido.correo, telefono: pedido.telefono, tarjetaTelefono: pedido.tarjetaTelefono, tarjetaCorreo: pedido.tarjetaCorreo, cantidad: pedido.cantidad, modalidad: pedido.modalidad === 'digital' ? 'digital' : 'fisica', retiroPersona: pedido.retiroPersona === true,
+    nombre: pedido.nombre, correo: pedido.correo, telefono: pedido.telefono, tarjetaTelefono: pedido.tarjetaTelefono, tarjetaCorreo: pedido.tarjetaCorreo, tarjetaColor: pedido.tarjetaColor, cantidad: pedido.cantidad, modalidad: pedido.modalidad === 'digital' ? 'digital' : 'fisica', retiroPersona: pedido.retiroPersona === true,
     logoTipo: pedido.logoTipo, logoBase64: pedido.logoBase64, factura: pedido.factura,
   }, { prueba: modo === 'test', fechaPago: new Date().toISOString(), pedidoId, autorizaLogoFecha: pedido.autorizaLogoFecha });
 
@@ -139,6 +139,7 @@ async function procesarPedidoEmpresa(ctx) {
     `Tarjetas: ${pedido.cantidad} a $${pedido.precioUnitario} c/u${pedido.envio ? ' + envío $' + pedido.envio : ''} — subtotal $${pedido.subtotal}, IVA $${pedido.iva}, total $${pedido.totalUSD}`,
     `Folios: ${lote.folios[0]} a ${lote.folios[lote.folios.length - 1]}`,
     `Carpeta en S3: empresas/${lote.empresaId}/`,
+    `Color de fondo de la tarjeta: ${/^#[0-9A-F]{6}$/.test(String(pedido.tarjetaColor || '')) ? pedido.tarjetaColor : 'sin código (verde estándar)'}`,
     `Logo autorizado por la empresa (casilla marcada el ${pedido.autorizaLogoFecha}).`,
     `Pago ONVO: ${paymentIntentId} — modo ${modo}`,
     ...(pedido.factura ? ['', ...lineasFactura(pedido.factura)] : []),

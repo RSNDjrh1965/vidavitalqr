@@ -101,6 +101,17 @@ function validarContactoTarjeta(p) {
   return { tarjetaTelefono, tarjetaCorreo };
 }
 
+// 2026-11-02: color de fondo de la tarjeta (código hexadecimal de la marca de la empresa). OPCIONAL: sin código la tarjeta
+// conserva el verde de siempre. Acepta "#1F4448", "1F4448", "#fff" o "fff" y devuelve siempre "#RRGGBB" en mayúsculas ('' si viene vacío).
+function normalizarColorTarjeta(v) {
+  let s = String(v == null ? '' : v).trim();
+  if (!s) return '';
+  if (s[0] === '#') s = s.slice(1);
+  if (/^[0-9a-fA-F]{3}$/.test(s)) s = s.split('').map((c) => c + c).join('');
+  if (!/^[0-9a-fA-F]{6}$/.test(s)) throw error400('El código de color de la tarjeta no es válido. Use 6 caracteres, por ejemplo #1F4448.');
+  return '#' + s.toUpperCase();
+}
+
 // Valida y normaliza los datos del pedido. Lanza error {codigo:400} con un mensaje claro.
 function validarPedido(p) {
   const nombre = String(p.nombre || '').trim();
@@ -108,6 +119,7 @@ function validarPedido(p) {
   const telefono = String(p.telefono || '').trim().slice(0, 30);
   const cantidad = parseInt(p.cantidad, 10);
   const contactoTarjeta = validarContactoTarjeta(p);
+  const tarjetaColor = normalizarColorTarjeta(p.tarjetaColor);
   if (nombre.length < 2 || nombre.length > 80) throw error400('Escriba el nombre de la empresa (entre 2 y 80 letras).');
   if (!emailValido(correo)) throw error400('El correo de la empresa no es válido.');
   if (!Number.isInteger(cantidad) || cantidad < 1) throw error400('Indique cuántas tarjetas necesita (mínimo 1).');
@@ -127,7 +139,7 @@ function validarPedido(p) {
   if (MODALIDADES.indexOf(modalidad) === -1) throw error400('Elija si desea la tarjeta impresa o solo digital.');
   // retiro en persona: solo con tarjeta impresa (en digital no hay envío que evitar)
   const retiroPersona = modalidad === 'fisica' && p.retiroPersona === true;
-  return { nombre, correo, telefono, tarjetaTelefono: contactoTarjeta.tarjetaTelefono, tarjetaCorreo: contactoTarjeta.tarjetaCorreo, cantidad, modalidad, retiroPersona, logoTipo: m[1], logoBase64: m[2], factura: rf.factura };
+  return { nombre, correo, telefono, tarjetaTelefono: contactoTarjeta.tarjetaTelefono, tarjetaCorreo: contactoTarjeta.tarjetaCorreo, tarjetaColor, cantidad, modalidad, retiroPersona, logoTipo: m[1], logoBase64: m[2], factura: rf.factura };
 }
 
 async function reservarFolios(s3, cantidad, prueba) {
@@ -172,6 +184,7 @@ async function crearLoteDePedido(s3, datos, opciones) {
     autorizaLogo: true, autorizaLogoFecha: opciones.autorizaLogoFecha || ahora,
     origen: 'pedido-web', pedidoId: opciones.pedidoId || null, telefono: datos.telefono || '',
     tarjetaTelefono: datos.tarjetaTelefono || '', tarjetaCorreo: datos.tarjetaCorreo || '',
+    tarjetaColor: /^#[0-9A-F]{6}$/.test(String(datos.tarjetaColor || '')) ? datos.tarjetaColor : '',
     modalidad: datos.modalidad === 'digital' ? 'digital' : 'fisica',
     retiroPersona: datos.retiroPersona === true,
     factura: datos.factura || null,
@@ -183,6 +196,6 @@ const clavePedido = (id) => `empresas/_pedidos/${id}.json`;
 const PEDIDO_ID_RE = /^[a-z0-9]{12,40}$/;
 
 module.exports = {
-  BUCKET_RESUMEN, MAX_TARJETAS_POR_PEDIDO, MODALIDADES, PRECIO_RENOVACION, MIN_FICHAS_RENOVACION, precioPorTarjeta, envioEmpresa, ENVIO_EMPRESA_HASTA_100, ENVIO_EMPRESA_MAS_100, calcularTotales, calcularRenovacion, validarPedido, validarContactoTarjeta, crearLoteDePedido,
+  BUCKET_RESUMEN, MAX_TARJETAS_POR_PEDIDO, MODALIDADES, PRECIO_RENOVACION, MIN_FICHAS_RENOVACION, precioPorTarjeta, envioEmpresa, ENVIO_EMPRESA_HASTA_100, ENVIO_EMPRESA_MAS_100, calcularTotales, calcularRenovacion, validarPedido, validarContactoTarjeta, normalizarColorTarjeta, crearLoteDePedido,
   enlaceDe, emailValido, clavePedido, PEDIDO_ID_RE,
 };
