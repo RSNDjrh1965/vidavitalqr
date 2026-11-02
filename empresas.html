@@ -47,7 +47,18 @@
   ol.pasos li{margin:4px 0}
   .nota{color:var(--muted);font-size:.82rem;margin-top:10px}
   .tramos th{font-size:.78rem;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);text-align:right;padding:4px;font-weight:600}
+  .vvc-ver{margin-top:8px;border:1px solid var(--line);background:#fff;border-radius:8px;padding:7px 12px;font-size:.85rem;font-weight:600;cursor:pointer;color:var(--teal,#1F4448)}
+  .vvc-panel{display:grid;grid-template-columns:repeat(auto-fill,minmax(64px,1fr));gap:6px;margin-top:8px;padding:10px;border:1px solid var(--line);border-radius:10px;background:#fff;max-width:520px}
+  .vvc-panel[hidden]{display:none}
   .tramos th:first-child{text-align:left}
+  .vvc-fila{display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+  .vvc-fila input[type=text]{width:150px;font-family:ui-monospace,Menlo,monospace;text-transform:uppercase}
+  .vvc-muestra{width:46px;height:46px;border-radius:10px;border:1.5px solid var(--line);background:repeating-conic-gradient(#e9e4d8 0% 25%,#fff 0% 50%) 50%/12px 12px;flex:none}
+  .vvc-picker{width:46px;height:46px;padding:2px;border:1px solid var(--line);border-radius:10px;background:#fff;cursor:pointer;flex:none}
+  .vvc-mini{width:60px;height:96px;border:1px solid var(--line);border-radius:7px;overflow:hidden;display:flex;flex-direction:column;background:linear-gradient(180deg,#fcfbf8,#f3ede2);flex:none}
+  .vvc-aviso{margin:8px 0 0;font-size:.85rem;min-height:1.2em}
+  .vvc-aviso.err{color:var(--err)}
+  .vvc-aviso.warn{color:#8A5A00}
   .tramos td.p{text-align:right;font-family:ui-monospace,Menlo,monospace}
   .tramos td.sel{font-weight:700;color:var(--teal)}
   .modo{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:4px}
@@ -113,6 +124,17 @@
         <input type="email" id="tarjetaCorreo" maxlength="50" autocomplete="off" placeholder="Ej.: info@miempresa.com">
       </div>
     </div>
+    <label for="colorCodigo">Color de fondo de la tarjeta <small>(opcional)</small></label>
+    <p class="hint" style="margin:0 0 8px;font-size:.88rem;color:var(--muted)">Escriba el código del color de su marca (por ejemplo <b>#1F4448</b>) y el recuadro le mostrará cómo se ve. Ese color se usa en las franjas superior e inferior de la tarjeta de todos sus colaboradores. Si lo deja en blanco, se usa el verde de VidaVitalQR.</p>
+    <div class="vvc-fila">
+      <input type="text" id="colorCodigo" maxlength="7" autocomplete="off" spellcheck="false" placeholder="#1F4448" aria-label="Código del color de fondo de la tarjeta">
+      <span id="colorMuestra" class="vvc-muestra" title="Color elegido"></span>
+      <input type="color" id="colorPicker" class="vvc-picker" value="#1F4448" title="Elegir un color" aria-label="Elegir un color">
+      <div id="colorMini" class="vvc-mini" title="Así quedarán las franjas de la tarjeta"></div>
+    </div>
+    <button type="button" id="colorVer" class="vvc-ver" aria-expanded="false">Ver colores y códigos</button>
+    <div id="colorPanel" class="vvc-panel" hidden></div>
+    <p id="colorAviso" class="vvc-aviso"></p>
     <label>Datos para la factura electrónica</label>
     <p class="hint" style="margin:0 0 8px;font-size:.88rem;color:var(--muted)">Le emitiremos la factura electrónica con estos datos y se la enviaremos al correo que indique aquí.</p>
     <div class="fila">
@@ -223,6 +245,100 @@
   $('cantidad').addEventListener('input', recalcular);
   Array.prototype.forEach.call(document.querySelectorAll('input[name=modalidad]'), function(r){ r.addEventListener('change', recalcular); });
   ['nombre','correo','telefono','tarjetaTelefono','tarjetaCorreo','cantidad','autoriza','logoFile'].forEach(function(id){ $(id).addEventListener('input', function(){ var m = $('msg'); m.textContent = ''; m.className = 'msg'; }); });
+// ---- 2026-11-02: color de fondo de la tarjeta (código hexadecimal). Opcional: sin código la tarjeta conserva el verde de siempre. ----
+var VVColor = (function () {
+  // acepta "#1F4448", "1F4448", "#fff" o "fff"; devuelve "#RRGGBB" en mayúsculas, '' si está vacío o null si no es válido
+  function normalizar(v) {
+    var s = String(v == null ? '' : v).trim();
+    if (!s) return '';
+    if (s.charAt(0) === '#') s = s.slice(1);
+    if (/^[0-9a-fA-F]{3}$/.test(s)) s = s.split('').map(function (c) { return c + c; }).join('');
+    if (!/^[0-9a-fA-F]{6}$/.test(s)) return null;
+    return '#' + s.toUpperCase();
+  }
+  function rgb(h) { return [parseInt(h.substr(1, 2), 16), parseInt(h.substr(3, 2), 16), parseInt(h.substr(5, 2), 16)]; }
+  function hex(a) { return '#' + a.map(function (n) { n = Math.max(0, Math.min(255, Math.round(n))); return (n < 16 ? '0' : '') + n.toString(16); }).join('').toUpperCase(); }
+  function lum(h) {
+    var c = rgb(h).map(function (n) { n /= 255; return n <= 0.03928 ? n / 12.92 : Math.pow((n + 0.055) / 1.055, 2.4); });
+    return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
+  }
+  function contraste(a, b) { var l1 = lum(a), l2 = lum(b); return (Math.max(l1, l2) + 0.05) / (Math.min(l1, l2) + 0.05); }
+  function mezcla(a, b, t) { var x = rgb(a), y = rgb(b); return hex([x[0] + (y[0] - x[0]) * t, x[1] + (y[1] - x[1]) * t, x[2] + (y[2] - x[2]) * t]); }
+  var OSCURO = '#12292D', CREMA = '#F7F4EE';
+  // colores derivados del color elegido: segundo tono del degradado, color del texto sobre el fondo y color del nombre sobre la tarjeta clara
+  function paleta(h) {
+    var claro = contraste(h, OSCURO) > contraste(h, '#FFFFFF');
+    return {
+      base: h,
+      claro: claro,
+      c2: claro ? mezcla(h, '#000000', 0.10) : mezcla(h, '#FFFFFF', 0.14),
+      c3: claro ? mezcla(h, '#000000', 0.45) : mezcla(h, '#FFFFFF', 0.50),
+      texto: claro ? OSCURO : '#FFFFFF',
+      textoSuave: claro ? '#2C4247' : '#D6EFEC',
+      acento: claro ? mezcla(h, '#000000', 0.55) : '#8FAFA6',
+      nombre: contraste(h, CREMA) >= 4.5 ? h : OSCURO
+    };
+  }
+  // true si el color es tan claro que casi no se distingue del fondo crema de la tarjeta
+  function muyClaro(h) { return contraste(h, CREMA) < 1.25; }
+  // miniatura de la tarjeta con el color elegido (solo para que la persona vea cómo quedará)
+  function miniatura(el, h, modo) {
+    var p = h ? paleta(h) : { base: modo === 'persona' ? '#1F4448' : '#0a4949', c2: modo === 'persona' ? '#3A6B70' : '#246666' };
+    var sup = modo === 'persona' ? 20 : 8, inf = modo === 'persona' ? 4 : 34;
+    el.innerHTML =
+      '<div style="height:' + sup + 'px;background:linear-gradient(90deg,' + p.base + ',' + p.c2 + ')"></div>' +
+      '<div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px">' +
+        '<div style="width:22px;height:22px;border-radius:5px;border:1px dashed #cdbfa3;background:#fff"></div>' +
+        '<div style="width:30px;height:3px;background:#c9c2b2;border-radius:2px"></div>' +
+        '<div style="width:26px;height:26px;border-radius:4px;background:#fff;border:1px solid #e4ddcc"></div>' +
+      '</div>' +
+      '<div style="height:' + inf + 'px;background:linear-gradient(90deg,' + p.base + ',' + p.c2 + ')"></div>';
+  }
+  // paleta de colores comunes con su código (el cliente toca uno y se llena el campo)
+  var COLORES = ['#C1272D','#E53935','#8B0000','#FF6F61','#E8590C','#FF9800','#F9A825','#FFD700',
+    '#1F4448','#004D40','#00796B','#2E7D32','#43A047','#8BC34A','#003366','#0D47A1',
+    '#1E88E5','#4FC3F7','#00ACC1','#1A237E','#4A148C','#7B1FA2','#AD1457','#F06292',
+    '#000000','#212121','#424242','#757575','#BDBDBD','#FFFFFF','#5D4037','#8D6E63'];
+  function panel(el, alElegir) {
+    el.innerHTML = '';
+    COLORES.forEach(function (c) {
+      var b = document.createElement('button');
+      b.type = 'button'; b.title = c;
+      b.style.cssText = 'display:flex;flex-direction:column;align-items:center;gap:3px;border:0;background:none;padding:2px;cursor:pointer;font:600 10px ui-monospace,Menlo,monospace;color:#444';
+      var m = document.createElement('span');
+      m.style.cssText = 'display:block;width:100%;height:30px;border-radius:7px;border:1px solid #c9c2b2;background:' + c;
+      var t = document.createElement('span'); t.textContent = c;
+      b.appendChild(m); b.appendChild(t);
+      b.addEventListener('click', function () { alElegir(c); });
+      el.appendChild(b);
+    });
+  }
+  return { normalizar: normalizar, paleta: paleta, muyClaro: muyClaro, miniatura: miniatura, panel: panel, contraste: contraste, lum: lum };
+})();
+
+  (function () {
+    var cod = $('colorCodigo'), mu = $('colorMuestra'), pk = $('colorPicker'), av = $('colorAviso'), mini = $('colorMini');
+    function pintar() {
+      var h = VVColor.normalizar(cod.value);
+      av.className = 'vvc-aviso'; av.textContent = '';
+      if (h === null) {
+        mu.style.background = ''; VVColor.miniatura(mini, '', 'empresa');
+        av.className = 'vvc-aviso err'; av.textContent = 'Código no válido: use 6 caracteres, por ejemplo #1F4448.';
+      } else if (h === '') {
+        mu.style.background = ''; VVColor.miniatura(mini, '', 'empresa');
+      } else {
+        mu.style.background = h; VVColor.miniatura(mini, h, 'empresa');
+        try { pk.value = h.toLowerCase(); } catch (e) {}
+        if (VVColor.muyClaro(h)) { av.className = 'vvc-aviso warn'; av.textContent = 'Este color es muy claro: las franjas casi no se distinguirán del fondo de la tarjeta. Puede usarlo, pero se recomienda un color más oscuro.'; }
+      }
+    }
+    cod.addEventListener('input', function () { pintar(); var m = $('msg'); m.textContent = ''; m.className = 'msg'; });
+    pk.addEventListener('input', function () { cod.value = pk.value.toUpperCase(); pintar(); });
+    var ver = $('colorVer'), pn = $('colorPanel');
+    VVColor.panel(pn, function (c) { cod.value = c; pintar(); var m = $('msg'); m.textContent = ''; m.className = 'msg'; });
+    ver.addEventListener('click', function () { pn.hidden = !pn.hidden; ver.setAttribute('aria-expanded', String(!pn.hidden)); ver.textContent = pn.hidden ? 'Ver colores y códigos' : 'Ocultar colores'; });
+    pintar();
+  })();
   recalcular();
 
   function mostrarError(t){ var m = $('msg'); m.textContent = t; m.className = 'msg err'; m.scrollIntoView({behavior:'smooth', block:'center'}); }
@@ -284,6 +400,8 @@
     var tTel = $('tarjetaTelefono').value.trim(), tCor = $('tarjetaCorreo').value.trim();
     if (tTel && !/^[0-9+()\-. ]{6,20}$/.test(tTel)) { mostrarError('El teléfono para la tarjeta no es válido (use números, espacios, guion o +).'); $('tarjetaTelefono').focus(); return; }
     if (tCor && (tCor.length > 50 || !/^[^\s@<>"']+@[^\s@<>"']+\.[^\s@<>"']{2,}$/.test(tCor))) { mostrarError('El correo para la tarjeta no es válido (máximo 50 caracteres).'); $('tarjetaCorreo').focus(); return; }
+    var colorTarjeta = VVColor.normalizar($('colorCodigo').value);
+    if (colorTarjeta === null) { mostrarError('El código de color de la tarjeta no es válido. Use 6 caracteres, por ejemplo #1F4448, o déjelo en blanco.'); $('colorCodigo').focus(); return; }
     var fac = { cedula: $('fCedula').value.replace(/[\s-]/g, ''), nombre: $('fNombre').value.trim(), correo: $('fCorreo').value.trim(), telefono: $('fTelefono').value.trim(), actividad: $('fActividad').value.replace(/[\s.-]/g, '') };
     if (!/^\d{9,12}$/.test(fac.cedula)) { mostrarError('Escriba la cédula jurídica para la factura (solo números, de 9 a 12 dígitos).'); $('fCedula').focus(); return; }
     if (fac.nombre.length < 3) { mostrarError('Escriba el nombre o la razón social para la factura.'); $('fNombre').focus(); return; }
@@ -295,7 +413,7 @@
     enviando = true; var b = $('btnPagar'); b.disabled = true; b.textContent = 'Preparando el pago…';
     fetch('/.netlify/functions/pedido-empresa', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ nombre: nombre, correo: correo, telefono: tel, tarjetaTelefono: tTel, tarjetaCorreo: tCor, cantidad: n, modalidad: modalidad(), retiroPersona: retiro(), logoDataUrl: logoDataUrl, autorizaLogo: true, factura: fac })
+      body: JSON.stringify({ nombre: nombre, correo: correo, telefono: tel, tarjetaTelefono: tTel, tarjetaCorreo: tCor, tarjetaColor: colorTarjeta, cantidad: n, modalidad: modalidad(), retiroPersona: retiro(), logoDataUrl: logoDataUrl, autorizaLogo: true, factura: fac })
     }).then(function(r){ return r.json().then(function(j){ return { ok: r.ok, j: j }; }); })
       .then(function(res){
         if (!res.ok || !res.j || !res.j.url) throw new Error((res.j && res.j.error) || 'No se pudo crear el pago.');

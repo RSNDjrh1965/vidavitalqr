@@ -89,6 +89,19 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
     display:inline-block;align-self:flex-start;
   }
 
+  /* ---------- color de fondo de la tarjeta (2026-11-02) ---------- */
+  .vvc-fila{display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+  .vvc-fila input[type=text]{width:150px;font-family:ui-monospace,Menlo,monospace;text-transform:uppercase}
+  .vvc-muestra{width:46px;height:46px;border-radius:10px;border:1.5px solid var(--line);background:repeating-conic-gradient(#e9e4d8 0% 25%,#fff 0% 50%) 50%/12px 12px;flex:none}
+  .vvc-picker{width:46px;height:46px;padding:2px;border:1px solid var(--line);border-radius:10px;background:#fff;cursor:pointer;flex:none}
+  .vvc-mini{width:60px;height:96px;border:1px solid var(--line);border-radius:7px;overflow:hidden;display:flex;flex-direction:column;background:linear-gradient(180deg,#fcfbf8,#f3ede2);flex:none}
+  .vvc-aviso{margin:8px 0 0;font-size:12.5px;min-height:1.2em}
+  .vvc-aviso.err{color:#B3261E}
+  .vvc-aviso.warn{color:#8A5A00}
+
+  .vvc-ver{margin-top:8px;border:1px solid var(--line);background:#fff;border-radius:8px;padding:7px 12px;font-size:.85rem;font-weight:600;cursor:pointer;color:var(--teal,#1F4448)}
+  .vvc-panel{display:grid;grid-template-columns:repeat(auto-fill,minmax(64px,1fr));gap:6px;margin-top:8px;padding:10px;border:1px solid var(--line);border-radius:10px;background:#fff;max-width:520px}
+  .vvc-panel[hidden]{display:none}
   /* ---------- Sections ---------- */
   .section{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:22px 24px;margin-bottom:20px;}
   .section h2{
@@ -415,6 +428,19 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
 <div class="field no-print"><label data-i18n="lblCorreoTitular">Correo del titular (obligatorio)</label><input type="email" id="correoTitular" placeholder="correo@ejemplo.com" required></div>
 </div>
 <p class="hint no-print" data-i18n="hintCorreoTitular">Este es el correo de la persona titular de la ficha (quien la paga). A este correo se enviarán los avisos de vencimiento y renovación anual — distinto de los correos de los contactos de emergencia de arriba.</p>
+<div class="field no-print" id="colorField" style="margin:6px 0 14px">
+<label for="colorCodigo" data-i18n="lblColorTarjeta">Color de fondo de su identificador (opcional)</label>
+<p class="hint no-print" style="margin:0 0 8px" data-i18n="hintColorTarjeta">Si lo desea, escriba el código del color de fondo de su tarjeta (por ejemplo #1F4448) y el recuadro le mostrará cómo se ve. Si lo deja en blanco, se usa el verde de VidaVitalQR.</p>
+<div class="vvc-fila">
+<input type="text" id="colorCodigo" maxlength="7" autocomplete="off" spellcheck="false" placeholder="#1F4448">
+<span id="colorMuestra" class="vvc-muestra"></span>
+<input type="color" id="colorPicker" class="vvc-picker" value="#1F4448">
+<div id="colorMini" class="vvc-mini"></div>
+</div>
+<button type="button" id="colorVer" class="vvc-ver" aria-expanded="false" data-i18n="verColores">Ver colores y códigos</button>
+<div id="colorPanel" class="vvc-panel" hidden></div>
+<p id="colorAviso" class="vvc-aviso"></p>
+</div>
 <div class="contact-rows">
 <div class="grid cols4">
 <div class="field"><label data-i18n="lblContacto1">Nombre de contacto 1</label><input type="text" id="contacto1"></div>
@@ -609,6 +635,12 @@ const TEXTOS_FICHA = {
     lblSenales: 'Otras señales', senalesPh: 'Referencias de ubicación',
     hintCorreoObligatorio: 'El correo del contacto 1 es obligatorio: ahí se enviará el código de acceso (folio y PIN) cada vez que se cree o actualice esta ficha, y también un aviso automático cada vez que alguien escanee el código QR. Cualquier información importante relacionada con la ficha se enviará a este correo.',
     lblCorreoTitular: 'Correo del titular (obligatorio)',
+    lblColorTarjeta: 'Color de fondo de su identificador (opcional)',
+    hintColorTarjeta: 'Si lo desea, escriba el código del color de fondo de su tarjeta (por ejemplo #1F4448) y el recuadro le mostrará cómo se ve. Si lo deja en blanco, se usa el verde de VidaVitalQR.',
+    colorInvalido: 'Código no válido: use 6 caracteres, por ejemplo #1F4448.',
+    colorClaro: 'Este color es muy claro: la tarjeta casi no se distinguirá del fondo. Puede usarlo, pero se recomienda un color más oscuro.',
+    verColores: 'Ver colores y códigos',
+    ocultarColores: 'Ocultar colores',
     hintCorreoTitular: 'Este es el correo de la persona titular de la ficha (quien la paga). A este correo se enviarán los avisos de vencimiento y renovación anual — distinto de los correos de los contactos de emergencia de arriba.',
     alertEmailTitularInvalido: 'El correo del titular es obligatorio y debe tener un formato válido (por ejemplo, correo@ejemplo.com). Ahí se enviarán los avisos de vencimiento y renovación de esta ficha.',
     politicaVigenciaTexto: 'Su ficha tiene vigencia anual. Si no la renueva a tiempo, la información básica de emergencia se mantiene visible por 2 meses adicionales; pasado ese plazo, la ficha y su información se eliminan por completo.',
@@ -698,6 +730,12 @@ const TEXTOS_FICHA = {
     lblSenales: 'Other landmarks', senalesPh: 'Location references',
     hintCorreoObligatorio: 'Contact 1\'s email is required: the access code (folio and PIN) will be sent there every time this card is created or updated, along with an automatic alert every time someone scans the QR code. Any important information related to the card will be sent to this email.',
     lblCorreoTitular: 'Owner\'s email (required)',
+    lblColorTarjeta: 'Background color of your ID card (optional)',
+    hintColorTarjeta: 'If you wish, type the code of your card\'s background color (for example #1F4448) and the box will show how it looks. If left blank, the standard VidaVitalQR green is used.',
+    colorInvalido: 'Invalid code: use 6 characters, for example #1F4448.',
+    colorClaro: 'This color is very light: the card will barely stand out from the background. You can use it, but a darker color is recommended.',
+    verColores: 'See colors and codes',
+    ocultarColores: 'Hide colors',
     hintCorreoTitular: 'This is the email of the person who owns the record (who pays for it). Renewal and expiration notices will be sent here — separate from the emergency contact emails above.',
     alertEmailTitularInvalido: 'The owner\'s email is required and must be a valid format (e.g. name@example.com). Renewal and expiration notices for this record will be sent there.',
     politicaVigenciaTexto: 'Your record has annual validity. If you do not renew it in time, basic emergency information stays visible for 2 additional months; after that period, the record and its information are permanently deleted.',
@@ -786,6 +824,12 @@ const TEXTOS_FICHA = {
     lblSenales: 'Autres repères', senalesPh: 'Références de localisation',
     hintCorreoObligatorio: 'L\'e-mail du contact 1 est obligatoire : le code d\'accès (folio et PIN) y sera envoyé à chaque création ou mise à jour de cette fiche, ainsi qu\'une alerte automatique chaque fois que quelqu\'un scanne le code QR. Toute information importante liée à la fiche sera envoyée à cet e-mail.',
     lblCorreoTitular: 'E-mail du titulaire (obligatoire)',
+    lblColorTarjeta: 'Couleur de fond de votre carte d\'identification (facultatif)',
+    hintColorTarjeta: 'Si vous le souhaitez, saisissez le code couleur du fond de votre carte (par exemple #1F4448) et le carré vous montrera le résultat. Si vous le laissez vide, le vert standard de VidaVitalQR est utilisé.',
+    colorInvalido: 'Code non valide : utilisez 6 caractères, par exemple #1F4448.',
+    colorClaro: 'Cette couleur est très claire : la carte se distinguera à peine du fond. Vous pouvez l\'utiliser, mais une couleur plus foncée est recommandée.',
+    verColores: 'Voir les couleurs et codes',
+    ocultarColores: 'Masquer les couleurs',
     hintCorreoTitular: 'Il s\'agit de l\'e-mail de la personne titulaire de la fiche (qui la paie). Les avis d\'expiration et de renouvellement y seront envoyés — distinct des e-mails des contacts d\'urgence ci-dessus.',
     alertEmailTitularInvalido: 'L\'e-mail du titulaire est obligatoire et doit être valide (ex. nom@exemple.com). Les avis d\'expiration et de renouvellement de cette fiche y seront envoyés.',
     politicaVigenciaTexto: 'Votre fiche a une validité annuelle. Si vous ne la renouvelez pas à temps, les informations d\'urgence de base restent visibles pendant 2 mois supplémentaires ; passé ce délai, la fiche et ses informations sont définitivement supprimées.',
@@ -874,6 +918,12 @@ const TEXTOS_FICHA = {
     lblSenales: 'Outros sinais', senalesPh: 'Referências de localização',
     hintCorreoObligatorio: 'O e-mail do contato 1 é obrigatório: nele será enviado o código de acesso (folio e PIN) sempre que esta ficha for criada ou atualizada, além de um aviso automático sempre que alguém escanear o código QR. Qualquer informação importante relacionada à ficha será enviada a esse e-mail.',
     lblCorreoTitular: 'E-mail do titular (obrigatório)',
+    lblColorTarjeta: 'Cor de fundo do seu identificador (opcional)',
+    hintColorTarjeta: 'Se desejar, digite o código da cor de fundo do seu cartão (por exemplo #1F4448) e o quadro mostrará como fica. Se deixar em branco, será usado o verde padrão do VidaVitalQR.',
+    colorInvalido: 'Código inválido: use 6 caracteres, por exemplo #1F4448.',
+    colorClaro: 'Esta cor é muito clara: o cartão quase não se destacará do fundo. Você pode usá-la, mas recomenda-se uma cor mais escura.',
+    verColores: 'Ver cores e códigos',
+    ocultarColores: 'Ocultar cores',
     hintCorreoTitular: 'Este é o e-mail da pessoa titular da ficha (quem paga por ela). Os avisos de vencimento e renovação serão enviados para cá — diferente dos e-mails dos contatos de emergência acima.',
     alertEmailTitularInvalido: 'O e-mail do titular é obrigatório e deve ter um formato válido (por exemplo, nome@exemplo.com). Os avisos de vencimento e renovação desta ficha serão enviados para lá.',
     politicaVigenciaTexto: 'Sua ficha tem vigência anual. Se você não a renovar a tempo, as informações básicas de emergência permanecem visíveis por 2 meses adicionais; passado esse prazo, a ficha e suas informações são excluídas por completo.',
@@ -966,6 +1016,7 @@ function aplicarIdiomaFicha(lang){
   // si la renovación está pendiente de código, refleja el texto "pendiente" ya traducido
   const counterEl = $('counterNum');
   if (counterEl && counterEl.dataset.pendiente === '1') counterEl.textContent = t.pendiente;
+  if (typeof window.__pintarColorFicha === 'function') window.__pintarColorFicha();
 }
 
 document.getElementById('langbar').addEventListener('click', (e) => {
@@ -1941,7 +1992,7 @@ async function generarYSubirPdfsOtrosIdiomas(folio, pinParaSubir){
 // codifica la misma URL de acceso que usa el código físico (".../v/..."),
 // generado aquí mismo con la librería qrcode-generator embebida arriba, así que siempre
 // corresponde exactamente al folio de esta ficha.
-async function generateTarjetaBlob(folio, fotoBase64){
+async function generateTarjetaBlob(folio, fotoBase64, colorFondo){
   const qrTargetUrl = 'https://vidavitalqr.com/v/' + encodeURIComponent(folio);
 
   const qr = qrcode(0, 'M');
@@ -1963,6 +2014,13 @@ async function generateTarjetaBlob(folio, fotoBase64){
     ? `<img src="${fotoBase64}" style="width:100%;height:100%;object-fit:cover;border-radius:17.5px;">`
     : `<svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="8" r="4" stroke="currentColor" stroke-width="1.6"/><path d="M4 20c0-4 3.5-6.5 8-6.5s8 2.5 8 6.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg><span class="t-photo-label">Foto</span>`;
 
+  // 2026-11-02: color de fondo elegido por la persona (opcional). Sin color, todos los valores son los de siempre.
+  const cp = colorFondo && VVColor.normalizar(colorFondo) ? VVColor.paleta(VVColor.normalizar(colorFondo)) : null;
+  const cHeadBg = cp ? `linear-gradient(120deg,${cp.base} 0%,${cp.c2} 100%)` : 'linear-gradient(120deg,#1F4448 0%,#3A6B70 100%)';
+  const cName = cp ? cp.texto : '#F7F4EE';
+  const cAccent = cp ? cp.acento : '#8FAFA6';
+  const cTag = cp ? cp.textoSuave : '#C7DAD6';
+  const cStrip = cp ? `linear-gradient(90deg,${cp.base},${cp.c3},#C1552F)` : 'linear-gradient(90deg,#1F4448,#8FAFA6,#C1552F)';
   const holder = document.createElement('div');
   holder.style.position = 'fixed';
   holder.style.left = '-9999px';
@@ -1970,11 +2028,11 @@ async function generateTarjetaBlob(folio, fotoBase64){
   holder.innerHTML = `
     <style>
       .t-card{width:638px;height:1011px;border-radius:26px;background:linear-gradient(160deg,#FFFFFF 0%,#F7F4EE 55%,#EFEAE0 100%);overflow:hidden;position:relative;font-family:Georgia,'Times New Roman',serif;display:flex;flex-direction:column;}
-      .t-card .t-header{background:linear-gradient(120deg,#1F4448 0%,#3A6B70 100%);padding:28px 28px 22px;}
-      .t-card .t-brand{color:#F7F4EE;text-align:center;}
+      .t-card .t-header{background:${cHeadBg};padding:28px 28px 22px;}
+      .t-card .t-brand{color:${cName};text-align:center;}
       .t-card .t-brand .t-name{font-size:34px;font-weight:700;letter-spacing:0.2px;}
-      .t-card .t-brand .t-accent{color:#8FAFA6;}
-      .t-card .t-brand .t-tag{font-family:Helvetica,Arial,sans-serif;font-size:14.5px;letter-spacing:1.9px;text-transform:uppercase;color:#C7DAD6;margin-top:6px;font-weight:600;}
+      .t-card .t-brand .t-accent{color:${cAccent};}
+      .t-card .t-brand .t-tag{font-family:Helvetica,Arial,sans-serif;font-size:14.5px;letter-spacing:1.9px;text-transform:uppercase;color:${cTag};margin-top:6px;font-weight:600;}
       .t-card .t-body{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:10px 18px 28px;}
       .t-card .t-photo-box{width:278px;height:278px;border-radius:26px;border:3px dashed #C7BFA9;background:#FFFFFF;display:flex;align-items:center;justify-content:center;position:relative;flex-shrink:0;overflow:hidden;}
       .t-card .t-photo-box svg{width:108px;height:108px;color:#C1D2CC;}
@@ -1998,7 +2056,7 @@ async function generateTarjetaBlob(folio, fotoBase64){
       .t-card .t-side-label.t-scan .t-arrow{position:absolute;left:50%;bottom:30px;transform:translateX(-50%);width:0;height:0;border-top:14px solid transparent;border-bottom:14px solid transparent;border-left:22px solid #C1552F;}
       .t-card .t-qr-frame{width:360px;height:360px;background:#FFFFFF;border-radius:18px;border:1.5px solid #DAD3C4;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
       .t-card .t-qr-id{margin-top:22px;font-family:'Courier New',Courier,monospace;font-size:33px;font-weight:700;letter-spacing:1px;color:#12282B;background:#EFEAE0;padding:9px 0;width:360px;text-align:center;white-space:nowrap;border-radius:9px;}
-      .t-card .t-footer-strip{height:9px;background:linear-gradient(90deg,#1F4448,#8FAFA6,#C1552F);}
+      .t-card .t-footer-strip{height:9px;background:${cStrip};}
     </style>
     <div class="t-card" id="tarjetaCardEl">
       <div class="t-header">
@@ -2065,6 +2123,7 @@ function aplicarModoEmpresa(info){
   $('empresaBanner').style.background = '#2E7D6B';
   $('empresaBanner').style.display = 'flex';
   $('cargoField').style.display = '';
+  if ($('colorField')) $('colorField').style.display = 'none';
   if (!esActualizacion) $('empresaConsent').style.display = 'block';
   const b = $('btnEmail');
   b.removeAttribute('data-i18n');
@@ -2167,6 +2226,14 @@ async function generateTarjetaEmpresa(folio, fotoBase64, info, cargo, nombreComp
     }
   }
   if (!logoHtml) logoHtml = `<div style="font:700 34px Georgia,serif;color:#0a4949;text-align:center;padding:10px">${escHtml(nombreEmpresa)}</div>`;
+  // 2026-11-02: color de fondo definido por la empresa en su pedido (opcional). Sin color, todos los valores son los de siempre.
+  const ce = info && info.tarjetaColor && VVColor.normalizar(info.tarjetaColor) ? VVColor.paleta(VVColor.normalizar(info.tarjetaColor)) : null;
+  const eTop = ce ? `linear-gradient(90deg,${ce.base},${ce.c2})` : 'linear-gradient(90deg,#0a4949,#246666)';
+  const eBand = ce ? `linear-gradient(180deg,${ce.base},${ce.c2})` : 'linear-gradient(180deg,#0a4949,#246666)';
+  const eBar = ce ? `linear-gradient(90deg,${ce.base},#d3552f)` : 'linear-gradient(90deg,#0a4949,#d3552f)';
+  const eTxt = ce ? ce.texto : '#fff';
+  const eSub = ce ? ce.textoSuave : '#d6efec';
+  const eNombre = ce ? ce.nombre : '#0a4949';
   const fotoCuadrada = await recortarFotoCuadrada(fotoBase64, 360);
   const fotoHtml = fotoCuadrada ? `<img src="${fotoCuadrada}" style="width:170px;height:170px;display:block">` : '';
 
@@ -2185,22 +2252,22 @@ async function generateTarjetaEmpresa(folio, fotoBase64, info, cargo, nombreComp
     <style>
       .e-card{width:540px;height:856px;position:relative;overflow:hidden;background:linear-gradient(180deg,#fcfbf8,#f3ede2);color:#12292d;font-family:'Source Sans Pro',Arial,Helvetica,sans-serif;box-sizing:border-box}
       .e-card *{box-sizing:border-box}
-      .e-top{position:absolute;left:0;top:0;width:540px;height:48px;background:linear-gradient(90deg,#0a4949,#246666);color:#fff}
+      .e-top{position:absolute;left:0;top:0;width:540px;height:48px;background:${eTop};color:${eTxt}}
       .e-web{position:absolute;left:24px;top:0;height:48px;line-height:48px;font-weight:700;font-size:23px;letter-spacing:.04em;white-space:nowrap}
-      .e-sub{position:absolute;right:24px;top:0;height:48px;line-height:48px;font-weight:700;font-size:16px;letter-spacing:.05em;color:#d6efec;white-space:nowrap}
+      .e-sub{position:absolute;right:24px;top:0;height:48px;line-height:48px;font-weight:700;font-size:16px;letter-spacing:.05em;color:${eSub};white-space:nowrap}
       .e-photo{position:absolute;left:185px;top:68px;width:170px;height:170px;border-radius:22px;overflow:hidden;border:2.5px dashed #cdbfa3;background:#fff}
-      .e-name{position:absolute;left:20px;top:248px;width:500px;height:46px;line-height:46px;text-align:center;font-family:Georgia,'Times New Roman',serif;font-weight:700;color:#0a4949;font-size:36px;white-space:nowrap}
+      .e-name{position:absolute;left:20px;top:248px;width:500px;height:46px;line-height:46px;text-align:center;font-family:Georgia,'Times New Roman',serif;font-weight:700;color:${eNombre};font-size:36px;white-space:nowrap}
       .e-role{position:absolute;left:20px;top:294px;width:500px;height:36px;line-height:36px;text-align:center;color:#4b5f62;font-size:26px;white-space:nowrap}
       .e-qrbox{position:absolute;left:154px;top:344px;width:232px;height:232px;padding:12px;border-radius:16px;background:#fff;border:1.5px solid #e4ddcc}
       .e-qrbox svg{width:100%;height:100%;display:block}
       .e-rot{position:absolute;width:232px;height:44px;line-height:44px;text-align:center;white-space:nowrap;transform:rotate(-90deg);transform-origin:50% 50%}
       .e-esc{left:-21px;top:438px;color:#d3552f;font-weight:700;letter-spacing:.12em;font-size:28px}
-      .e-emerg{left:329px;top:438px;width:232px;color:#0a4949;font-weight:700;letter-spacing:.1em;font-size:25px}
-      .e-band{position:absolute;left:0;top:588px;width:540px;height:268px;background:linear-gradient(180deg,#0a4949,#246666)}
+      .e-emerg{left:329px;top:438px;width:232px;color:${eNombre};font-weight:700;letter-spacing:.1em;font-size:25px}
+      .e-band{position:absolute;left:0;top:588px;width:540px;height:268px;background:${eBand}}
       .e-logobox{position:absolute;left:28px;top:16px;width:484px;height:${ALTO_CAJA_LOGO}px;background:#fff;border-radius:18px;border:2.5px dashed #b9b09c;display:flex;align-items:center;justify-content:center;overflow:hidden}
-      .e-emp{position:absolute;left:20px;top:${nContacto === 0 ? 224 : 190}px;width:500px;height:30px;line-height:30px;text-align:center;font-family:Georgia,'Times New Roman',serif;font-weight:700;font-size:23px;color:#fff;white-space:nowrap}
-      .e-ct{position:absolute;left:20px;width:500px;height:26px;line-height:26px;text-align:center;color:#d6efec;font-weight:600;font-size:20px;white-space:nowrap}
-      .e-bar{position:absolute;left:0;right:0;bottom:0;height:8px;background:linear-gradient(90deg,#0a4949,#d3552f)}
+      .e-emp{position:absolute;left:20px;top:${nContacto === 0 ? 224 : 190}px;width:500px;height:30px;line-height:30px;text-align:center;font-family:Georgia,'Times New Roman',serif;font-weight:700;font-size:23px;color:${eTxt};white-space:nowrap}
+      .e-ct{position:absolute;left:20px;width:500px;height:26px;line-height:26px;text-align:center;color:${eSub};font-weight:600;font-size:20px;white-space:nowrap}
+      .e-bar{position:absolute;left:0;right:0;bottom:0;height:8px;background:${eBar}}
     </style>
     <div class="e-card" id="tarjetaEmpresaEl">
       <div class="e-top"><div class="e-web">vidavitalqr.com</div><div class="e-sub">IDENTIFICADOR DE EMERGENCIA</div></div>
@@ -2406,6 +2473,7 @@ function precargarDatosFicha(datos){
   setVal('nombres', datos.nombres);
   setVal('apellidos', datos.apellidos);
   setVal('cargo', datos.cargo);
+  if ($('colorCodigo') && typeof datos.colorTarjeta === 'string') { $('colorCodigo').value = datos.colorTarjeta; if (typeof window.__pintarColorFicha === 'function') window.__pintarColorFicha(); }
   setVal('fnac', datos.fnac);
   $('fnac').dispatchEvent(new Event('input')); // recalcula la edad automática, que depende de este evento
   setVal('asegurado', datos.asegurado);
@@ -2623,6 +2691,103 @@ function emailValido(str){
   window.sonarSonidoMarca = function () {};
 })();
 
+// ---- 2026-11-02: color de fondo de la tarjeta (código hexadecimal). Opcional: sin código la tarjeta conserva el verde de siempre. ----
+var VVColor = (function () {
+  // acepta "#1F4448", "1F4448", "#fff" o "fff"; devuelve "#RRGGBB" en mayúsculas, '' si está vacío o null si no es válido
+  function normalizar(v) {
+    var s = String(v == null ? '' : v).trim();
+    if (!s) return '';
+    if (s.charAt(0) === '#') s = s.slice(1);
+    if (/^[0-9a-fA-F]{3}$/.test(s)) s = s.split('').map(function (c) { return c + c; }).join('');
+    if (!/^[0-9a-fA-F]{6}$/.test(s)) return null;
+    return '#' + s.toUpperCase();
+  }
+  function rgb(h) { return [parseInt(h.substr(1, 2), 16), parseInt(h.substr(3, 2), 16), parseInt(h.substr(5, 2), 16)]; }
+  function hex(a) { return '#' + a.map(function (n) { n = Math.max(0, Math.min(255, Math.round(n))); return (n < 16 ? '0' : '') + n.toString(16); }).join('').toUpperCase(); }
+  function lum(h) {
+    var c = rgb(h).map(function (n) { n /= 255; return n <= 0.03928 ? n / 12.92 : Math.pow((n + 0.055) / 1.055, 2.4); });
+    return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
+  }
+  function contraste(a, b) { var l1 = lum(a), l2 = lum(b); return (Math.max(l1, l2) + 0.05) / (Math.min(l1, l2) + 0.05); }
+  function mezcla(a, b, t) { var x = rgb(a), y = rgb(b); return hex([x[0] + (y[0] - x[0]) * t, x[1] + (y[1] - x[1]) * t, x[2] + (y[2] - x[2]) * t]); }
+  var OSCURO = '#12292D', CREMA = '#F7F4EE';
+  // colores derivados del color elegido: segundo tono del degradado, color del texto sobre el fondo y color del nombre sobre la tarjeta clara
+  function paleta(h) {
+    var claro = contraste(h, OSCURO) > contraste(h, '#FFFFFF');
+    return {
+      base: h,
+      claro: claro,
+      c2: claro ? mezcla(h, '#000000', 0.10) : mezcla(h, '#FFFFFF', 0.14),
+      c3: claro ? mezcla(h, '#000000', 0.45) : mezcla(h, '#FFFFFF', 0.50),
+      texto: claro ? OSCURO : '#FFFFFF',
+      textoSuave: claro ? '#2C4247' : '#D6EFEC',
+      acento: claro ? mezcla(h, '#000000', 0.55) : '#8FAFA6',
+      nombre: contraste(h, CREMA) >= 4.5 ? h : OSCURO
+    };
+  }
+  // true si el color es tan claro que casi no se distingue del fondo crema de la tarjeta
+  function muyClaro(h) { return contraste(h, CREMA) < 1.25; }
+  // miniatura de la tarjeta con el color elegido (solo para que la persona vea cómo quedará)
+  function miniatura(el, h, modo) {
+    var p = h ? paleta(h) : { base: modo === 'persona' ? '#1F4448' : '#0a4949', c2: modo === 'persona' ? '#3A6B70' : '#246666' };
+    var sup = modo === 'persona' ? 20 : 8, inf = modo === 'persona' ? 4 : 34;
+    el.innerHTML =
+      '<div style="height:' + sup + 'px;background:linear-gradient(90deg,' + p.base + ',' + p.c2 + ')"></div>' +
+      '<div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px">' +
+        '<div style="width:22px;height:22px;border-radius:5px;border:1px dashed #cdbfa3;background:#fff"></div>' +
+        '<div style="width:30px;height:3px;background:#c9c2b2;border-radius:2px"></div>' +
+        '<div style="width:26px;height:26px;border-radius:4px;background:#fff;border:1px solid #e4ddcc"></div>' +
+      '</div>' +
+      '<div style="height:' + inf + 'px;background:linear-gradient(90deg,' + p.base + ',' + p.c2 + ')"></div>';
+  }
+  // paleta de colores comunes con su código (el cliente toca uno y se llena el campo)
+  var COLORES = ['#C1272D','#E53935','#8B0000','#FF6F61','#E8590C','#FF9800','#F9A825','#FFD700',
+    '#1F4448','#004D40','#00796B','#2E7D32','#43A047','#8BC34A','#003366','#0D47A1',
+    '#1E88E5','#4FC3F7','#00ACC1','#1A237E','#4A148C','#7B1FA2','#AD1457','#F06292',
+    '#000000','#212121','#424242','#757575','#BDBDBD','#FFFFFF','#5D4037','#8D6E63'];
+  function panel(el, alElegir) {
+    el.innerHTML = '';
+    COLORES.forEach(function (c) {
+      var b = document.createElement('button');
+      b.type = 'button'; b.title = c;
+      b.style.cssText = 'display:flex;flex-direction:column;align-items:center;gap:3px;border:0;background:none;padding:2px;cursor:pointer;font:600 10px ui-monospace,Menlo,monospace;color:#444';
+      var m = document.createElement('span');
+      m.style.cssText = 'display:block;width:100%;height:30px;border-radius:7px;border:1px solid #c9c2b2;background:' + c;
+      var t = document.createElement('span'); t.textContent = c;
+      b.appendChild(m); b.appendChild(t);
+      b.addEventListener('click', function () { alElegir(c); });
+      el.appendChild(b);
+    });
+  }
+  return { normalizar: normalizar, paleta: paleta, muyClaro: muyClaro, miniatura: miniatura, panel: panel, contraste: contraste, lum: lum };
+})();
+
+(function () {
+  var cod = $('colorCodigo'), mu = $('colorMuestra'), pk = $('colorPicker'), av = $('colorAviso'), mini = $('colorMini');
+  if (!cod) return;
+  function pintar() {
+    var h = VVColor.normalizar(cod.value);
+    av.className = 'vvc-aviso'; av.textContent = '';
+    if (h === null) {
+      mu.style.background = ''; VVColor.miniatura(mini, '', 'persona');
+      av.className = 'vvc-aviso err'; av.textContent = T().colorInvalido;
+    } else if (h === '') {
+      mu.style.background = ''; VVColor.miniatura(mini, '', 'persona');
+    } else {
+      mu.style.background = h; VVColor.miniatura(mini, h, 'persona');
+      try { pk.value = h.toLowerCase(); } catch (e) {}
+      if (VVColor.muyClaro(h)) { av.className = 'vvc-aviso warn'; av.textContent = T().colorClaro; }
+    }
+  }
+  cod.addEventListener('input', pintar);
+  pk.addEventListener('input', function () { cod.value = pk.value.toUpperCase(); pintar(); });
+  var ver = $('colorVer'), pn = $('colorPanel');
+  VVColor.panel(pn, function (c) { cod.value = c; pintar(); });
+  ver.addEventListener('click', function () { pn.hidden = !pn.hidden; ver.setAttribute('aria-expanded', String(!pn.hidden)); ver.textContent = pn.hidden ? T().verColores : T().ocultarColores; });
+  window.__pintarColorFicha = pintar;
+  pintar();
+})();
+
 $('btnEmail').addEventListener('click', async () => {
   if (!emailValido($('correoTitular').value)) {
     alert(T().alertEmailTitularInvalido);
@@ -2633,6 +2798,18 @@ $('btnEmail').addEventListener('click', async () => {
     alert(T().alertEmailInvalido);
     $('emailcontacto1').focus();
     return;
+  }
+
+  // ---- 2026-11-02: color de fondo de la tarjeta (solo personas; en empresas lo define la empresa al hacer el pedido) ----
+  let colorTarjetaFicha = '';
+  if (!empresaFicha) {
+    const ch = VVColor.normalizar($('colorCodigo').value);
+    if (ch === null) {
+      alert(T().colorInvalido);
+      $('colorCodigo').focus();
+      return;
+    }
+    colorTarjetaFicha = ch;
   }
 
   // ---- 2026-10-20: ficha de EMPRESA — cargo, aviso de privacidad y foto son obligatorios al crear ----
@@ -2709,7 +2886,7 @@ $('btnEmail').addEventListener('click', async () => {
       tarjetaBase64 = await generateTarjetaEmpresa(folio, fotoBase64, empresaFicha, $('cargo').value, nombreCompleto);
     } else {
       try{
-        tarjetaBase64 = await generateTarjetaBlob(folio, fotoBase64);
+        tarjetaBase64 = await generateTarjetaBlob(folio, fotoBase64, colorTarjetaFicha);
       }catch(errTarjeta){
         console.error('Error generando la tarjeta Identificador QR:', errTarjeta);
       }
@@ -2754,6 +2931,7 @@ $('btnEmail').addEventListener('click', async () => {
       archivosImportantes,
     };
     if (empresaFicha) datosFormulario.cargo = ($('cargo').value || '').trim();
+    if (!empresaFicha) datosFormulario.colorTarjeta = colorTarjetaFicha;
 
     // ---- verificación de peso antes de enviar: el servidor (Netlify/AWS) rechaza cualquier
     // solicitud que supere ~6MB con el error "413" — un mensaje críptico que no explica la causa
