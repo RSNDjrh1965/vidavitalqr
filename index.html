@@ -27,9 +27,10 @@
     --teal-deep:#1F4448;
     --sage:#8FAFA6;
     --signal:#C1552F;
+    --signal-text:#A8431F;
     --signal-soft:#F0DACD;
     --line:#DAD3C4;
-    --muted:#6C7A76;
+    --muted:#5E6C68;
     --success-green:#1E8E3E;
     --shadow: 0 20px 50px -25px rgba(18,40,43,0.35);
   }
@@ -44,6 +45,7 @@
       --teal-deep:#B7DAD5;
       --sage:#6E938A;
       --signal:#E5875D;
+      --signal-text:#E5875D;
       --signal-soft:#3A2A20;
       --line:#2E4749;
       --muted:#9FB0AC;
@@ -61,6 +63,7 @@
     --teal-deep:#B7DAD5;
     --sage:#6E938A;
     --signal:#E5875D;
+    --signal-text:#E5875D;
     --signal-soft:#3A2A20;
     --line:#2E4749;
     --success-green:#34C759;
@@ -287,10 +290,10 @@
     text-align:center;
     font-family:"IBM Plex Mono", monospace;
     font-weight:500;
-    font-size:0.72rem;
+    font-size:0.75rem;
     letter-spacing:0.09em;
     text-transform:uppercase;
-    color:var(--signal);
+    color:var(--signal-text);
     margin-bottom:12px;
   }
   .qr-frame img{ width:100%; border-radius:6px; }
@@ -557,6 +560,7 @@
     .price-panel{ grid-template-columns:1fr; padding:32px 26px; gap:30px; }
   }
   .price-panel .eyebrow{ color:var(--sage); }
+  .price-card .eyebrow{ color:var(--teal); }
   .price-panel .eyebrow.eyebrow-lg{ font-size:1.56rem; display:block; }
   .price-panel .trial-btn{ display:flex; width:fit-content; margin:0 auto 18px; }
   .price-panel .trial-note{
