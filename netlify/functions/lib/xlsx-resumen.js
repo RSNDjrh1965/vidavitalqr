@@ -31,6 +31,7 @@
 
 const ExcelJS = require('exceljs');
 const { PutObjectCommand, GetObjectCommand } = require('@aws-sdk/client-s3');
+const { condicionDeEscritura, esPrecondicionFallida, reintentarSiCambio } = require('./concurrencia');
 const { fechaVencimiento: calcularFechaVencimiento } = require('./vigencia');
 
 const HEADER_FILL = 'FF12282B';
@@ -421,8 +422,12 @@ function ajustarEncabezadoYAnchos(sheet) {
 async function cargarOCrearLibro(s3, bucket, key) {
   const workbook = new ExcelJS.Workbook();
   let sheet;
+  let etag = null;
+  let existia = false;
   try {
     const resp = await s3.send(new GetObjectCommand({ Bucket: bucket, Key: key }));
+    etag = resp.ETag || null;
+    existia = true;
     const buf = await streamToBuffer(resp.Body);
     await workbook.xlsx.load(buf);
     sheet = workbook.getWorksheet('Resumen');
@@ -442,7 +447,7 @@ async function cargarOCrearLibro(s3, bucket, key) {
     sheet = nuevaHojaConEstilo(workbook);
   }
   ajustarEncabezadoYAnchos(sheet);
-  return { workbook, sheet };
+  return { workbook, sheet, etag, existia };
 }
 
 function buscarFilaPorContador(sheet, contador) {
@@ -482,9 +487,9 @@ function offsetParaCentrar(colWidthChars, rowHeightPt, imgWidthPx, imgHeightPx) 
   return { offX, offY };
 }
 
-async function actualizarResumenXlsx(s3, bucket, key, fila) {
+async function actualizarResumenXlsxUnaVez(s3, bucket, key, fila) {
   const { contador, pin, nombre, fecha, pdfUrl, fotoBase64, qrUrl, creadoVigencia, qrPlacaSvgUrl, qrPlacaPngUrl } = fila;
-  const { workbook, sheet } = await cargarOCrearLibro(s3, bucket, key);
+  const { workbook, sheet, etag, existia } = await cargarOCrearLibro(s3, bucket, key);
 
   let rowNumber = buscarFilaPorContador(sheet, contador);
   const esNueva = !rowNumber;
@@ -593,7 +598,13 @@ async function actualizarResumenXlsx(s3, bucket, key, fila) {
     Key: key,
     Body: buffer,
     ContentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    ...condicionDeEscritura(etag, existia),
   }));
+}
+
+// con reintento si otro guardado simultáneo cambió el archivo (ver lib/concurrencia.js)
+function actualizarResumenXlsx(s3, bucket, key, fila) {
+  return reintentarSiCambio(() => actualizarResumenXlsxUnaVez(s3, bucket, key, fila));
 }
 
 // ---- 2026-09-30: marca la fila de una ficha como eliminada con un texto FIJO (no fórmula) en la
@@ -615,10 +626,10 @@ async function actualizarResumenXlsx(s3, bucket, key, fila) {
 // Nunca lanza error hacia arriba: si la fila no se encuentra (por ejemplo, el Excel nunca llegó a
 // tener esa fila, o el archivo resumen.xlsx no existe todavía), simplemente no hace nada — no es
 // motivo para interrumpir el borrado real de la ficha, que ya ocurrió antes de llamar a esto.
-async function marcarFilaComoEliminada(s3, bucket, key, contador, textoEstado) {
-  let workbook, sheet;
+async function marcarFilaComoEliminadaUnaVez(s3, bucket, key, contador, textoEstado) {
+  let workbook, sheet, etag, existia;
   try {
-    ({ workbook, sheet } = await cargarOCrearLibro(s3, bucket, key));
+    ({ workbook, sheet, etag, existia } = await cargarOCrearLibro(s3, bucket, key));
   } catch (err) {
     console.error('xlsx-resumen: no se pudo abrir el libro para marcar como eliminada la fila de', contador, err);
     return;
@@ -631,6 +642,12 @@ async function marcarFilaComoEliminada(s3, bucket, key, contador, textoEstado) {
   row.getCell(COL_ESTADO).value = textoEstado || 'Eliminada';
   row.getCell(COL_ESTADO).font = { bold: true, color: { argb: 'FFB42318' } };
   row.getCell(COL_ESTADO).alignment = { vertical: 'middle', horizontal: 'center' };
+
+  // 2026-11-10 (auditoría, hallazgo 7): los correos dicen que la información se elimina por completo, pero en la fila
+  // quedaban el nombre y el PIN. Ahora se borran también (la miniatura de la foto, que es una imagen incrustada en el
+  // Excel, NO se toca para no arriesgar que el archivo se dañe; es un archivo privado de James).
+  if (row.getCell(COL_PIN).value) row.getCell(COL_PIN).value = '(eliminado)';
+  if (row.getCell(COL_NOMBRE).value) row.getCell(COL_NOMBRE).value = '(eliminado)';
 
   const celdaPdf = row.getCell(COL_PDF);
   if (celdaPdf.value) celdaPdf.value = '(eliminado)';
@@ -650,9 +667,19 @@ async function marcarFilaComoEliminada(s3, bucket, key, contador, textoEstado) {
       Key: key,
       Body: buffer,
       ContentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      ...condicionDeEscritura(etag, existia),
     }));
   } catch (err) {
+    if (esPrecondicionFallida(err)) throw err; // otro guardado se coló: se reintenta (ver lib/concurrencia.js)
     console.error('xlsx-resumen: no se pudo guardar el libro tras marcar como eliminada la fila de', contador, err);
+  }
+}
+
+async function marcarFilaComoEliminada(s3, bucket, key, contador, textoEstado) {
+  try {
+    await reintentarSiCambio(() => marcarFilaComoEliminadaUnaVez(s3, bucket, key, contador, textoEstado));
+  } catch (err) {
+    console.error('xlsx-resumen: no se pudo marcar como eliminada la fila de', contador, '(reintentos agotados) —', err);
   }
 }
 

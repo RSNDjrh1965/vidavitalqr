@@ -25,6 +25,7 @@
 
 const ExcelJS = require('exceljs');
 const { PutObjectCommand, GetObjectCommand } = require('@aws-sdk/client-s3');
+const { condicionDeEscritura, reintentarSiCambio } = require('./concurrencia');
 
 const HEADER_FILL = 'FF12282B';
 const HEADER_FONT = 'FFF9F6EF';
@@ -131,8 +132,12 @@ function ajustarEncabezadoYAnchos(sheet) {
 async function cargarOCrearLibro(s3, bucket, key) {
   const workbook = new ExcelJS.Workbook();
   let sheet;
+  let etag = null;
+  let existia = false;
   try {
     const resp = await s3.send(new GetObjectCommand({ Bucket: bucket, Key: key }));
+    etag = resp.ETag || null;
+    existia = true;
     const buf = await streamToBuffer(resp.Body);
     await workbook.xlsx.load(buf);
     sheet = workbook.getWorksheet('Registro de Ingresos');
@@ -143,7 +148,7 @@ async function cargarOCrearLibro(s3, bucket, key) {
     sheet = nuevaHojaConEstilo(workbook);
   }
   ajustarEncabezadoYAnchos(sheet);
-  return { workbook, sheet };
+  return { workbook, sheet, etag, existia };
 }
 
 function yaExisteFila(sheet, paymentIntentId) {
@@ -165,13 +170,13 @@ function yaExisteFila(sheet, paymentIntentId) {
 // datos: { paymentIntentId, fecha (Date), folio, cliente, medioPago, moneda ("CRC"/"USD"),
 //          montoBruto (número), tipoCambio (número, solo si moneda==CRC), referencia, estado }
 // Devuelve { duplicado: true } sin escribir nada si ese paymentIntentId ya tenía una fila.
-async function agregarIngreso(s3, bucket, key, datos) {
+async function agregarIngresoUnaVez(s3, bucket, key, datos) {
   const {
     paymentIntentId, fecha, folio, cliente, medioPago, moneda,
     montoBruto, tipoCambio, referencia, estado,
   } = datos;
 
-  const { workbook, sheet } = await cargarOCrearLibro(s3, bucket, key);
+  const { workbook, sheet, etag, existia } = await cargarOCrearLibro(s3, bucket, key);
 
   if (yaExisteFila(sheet, paymentIntentId)) {
     return { duplicado: true };
@@ -244,9 +249,15 @@ async function agregarIngreso(s3, bucket, key, datos) {
     Key: key,
     Body: buffer,
     ContentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    ...condicionDeEscritura(etag, existia),
   }));
 
   return { duplicado: false, rowNumber };
+}
+
+// con reintento si otro guardado simultáneo cambió el archivo (ver lib/concurrencia.js)
+function agregarIngreso(s3, bucket, key, datos) {
+  return reintentarSiCambio(() => agregarIngresoUnaVez(s3, bucket, key, datos));
 }
 
 module.exports = { agregarIngreso };
