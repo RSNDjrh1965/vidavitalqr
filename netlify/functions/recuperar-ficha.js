@@ -212,7 +212,7 @@ exports.handler = async (event) => {
       return {
         statusCode: 404,
         headers,
-        body: JSON.stringify({ error: 'Esta ficha no tiene un correo de contacto registrado. Usa la opción de verlo en pantalla.' }),
+        body: JSON.stringify({ error: 'Esta ficha no tiene un correo de contacto registrado, por eso no se puede enviar el PIN. Escríbanos por WhatsApp al 6093-3090 para ayudarle.' }),
       };
     }
 
@@ -222,7 +222,7 @@ exports.handler = async (event) => {
       return {
         statusCode: 500,
         headers,
-        body: JSON.stringify({ error: 'No se pudo enviar el correo. Intenta con la opción de verlo en pantalla.', detalle: String(err) }),
+        body: JSON.stringify({ error: 'No se pudo enviar el correo. Intenta de nuevo en unos minutos o escríbanos por WhatsApp al 6093-3090.', detalle: String(err) }),
       };
     }
 
