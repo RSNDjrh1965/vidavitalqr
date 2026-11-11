@@ -35,6 +35,7 @@
 
 const { S3Client, GetObjectCommand } = require('@aws-sdk/client-s3');
 const { validarFactura, pideFactura } = require('./lib/factura');
+const { estaBloqueado, anotar, ipDe } = require('./lib/limite');
 
 const ONVO_API_BASE = 'https://api.onvopay.com/v1';
 const BUCKET_RESUMEN = process.env.S3_BUCKET_RESUMEN || 'resumen-vidavitalqr';
@@ -182,6 +183,40 @@ exports.handler = async (event) => {
       if (ESTILOS_PLACA_VALIDOS.indexOf(estiloRecibido) !== -1) { placaEstilo = estiloRecibido; }
     }
     items.push({ itemId, folio, placaEstilo, label: catalogo.label, price: catalogo.price, tipo: catalogo.tipo, renovacion: catalogo.renovacion });
+  }
+
+  // ---- 2026-11-10 (auditoría, hallazgo 24): antes se podía crear un cobro para un folio que no existe y sin límite
+  // de frecuencia. Ahora (1) máximo 40 cobros por hora desde una misma conexión y (2) cada folio debe tener su ficha
+  // ya guardada (registro de acceso en S3). Ambas protecciones "fallan abiertas": si S3 no responde, NO se bloquea el
+  // pago (solo se rechaza cuando S3 confirma que el folio no existe). Los folios de empresa (VVITALQRE...) no se
+  // revisan aquí porque su registro se crea por otro camino. ----
+  try {
+    const regionP = process.env.S3_REGION || 'us-east-1';
+    if (process.env.S3_ACCESS_KEY_ID && process.env.S3_SECRET_ACCESS_KEY) {
+      const s3P = new S3Client({ region: regionP, credentials: { accessKeyId: process.env.S3_ACCESS_KEY_ID, secretAccessKey: process.env.S3_SECRET_ACCESS_KEY } });
+      const ipP = ipDe(event);
+      if (await estaBloqueado(s3P, BUCKET_RESUMEN, 'crear-pago-ip', ipP, 40, 60 * 60 * 1000)) {
+        return { statusCode: 429, body: JSON.stringify({ error: 'Demasiados intentos de pago. Intente de nuevo en un rato.' }) };
+      }
+      await anotar(s3P, BUCKET_RESUMEN, 'crear-pago-ip', ipP, 60 * 60 * 1000);
+      const foliosRevisar = Array.from(new Set(items.map((it) => String(it.folio || '').toUpperCase()).filter((f) => f && !f.startsWith('VVITALQRE'))));
+      for (const f of foliosRevisar) {
+        const carpetaP = f.startsWith('VVMASCOTA') ? 'mascotas' : (f.startsWith('VVOBJETO') ? 'objetos' : 'personas');
+        let existe = null; // null = no se pudo saber; true/false = confirmado
+        for (const k of [`${carpetaP}/login/${f}.json`, `login/${f}.json`]) {
+          try { await s3P.send(new GetObjectCommand({ Bucket: BUCKET_RESUMEN, Key: k })); existe = true; break; }
+          catch (eP) {
+            const noExiste = eP && (eP.name === 'NoSuchKey' || eP.Code === 'NoSuchKey' || (eP.$metadata && eP.$metadata.httpStatusCode === 404));
+            if (noExiste) { if (existe === null) existe = false; } else { existe = null; break; }
+          }
+        }
+        if (existe === false) {
+          return { statusCode: 404, body: JSON.stringify({ error: 'No se encontró la ficha con el código ' + f + '. Revise el código o guarde primero su ficha.' }) };
+        }
+      }
+    }
+  } catch (eVerif) {
+    console.error('crear-pago: no se pudo verificar el folio/límite (se deja continuar) —', eVerif);
   }
 
   // ---- costo de envío: se agrega una sola vez si el pedido incluye algún producto físico,

@@ -127,7 +127,7 @@ const TEXTOS_AVISO_ESCANEO = {
     ubicExactaNota: '(Precisión según el dispositivo de quien escaneó — puede no ser exacta.)',
     ubicAprox: (detalle) => `Ubicación aproximada de quien escaneó el código${detalle}`,
     ubicAproxNota: '(Esta ubicación es aproximada, calculada a partir de la conexión a internet — no es exacta, y quien escaneó no compartió su ubicación real.)',
-    ubicSin: 'La persona que escaneó el código no compartió su ubicación, por eso este aviso no incluye ninguna ubicación.',
+    ubicSin: 'Este aviso no incluye ubicación.',
     aproxEnLbl: (etiqueta) => ` (aproximadamente en ${etiqueta})`,
     fichaLbl: 'Ficha completa',
     hola: 'Hola',
@@ -146,7 +146,7 @@ const TEXTOS_AVISO_ESCANEO = {
     ubicExactaNota: '(Accuracy depends on the scanning device — may not be exact.)',
     ubicAprox: (detalle) => `Approximate location of the person who scanned the code${detalle}`,
     ubicAproxNota: '(This location is approximate, calculated from the internet connection — it is not exact, and the person who scanned did not share their real location.)',
-    ubicSin: 'The person who scanned the code did not share their location, so this notice does not include any location.',
+    ubicSin: 'This notice does not include a location.',
     aproxEnLbl: (etiqueta) => ` (approximately in ${etiqueta})`,
     fichaLbl: 'Full profile',
     hola: 'Hello',
@@ -165,7 +165,7 @@ const TEXTOS_AVISO_ESCANEO = {
     ubicExactaNota: "(Précision selon l'appareil utilisé — peut ne pas être exacte.)",
     ubicAprox: (detalle) => `Position approximative de la personne qui a scanné le code${detalle}`,
     ubicAproxNota: "(Cette position est approximative, calculée à partir de la connexion internet — elle n'est pas exacte, et la personne n'a pas partagé sa position réelle.)",
-    ubicSin: "La personne qui a scanné le code n'a pas partagé sa localisation ; cet avis n'inclut donc aucune localisation.",
+    ubicSin: "Cet avis n'inclut pas de localisation.",
     aproxEnLbl: (etiqueta) => ` (environ à ${etiqueta})`,
     fichaLbl: 'Fiche complète',
     hola: 'Bonjour',
@@ -187,7 +187,7 @@ const TEXTOS_AVISO_ESCANEO = {
     ubicExactaNota: '(Precisão de acordo com o dispositivo de quem escaneou — pode não ser exata.)',
     ubicAprox: (detalle) => `Localização aproximada de quem escaneou o código${detalle}`,
     ubicAproxNota: '(Esta localização é aproximada, calculada a partir da conexão à internet — não é exata, e quem escaneou não compartilhou sua localização real.)',
-    ubicSin: 'A pessoa que escaneou o código não compartilhou sua localização, por isso este aviso não inclui nenhuma localização.',
+    ubicSin: 'Este aviso não inclui localização.',
     aproxEnLbl: (etiqueta) => ` (aproximadamente em ${etiqueta})`,
     fichaLbl: 'Ficha completa',
     hola: 'Olá',
@@ -318,9 +318,12 @@ exports.handler = async (event) => {
     return { statusCode: 400, headers, body: JSON.stringify({ error: 'Falta el folio.' }) };
   }
 
-  const permitido = payload.permitido === true;
-  const lat = permitido && typeof payload.lat === 'number' ? payload.lat : null;
-  const lng = permitido && typeof payload.lng === 'number' ? payload.lng : null;
+  // ---- 2026-11-10: la ficha pública ya no pide ubicación, así que este aviso NUNCA lleva ubicación. Cualquier
+  // lat/lng que llegue en la petición se ignora a propósito (cerraba el hueco de que alguien enviara un aviso
+  // falso con una ubicación inventada). ----
+  const permitido = false;
+  const lat = null;
+  const lng = null;
 
   // ---- vuelve a leer la ficha completa de S3 a partir del folio — nunca se confía en datos de
   // contacto ni PDF que pudieran venir del navegador, solo en el folio para ubicarla ----

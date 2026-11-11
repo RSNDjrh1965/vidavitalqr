@@ -41,6 +41,7 @@ const { agregarIngreso } = require('./lib/ingresos');
 const { firmarFolio } = require('./lib/enlace-qr');
 const { procesarPedidoEmpresa } = require('./lib/pedido-empresa-pago');
 const { procesarRenovacionEmpresa } = require('./lib/renovacion-empresa-pago');
+const { fechaVencimiento } = require('./lib/vigencia');
 const { facturaDeMetadata, lineasFactura } = require('./lib/factura');
 
 const ONVO_API_BASE = 'https://api.onvopay.com/v1';
@@ -259,19 +260,21 @@ exports.handler = async (event) => {
   // nunca debe impedir que el webhook responda 200 (el pago ya está confirmado y registrado
   // arriba); si algo falla, queda este log para activarla a mano y diagnosticar.
   //
-  // Sigue pendiente (fuera de alcance de este cambio, ya señalado y aceptado con James el
-  // 2026-09-25 en la política de vigencia): reiniciar la fecha "creado" de una renovación pagada
-  // recién en este webhook en vez de al momento de "Enviar" — por ahora una renovación conserva
-  // el mismo comportamiento que ya tenía.
+  // 2026-11-10: la renovación pagada reinicia la fecha "creado" (12 meses) aquí, al confirmarse el pago
+  // (ver activarFichasPagadas); send-ficha.js ya no la reinicia al guardar el formulario.
+  // 2026-11-10: se recuerda el resultado (qué folios sí quedaron activos y cuáles no) para decirlo en el correo
+  // de aviso al administrador; antes, si la activación fallaba, solo quedaba en el registro interno de Netlify.
+  let activacion = { ok: [], fallo: [] };
   try {
     const s3Activacion = getS3Client();
-    await activarFichasPagadas(s3Activacion, items);
+    activacion = await activarFichasPagadas(s3Activacion, items);
   } catch (err) {
     console.error('onvo-webhook: no se pudieron activar las fichas pagadas —', err);
+    activacion = { ok: [], fallo: Array.from(new Set((items || []).filter((it) => it && it.folio).map((it) => String(it.folio).toUpperCase()))) };
   }
 
   // ---- 2) Avisar por correo al administrador (mismo destinatario que ya recibe los demás avisos) ----
-  await avisarAdministrador({ items, folios, sessionId: paymentIntentId, modo, envio, retiroPersona, moneda, tipoCambioUsado, totalUSDReportado, totalCRCInformativo, factura: facturaDeMetadata(meta.factura) });
+  await avisarAdministrador({ activacion, items, folios, sessionId: paymentIntentId, modo, envio, retiroPersona, moneda, tipoCambioUsado, totalUSDReportado, totalCRCInformativo, factura: facturaDeMetadata(meta.factura) });
 
   // ---- 3) Registrar el ingreso, solo para pagos reales (nunca los de prueba, para no ensuciar
   // el Registro de Ingresos con cifras que no son dinero real) ----
@@ -485,18 +488,34 @@ async function avisarClienteQrDigital(items, correoCliente) {
 // uno falla (por ejemplo, un folio mal formado) los demás igual se activan. ----
 async function activarFichasPagadas(s3, items) {
   const foliosUnicos = Array.from(new Set((items || []).filter((it) => it && it.folio).map((it) => String(it.folio).toUpperCase())));
+  // ---- 2026-11-10: una renovación anual (item renewal / renewal_mascota / renewal_objeto) reinicia los 12 meses
+  // SOLO aquí, cuando ONVO confirma el pago. Antes lo hacía send-ficha.js al guardar el formulario, sin pago. ----
+  const foliosRenovacion = new Set((items || []).filter((it) => it && it.folio && /^renewal/.test(String(it.item || ''))).map((it) => String(it.folio).toUpperCase()));
+  const resultado = { ok: [], fallo: [] };
   for (const folio of foliosUnicos) {
     try {
-      await activarUnaFicha(s3, folio);
-      console.log('onvo-webhook: ficha', folio, 'activada (pago confirmado).');
+      const r = await activarUnaFicha(s3, folio, foliosRenovacion.has(folio));
+      if (r && r.login && r.datos) {
+        resultado.ok.push(folio);
+        console.log('onvo-webhook: ficha', folio, 'activada (pago confirmado).', foliosRenovacion.has(folio) ? 'Renovación: vigencia reiniciada.' : '');
+      } else {
+        resultado.fallo.push(folio);
+        console.error('onvo-webhook: la ficha', folio, 'NO quedó activada por completo (login:', !!(r && r.login), ', datos públicos:', !!(r && r.datos), ').');
+      }
     } catch (err) {
+      resultado.fallo.push(folio);
       console.error('onvo-webhook: no se pudo activar la ficha', folio, '—', err);
     }
   }
+  return resultado;
 }
 
-async function activarUnaFicha(s3, folioMayus) {
+async function activarUnaFicha(s3, folioMayus, esRenovacion) {
   const carpeta = carpetaDesdeFolio(folioMayus);
+  const ahoraISO = new Date().toISOString();
+  let reiniciaVigencia = false; // true solo si es renovación pagada de una ficha que NO es de empresa
+  let loginActualizado = false;
+  let datosActualizados = false;
 
   // 1) registro privado de acceso (login) — mismo patrón de "carpeta nueva, con respaldo en la
   // ubicación antigua sin carpeta" que usa el resto del proyecto (ver cargarOCrearLogin en
@@ -518,8 +537,15 @@ async function activarUnaFicha(s3, folioMayus) {
     }
   }
   if (loginTexto) {
+    loginActualizado = true;
     const registro = JSON.parse(loginTexto);
-    if (registro.activo !== true) {
+    // las fichas de empresa se renuevan por empresa (renovacion-empresa), nunca por este camino
+    reiniciaVigencia = esRenovacion === true && !registro.empresa;
+    if (reiniciaVigencia) {
+      registro.creado = ahoraISO;
+      registro.vigencia = { avisos: { aviso30: false, aviso7: false, avisoVencida: false, avisoGracia30: false, avisoFinal55: false } };
+    }
+    if (registro.activo !== true || reiniciaVigencia) {
       registro.activo = true;
       registro.actualizado = new Date().toISOString();
       await s3.send(new PutObjectCommand({
@@ -550,8 +576,13 @@ async function activarUnaFicha(s3, folioMayus) {
     }
   }
   if (datosTexto) {
+    datosActualizados = true;
     const datos = JSON.parse(datosTexto);
-    if (datos.activo !== true) {
+    if (reiniciaVigencia) {
+      datos.creado = ahoraISO;
+      datos.fechaVencimiento = fechaVencimiento(ahoraISO).toISOString();
+    }
+    if (datos.activo !== true || reiniciaVigencia) {
       datos.activo = true;
       datos.actualizado = new Date().toISOString();
       await s3.send(new PutObjectCommand({
@@ -562,6 +593,7 @@ async function activarUnaFicha(s3, folioMayus) {
       }));
     }
   }
+  return { login: loginActualizado, datos: datosActualizados };
 }
 
 // ---- consulta a ONVO qué tipo de método de pago se usó (tarjeta o SINPE Móvil) ----
@@ -624,7 +656,7 @@ async function resolverNombreCliente(folio) {
   }
 }
 
-async function avisarAdministrador({ items, folios, sessionId, modo, envio, retiroPersona, moneda, tipoCambioUsado, totalUSDReportado, totalCRCInformativo, factura }) {
+async function avisarAdministrador({ activacion, items, folios, sessionId, modo, envio, retiroPersona, moneda, tipoCambioUsado, totalUSDReportado, totalCRCInformativo, factura }) {
   const apiKey = process.env.RESEND_API_KEY;
   if (!apiKey) {
     console.error('onvo-webhook: falta RESEND_API_KEY — no se pudo avisar por correo del pago confirmado.');
@@ -645,7 +677,15 @@ async function avisarAdministrador({ items, folios, sessionId, modo, envio, reti
     ? 'Cobrado en: colones (CRC)' + (totalUSDReportado ? ' — equivalente a $' + totalUSDReportado.toFixed(2) : '') + (tipoCambioUsado ? ' — tipo de cambio usado: ₡' + tipoCambioUsado : '') + '\n'
     : (totalCRCInformativo ? 'Cobrado en: dólares (USD) — equivalente informativo: ₡' + totalCRCInformativo.toLocaleString('es-CR') + (tipoCambioUsado ? ' (tipo de cambio del día: ₡' + tipoCambioUsado + ')' : '') + '\n' : '');
 
-  const asunto = 'Pago confirmado — ' + items.length + ' producto(s)' + (moneda === 'CRC' ? ' (₡)' : '') + (modo === 'test' ? ' (MODO PRUEBA)' : '');
+  // ---- 2026-11-10: estado de la activación de las fichas pagadas (antes el correo solo decía que "eso se agrega en la
+  // siguiente fase" y nadie se enteraba si la activación fallaba) ----
+  const act = activacion && typeof activacion === 'object' ? activacion : { ok: [], fallo: [] };
+  const hayFallo = Array.isArray(act.fallo) && act.fallo.length > 0;
+  const lineaActivacion = hayFallo
+    ? '⚠ ATENCIÓN: la ficha NO quedó activada para: ' + act.fallo.join(', ') + ' — el pago SÍ se cobró; hay que activarla a mano o revisar el registro de Netlify.' + ((act.ok && act.ok.length) ? ' Sí quedaron activas: ' + act.ok.join(', ') + '.' : '')
+    : ((act.ok && act.ok.length) ? 'Ficha activada correctamente: sí (' + act.ok.join(', ') + ').' : '');
+
+  const asunto = (hayFallo ? '⚠ REVISAR: ficha sin activar — ' : '') + 'Pago confirmado — ' + items.length + ' producto(s)' + (moneda === 'CRC' ? ' (₡)' : '') + (modo === 'test' ? ' (MODO PRUEBA)' : '');
   const cuerpo = [
     'ONVO Pay confirmó un pago de VidaVitalQR.',
     '',
@@ -658,9 +698,7 @@ async function avisarAdministrador({ items, folios, sessionId, modo, envio, reti
     lineaMoneda.trimEnd(),
     ...(factura ? ['', ...lineasFactura(factura)] : []),
     '',
-    'Nota: este aviso confirma que el pago llegó correctamente, pero todavía no marca ninguna',
-    'ficha como renovada de forma automática en el sistema ni desbloquea nada en el visor',
-    'público. Eso se agrega en la siguiente fase.',
+    ...(lineaActivacion ? [lineaActivacion] : []),
   ].join('\n');
 
   // ---- versión HTML del aviso: resalta visualmente qué se compró (punto 4), para que quede claro
@@ -694,7 +732,7 @@ async function avisarAdministrador({ items, folios, sessionId, modo, envio, reti
         ? '<br><strong>Cobrado en:</strong> colones (CRC)' + (totalUSDReportado ? ' — equivalente a $' + totalUSDReportado.toFixed(2) : '') + (tipoCambioUsado ? ' — tipo de cambio usado: ₡' + tipoCambioUsado : '')
         : (totalCRCInformativo ? '<br><strong>Cobrado en:</strong> dólares (USD) — equivalente informativo: ₡' + totalCRCInformativo.toLocaleString('es-CR') + (tipoCambioUsado ? ' (tipo de cambio del día: ₡' + tipoCambioUsado + ')' : '') : '')) +
       '</p>',
-    '<p style="color:#777;font-size:12px;margin-top:18px;">Nota: este aviso confirma que el pago llegó correctamente, pero todavía no marca ninguna ficha como renovada de forma automática en el sistema ni desbloquea nada en el visor público. Eso se agrega en la siguiente fase.</p>',
+    (lineaActivacion ? '<p style="margin-top:14px;padding:10px 14px;border-radius:8px;font-weight:bold;' + (hayFallo ? 'background:#fdecea;border:1px solid #f5b5ae;color:#b30000;' : 'background:#f2f9f4;border:1px solid #cfe9d8;color:#0a7d3c;') + '">' + escaparHtml(lineaActivacion) + '</p>' : ''),
     '</div>',
   ].join('');
 

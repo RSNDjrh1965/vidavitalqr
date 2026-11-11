@@ -87,12 +87,7 @@ const TEXTOS = {
     notaOriginal: 'Texto ingresado por el usuario, tal como fue escrito.',
     noEncontrado: 'No se encontró información para este código.',
     idioma: 'Idioma',
-    avisoSolicitud: 'Se solicita su permiso para enviar a la persona de contacto la ubicación actual de la persona y/o mascota en aprietos.',
-    avisoUbicPrecisa: 'Gracias. Se notificó a los contactos de emergencia junto con su ubicación.',
-    avisoUbicAprox: 'No se compartió su ubicación. Se notificó a los contactos de emergencia, pero sin ubicación.',
-    ubicPreguntaTexto: 'Para que los contactos de emergencia sepan dónde se encuentra, ¿autoriza compartir su ubicación exacta? Si no autoriza, se les notificará igual, pero sin ubicación.',
-    btnUbicSi: 'Sí, compartir ubicación exacta',
-    btnUbicNo: 'No, usar solo aproximada',
+    avisoEscaneo: 'Se notificó a los contactos de emergencia que este código fue escaneado.',
     // ---- 2026-09-25: aviso de ficha vencida (ver lib/vigencia.js). Solo se muestra en el
     // período de gracia de 2 meses después del año de vigencia — la información esencial de
     // emergencia (contactos y datos médicos) se sigue mostrando igual, para no arriesgar una
@@ -128,12 +123,7 @@ const TEXTOS = {
     notaOriginal: 'Text entered by the user, shown exactly as written.',
     noEncontrado: 'No information was found for this code.',
     idioma: 'Language',
-    avisoSolicitud: 'We are requesting your permission to send the contact person the current location of the person and/or pet in distress.',
-    avisoUbicPrecisa: 'Thank you. The emergency contacts were notified along with your location.',
-    avisoUbicAprox: 'Your location was not shared. The emergency contacts were notified, but without a location.',
-    ubicPreguntaTexto: 'So the emergency contacts know where you are, do you authorize sharing your exact location? If you do not authorize it, they will still be notified, but without a location.',
-    btnUbicSi: 'Yes, share exact location',
-    btnUbicNo: 'No, use approximate only',
+    avisoEscaneo: 'The emergency contacts were notified that this code was scanned.',
     bannerVencida: '⚠️ This record has expired. Essential emergency information (contacts and medical data) is still shown, but the photo and the full PDF record are hidden until the owner renews it — and it will be permanently deleted if not renewed in time.',
     noEncontradoEliminada: 'This record no longer exists: it was deleted for lack of renewal.',
     pagoPendienteTitulo: 'Payment pending',
@@ -165,12 +155,7 @@ const TEXTOS = {
     notaOriginal: "Texte saisi par l'utilisateur, affiché tel quel.",
     noEncontrado: "Aucune information trouvée pour ce code.",
     idioma: 'Langue',
-    avisoSolicitud: "Nous vous demandons la permission d'envoyer à la personne de contact la localisation actuelle de la personne et/ou de l'animal en détresse.",
-    avisoUbicPrecisa: "Merci. Les contacts d'urgence ont été notifiés avec votre localisation.",
-    avisoUbicAprox: "Votre localisation n'a pas été partagée. Les contacts d'urgence ont été notifiés, mais sans localisation.",
-    ubicPreguntaTexto: "Pour que les contacts d'urgence sachent où vous êtes, autorisez-vous le partage de votre localisation exacte ? Si vous ne l'autorisez pas, ils seront tout de même notifiés, mais sans localisation.",
-    btnUbicSi: 'Oui, partager la localisation exacte',
-    btnUbicNo: 'Non, utiliser seulement l\'approximative',
+    avisoEscaneo: "Les contacts d'urgence ont été informés que ce code a été scanné.",
     bannerVencida: "⚠️ Cette fiche a expiré. Les informations d'urgence essentielles (contacts et données médicales) restent affichées, mais la photo et la fiche complète en PDF sont masquées jusqu'à ce que le titulaire la renouvelle — elle sera définitivement supprimée si elle n'est pas renouvelée à temps.",
     noEncontradoEliminada: "Cette fiche n'existe plus : elle a été supprimée faute de renouvellement.",
     pagoPendienteTitulo: 'Paiement en attente',
@@ -202,12 +187,7 @@ const TEXTOS = {
     notaOriginal: 'Texto inserido pelo usuário, exibido como foi escrito.',
     noEncontrado: 'Nenhuma informação foi encontrada para este código.',
     idioma: 'Idioma',
-    avisoSolicitud: 'Solicitamos sua permissão para enviar ao contato a localização atual da pessoa e/ou animal em apuros.',
-    avisoUbicPrecisa: 'Obrigado. Os contatos de emergência foram notificados junto com sua localização.',
-    avisoUbicAprox: 'Sua localização não foi compartilhada. Os contatos de emergência foram notificados, mas sem localização.',
-    ubicPreguntaTexto: 'Para que os contatos de emergência saibam onde você está, você autoriza compartilhar sua localização exata? Se não autorizar, eles ainda serão notificados, mas sem localização.',
-    btnUbicSi: 'Sim, compartilhar localização exata',
-    btnUbicNo: 'Não, usar apenas a aproximada',
+    avisoEscaneo: 'Os contatos de emergência foram avisados de que este código foi escaneado.',
     bannerVencida: '⚠️ Esta ficha está vencida. As informações essenciais de emergência (contatos e dados médicos) continuam sendo exibidas, mas a foto e a ficha completa em PDF ficam ocultas até que o titular a renove — e será excluída definitivamente se não for renovada a tempo.',
     noEncontradoEliminada: 'Esta ficha não existe mais: foi excluída por falta de renovação.',
     pagoPendienteTitulo: 'Pagamento pendente',
@@ -229,12 +209,36 @@ function maskTelefono(telefono) {
   return '*'.repeat(ocultos) + digitos.slice(digitos.length - visibles);
 }
 
-function telHref(telefono) {
-  const digitos = String(telefono || '').replace(/\D/g, '');
-  if (!digitos) return '';
-  if (String(telefono).trim().startsWith('+')) return '+' + digitos;
-  if (digitos.length === 8) return '+506' + digitos; // número local de Costa Rica sin código de país
-  return digitos;
+// ---- 2026-11-10: el campo de teléfono de un contacto es texto libre: el cliente puede escribir
+// varios números juntos ("8888-1234 / 2222-3333", "8888-1234 o 2222-3333") o una extensión
+// ("8888-1234 ext. 12"). Antes se juntaban TODOS los dígitos en un solo número, y el botón "Llamar"
+// marcaba un número inexistente. Ahora se separa en números individuales y se genera un botón por
+// cada uno (máximo 3). Con un solo número escrito normal, el resultado es el mismo de siempre
+// (mismo enlace tel: y misma máscara de asteriscos). ----
+function telefonosDe(texto) {
+  const partes = String(texto || '').split(/\s*(?:\/|\\|;|,|\||\n|\r|\s+(?:o|y|or|and|ou|et|e)\s+)\s*/i);
+  const salida = [];
+  const vistos = new Set();
+  for (let p of partes) {
+    p = String(p || '').replace(/\s*(?:ext\.?|extensi[oó]n|extension|x)\s*\.?\s*\d+\s*$/i, '');
+    const digitos = p.replace(/\D/g, '');
+    if (!digitos) continue;
+    const conMas = /^\s*\+/.test(p);
+    // Dos números de 8 dígitos escritos seguidos, sin separador: se parten en dos.
+    const grupos = (!conMas && digitos.length === 16) ? [digitos.slice(0, 8), digitos.slice(8)] : [digitos];
+    for (const g of grupos) {
+      let href;
+      if (conMas) href = '+' + g;
+      else if (g.length === 8) href = '+506' + g; // número local de Costa Rica sin código de país
+      else if (g.length === 11 && g.startsWith('506')) href = '+' + g; // "506 8888-1234" sin el "+"
+      else if (g.length >= 11 && g.startsWith('00')) href = '+' + g.slice(2); // "00506..."
+      else href = g;
+      if (vistos.has(href)) continue;
+      vistos.add(href);
+      salida.push({ href, mask: maskTelefono(g) });
+    }
+  }
+  return salida.slice(0, 3);
 }
 
 function paginaError(mensaje) {
@@ -312,10 +316,9 @@ function paginaVisor(datos) {
 
   const contactosHtml = contactos.length
     ? contactos.map((c) => {
-        const href = c.telefono ? telHref(c.telefono) : '';
-        const btnLlamarHtml = href
-          ? `<a class="btnLlamar" href="tel:${escapeHtml(href)}"><span data-i18n="llamar"></span> (${escapeHtml(maskTelefono(c.telefono))})</a>`
-          : '';
+        const btnLlamarHtml = (c.telefono ? telefonosDe(c.telefono) : [])
+          .map((n) => `<a class="btnLlamar" href="tel:${escapeHtml(n.href)}"><span data-i18n="llamar"></span> (${escapeHtml(n.mask)})</a>`)
+          .join('');
         return `<div class="contacto"><strong>${escapeHtml(c.nombre || '')}</strong>${c.parentesco ? ` — ${escapeHtml(c.parentesco)}` : ''}${c.telefono ? `<br><span class="etiqueta" data-i18n="telefono"></span> ${escapeHtml(c.telefono)}` : ''}${btnLlamarHtml}</div>`;
       }).join('')
     : `<p class="valor-libre" data-i18n="sinDatos"></p>`;
@@ -334,7 +337,7 @@ function paginaVisor(datos) {
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>VidaVitalQR — ${escapeHtml(datos.nombreCompleto || '')}</title>
 <style>
-  :root{ --ink:#12282B; --ink-soft:#2C4247; --paper:#F7F4EE; --card:#FFFFFF; --teal-deep:#1F4448; --signal:#C1552F; --line:#DAD3C4; --muted:#6C7A76; }
+  :root{ --ink:#12282B; --ink-soft:#2C4247; --paper:#F7F4EE; --card:#FFFFFF; --teal-deep:#1F4448; --signal:#C1552F; --line:#DAD3C4; --muted:#5E6C68; }
   *{box-sizing:border-box;}
   body{margin:0;background:var(--paper);color:var(--ink);font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;}
   .wrap{max-width:560px;margin:0 auto;padding:28px 20px 60px;}
@@ -352,17 +355,14 @@ function paginaVisor(datos) {
   .bloque{margin-top:18px;padding-top:14px;border-top:1px solid var(--line);}
   .bloque h3{font-size:1rem;margin:0 0 6px;color:var(--teal-deep);}
   .valor-libre{white-space:pre-wrap;font-size:0.95rem;margin:0;}
+  /* 2026-11-10: correos, enlaces o palabras muy largas sin espacios se parten en vez de ensanchar la página en el celular */
+  .card{overflow-wrap:anywhere;}
+  .dato .valor{min-width:0;}
   .nota{color:var(--muted);font-size:0.78rem;margin:6px 0 0;font-style:italic;}
   .contacto{padding:8px 0;border-top:1px solid var(--line);font-size:0.95rem;}
-  .btnLlamar{display:inline-block;margin-top:8px;background:var(--signal);color:#fff;text-decoration:none;font-weight:700;padding:9px 16px;border-radius:8px;font-size:0.85rem;}
+  .btnLlamar{display:inline-block;margin:8px 0 0 10px;background:var(--signal);color:#fff;text-decoration:none;font-weight:700;padding:9px 16px;border-radius:8px;font-size:0.85rem;}
   .btnPdf{display:block;text-align:center;margin-top:22px;background:var(--signal);color:#fff;text-decoration:none;font-weight:700;padding:14px;border-radius:10px;}
   .avisoFooter{color:var(--muted);font-size:0.8rem;text-align:center;margin-top:16px;}
-  .ubicPrompt{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px;margin-top:16px;text-align:center;}
-  .ubicPrompt p{font-size:0.85rem;color:var(--ink-soft);margin:0 0 12px;}
-  .ubicPrompt .fila{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;}
-  .ubicPrompt button{flex:1;min-width:150px;border-radius:8px;padding:10px 12px;font-size:0.85rem;font-weight:700;cursor:pointer;border:1px solid var(--teal-deep);}
-  .ubicPrompt .btnSi{background:var(--teal-deep);color:#fff;}
-  .ubicPrompt .btnNo{background:var(--card);color:var(--teal-deep);}
   .pieMarca{margin-top:26px;padding:20px 16px;background:var(--card);border:1px solid var(--line);border-radius:14px;text-align:center;}
   .pieMarca img{width:150px;max-width:50vw;height:auto;display:block;margin:0 auto 10px;border-radius:10px;}
   .pieMarca .pieFrase{margin:0 0 14px;font-size:0.9rem;font-weight:700;color:var(--teal-deep);}
@@ -400,14 +400,7 @@ function paginaVisor(datos) {
     </div>
     ${(datos.pdfUrl && !estaVencida) ? `<a class="btnPdf" id="btnPdf" href="${escapeHtml(datos.pdfUrl)}" target="_blank" rel="noopener" data-i18n="botonPdf"></a>` : ''}
   </div>
-  <div class="ubicPrompt" id="ubicPrompt">
-    <p data-i18n="ubicPreguntaTexto"></p>
-    <div class="fila">
-      <button type="button" class="btnSi" id="btnUbicSi" data-i18n="btnUbicSi"></button>
-      <button type="button" class="btnNo" id="btnUbicNo" data-i18n="btnUbicNo"></button>
-    </div>
-  </div>
-  <p class="avisoFooter oculto" id="avisoUbicacion"></p>
+  <p class="avisoFooter oculto" id="avisoUbicacion" data-i18n="avisoEscaneo"></p>
   <div class="pieMarca">
     <img src="data:image/png;base64,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" alt="VidaVitalQR" width="150" height="91">
     <p class="pieFrase" data-i18n="pieFrase"></p>
@@ -536,20 +529,6 @@ function paginaVisor(datos) {
   var PDF_URL_DEFAULT = ${jsonEnScript(datos.pdfUrl || '')};
   var PDF_URLS = ${jsonEnScript((datos.pdfUrls && typeof datos.pdfUrls === 'object') ? datos.pdfUrls : {})};
   var idiomaActual = 'es';
-  // estadoUbicacion: 'pendiente' mientras se espera la respuesta del navegador al permiso de
-  // ubicación; 'concedida' si la persona que escaneó aceptó compartirla; 'denegada' si la
-  // rechazó, no respondió a tiempo, o su navegador no soporta geolocalización.
-  var estadoUbicacion = 'pendiente';
-
-  function actualizarAvisoUbicacion(){
-    var dic = TEXTOS[idiomaActual] || TEXTOS.es;
-    var el = document.getElementById('avisoUbicacion');
-    if (!el) return;
-    if (estadoUbicacion === 'concedida') el.textContent = dic.avisoUbicPrecisa;
-    else if (estadoUbicacion === 'denegada') el.textContent = dic.avisoUbicAprox;
-    else el.textContent = dic.avisoSolicitud;
-  }
-
   function aplicarIdioma(lang){
     idiomaActual = TEXTOS[lang] ? lang : 'es';
     var dic = TEXTOS[idiomaActual];
@@ -563,7 +542,6 @@ function paginaVisor(datos) {
     });
     var btnPdf = document.getElementById('btnPdf');
     if (btnPdf) btnPdf.href = PDF_URLS[idiomaActual] || PDF_URL_DEFAULT;
-    actualizarAvisoUbicacion();
     try { localStorage.setItem('vidavitalqr_lang', idiomaActual); } catch(e){}
   }
 
@@ -582,75 +560,27 @@ function paginaVisor(datos) {
   } catch(e){}
   aplicarIdioma(preferido);
 
-  // ---- pregunta explícitamente, dentro de la propia página (no solo el permiso nativo del
-  // navegador, que una vez concedido/rechazado una vez ya no vuelve a preguntar en visitas
-  // posteriores), si la persona que escaneó autoriza compartir su ubicación exacta. Solo si
-  // responde "Sí" se le pide el permiso de geolocalización al navegador (que sí muestra su
-  // propio diálogo nativo en ese momento, la primera vez); si responde "No", se avisa de una
-  // vez con ubicación aproximada, sin siquiera intentar obtener coordenadas. Aplica igual para
-  // fichas de persona, mascota y objeto. ----
-  function avisarEscaneo(lat, lng, permitido, precision){
+  // ---- 2026-11-10: ya no se pide ni se menciona la ubicación en la página (generaba confusión).
+  // Al abrirse la ficha se avisa de inmediato a los contactos de emergencia que el código fue
+  // escaneado (sin ubicación) y se muestra solo ese mensaje. Un solo aviso por visita; el servidor
+  // además permite 1 aviso cada 10 minutos por ficha. Aplica igual para persona, mascota y objeto. ----
+  var avisoYaEnviado = false;
+  function avisarEscaneo(){
     if (!FOLIO) return;
+    if (avisoYaEnviado) return;
+    avisoYaEnviado = true;
+    var el = document.getElementById('avisoUbicacion');
+    if (el) el.classList.remove('oculto');
     try {
       fetch('/.netlify/functions/avisar-escaneo', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         keepalive: true,
-        body: JSON.stringify({ folio: FOLIO, lat: lat, lng: lng, permitido: !!permitido, precision: precision }),
+        body: JSON.stringify({ folio: FOLIO, lat: null, lng: null, permitido: false }),
       }).catch(function(){});
     } catch (e) {}
   }
-
-  function ocultarPromptUbicacion(){
-    var prompt = document.getElementById('ubicPrompt');
-    var aviso = document.getElementById('avisoUbicacion');
-    if (prompt) prompt.classList.add('oculto');
-    if (aviso) aviso.classList.remove('oculto');
-  }
-
-  function pedirUbicacionExacta(){
-    if (!navigator.geolocation) {
-      estadoUbicacion = 'denegada';
-      ocultarPromptUbicacion();
-      actualizarAvisoUbicacion();
-      avisarEscaneo(null, null, false);
-      return;
-    }
-    // ---- 2026-10-23: se busca la ubicación REAL con GPS de alta precisión (hasta 20 s). Si el
-    // celular no la entrega a tiempo (error distinto a "permiso denegado"), se reintenta una vez
-    // con precisión normal y se acepta una lectura reciente. Si no se logra, el aviso sale SIN
-    // ubicación (ya no se manda una aproximada por IP, que podía caer en lugares sin sentido). ----
-    function exito(pos){
-      estadoUbicacion = 'concedida';
-      ocultarPromptUbicacion();
-      actualizarAvisoUbicacion();
-      avisarEscaneo(pos.coords.latitude, pos.coords.longitude, true, Math.round(pos.coords.accuracy || 0));
-    }
-    function fallo(){
-      estadoUbicacion = 'denegada';
-      ocultarPromptUbicacion();
-      actualizarAvisoUbicacion();
-      avisarEscaneo(null, null, false);
-    }
-    navigator.geolocation.getCurrentPosition(
-      exito,
-      function (err) {
-        if (err && err.code === 1) { fallo(); return; } // permiso denegado: no se insiste
-        navigator.geolocation.getCurrentPosition(exito, fallo, { timeout: 10000, maximumAge: 60000, enableHighAccuracy: false });
-      },
-      { timeout: 20000, maximumAge: 0, enableHighAccuracy: true }
-    );
-  }
-
-  var btnUbicSi = document.getElementById('btnUbicSi');
-  var btnUbicNo = document.getElementById('btnUbicNo');
-  if (btnUbicSi) btnUbicSi.addEventListener('click', pedirUbicacionExacta);
-  if (btnUbicNo) btnUbicNo.addEventListener('click', function(){
-    estadoUbicacion = 'denegada';
-    ocultarPromptUbicacion();
-    actualizarAvisoUbicacion();
-    avisarEscaneo(null, null, false);
-  });
+  avisarEscaneo();
 </script>
 </body>
 </html>`;

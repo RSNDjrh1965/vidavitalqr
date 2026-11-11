@@ -189,11 +189,14 @@ exports.handler = async (event) => {
 
     // ---- opción "verlo en pantalla": se devuelve el PIN directamente, porque el usuario ya
     // pasó la verificación de tres factores y decidió mostrarlo él mismo ----
+    // 2026-11-10: el PIN YA NO se devuelve nunca en la respuesta (el folio, el nombre y la fecha de
+    // nacimiento se pueden obtener de la ficha pública y su PDF). Esta primera llamada solo confirma
+    // que los datos coinciden; el PIN solo llega por correo (accion 'correo').
     if (accion !== 'correo') {
       return {
         statusCode: 200,
         headers,
-        body: JSON.stringify({ ok: true, folio, pin: registro.pin }),
+        body: JSON.stringify({ ok: true, folio, verificado: true }),
       };
     }
 

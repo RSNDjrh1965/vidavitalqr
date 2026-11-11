@@ -107,6 +107,7 @@ exports.handler = async (event) => {
       return { statusCode: 404, body: JSON.stringify({ error: 'No se encontró la ficha. Guarde primero la ficha e intente de nuevo.' }) };
     }
     let historial = [];
+    let direccionAnterior = null; // 2026-11-10: para avisar a James si una dirección ya guardada se cambia por otra distinta
     try {
       const prev = await s3.send(new GetObjectCommand({ Bucket: BUCKET_RESUMEN, Key: key }));
       const chunks = []; for await (const c of prev.Body) chunks.push(c);
@@ -114,6 +115,7 @@ exports.handler = async (event) => {
       historial = (Array.isArray(anterior.historial) ? anterior.historial : []).slice(-2);
       const { historial: _h, ...sinHistorial } = anterior;
       historial.push(sinHistorial);
+      direccionAnterior = sinHistorial;
     } catch (ePrev) { /* no había dirección anterior */ }
 
     await s3.send(new PutObjectCommand({
@@ -135,6 +137,30 @@ exports.handler = async (event) => {
       }), 'utf-8'),
       ContentType: 'application/json',
     }));
+
+    // ---- 2026-11-10 (auditoría, hallazgo 9): esta función no pide PIN (el comprador aún no lo tiene en este paso) y
+    // un cliente legítimo puede volver a guardar su dirección, así que NO se bloquea; en cambio, si ya había una
+    // dirección distinta guardada para ese folio, se avisa por correo a James para que pueda detectar un cambio
+    // extraño antes de enviar el pedido (el sistema además guarda las 3 direcciones anteriores). Nunca debe
+    // impedir que se guarde ni que responda. ----
+    try {
+      const campos = ['nombreEnvio', 'provincia', 'canton', 'distrito', 'senas', 'telefono'];
+      const nuevo = { nombreEnvio, provincia: retiroPersona ? '' : provincia, canton: retiroPersona ? '' : canton, distrito: retiroPersona ? '' : distrito, senas: retiroPersona ? '' : senas, telefono };
+      if (direccionAnterior && campos.some((c) => String(direccionAnterior[c] || '') !== String(nuevo[c] || '')) && process.env.RESEND_API_KEY) {
+        const linea = (o) => campos.map((c) => c + ': ' + String(o[c] || '(vacío)')).join('\n');
+        await fetch('https://api.resend.com/emails', {
+          method: 'POST',
+          headers: { Authorization: 'Bearer ' + process.env.RESEND_API_KEY, 'Content-Type': 'application/json' },
+          signal: AbortSignal.timeout(4000),
+          body: JSON.stringify({
+            from: 'VidaVitalQR <ficha@vidavitalqr.com>',
+            to: ['roljamher@hotmail.com'],
+            subject: 'Revisar: cambió la dirección de envío del folio ' + folio,
+            text: 'Se guardó una dirección de envío DISTINTA para el folio ' + folio + '. Si el cliente no la cambió, revise antes de enviar el pedido (las 3 direcciones anteriores quedan guardadas).\n\nANTES:\n' + linea(direccionAnterior) + '\n\nAHORA:\n' + linea(nuevo),
+          }),
+        });
+      }
+    } catch (eAviso) { console.error('guardar-envio: no se pudo enviar el aviso de cambio de dirección —', eAviso); }
 
     return { statusCode: 200, body: JSON.stringify({ ok: true }) };
   } catch (err) {

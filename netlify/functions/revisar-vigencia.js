@@ -261,6 +261,8 @@ async function borrarFichaCompleta(s3, carpeta, folio, datosPublicos, empresaId)
   // Registro de acceso (login/PIN) — ubicación nueva y la antigua (legacy)
   clavesABorrar.push({ bucket: BUCKET_RESUMEN, key: `${carpeta}/login/${folio}.json` });
   clavesABorrar.push({ bucket: BUCKET_RESUMEN, key: `login/${folio}.json` });
+  // 2026-11-10 (auditoría, hallazgo 7): la dirección de envío (guardar-envio.js) tampoco se borraba
+  clavesABorrar.push({ bucket: BUCKET_RESUMEN, key: `${carpeta}/envio/${folio}.json` });
 
   // ---- 2026-10-20: ficha de EMPRESA — también se borra la copia de su tarjeta (lleva la foto) en la
   // carpeta de la empresa, y el folio queda marcado "eliminada" para que no se pueda volver a llenar ----
@@ -491,48 +493,66 @@ exports.handler = async () => {
   let revisadas = 0;
   const errores = [];
 
+  // ---- 2026-11-10 (auditoría, hallazgo 6): Netlify corta las tareas programadas a los 30 segundos y antes se
+  // revisaban TODAS las fichas en cada corrida, así que al crecer el número de fichas las últimas de la lista nunca
+  // se alcanzaban. Ahora (1) se arma una sola lista de trabajo, (2) se procesa con un presupuesto de ~20 segundos y
+  // (3) se guarda en S3 dónde quedó (config/vigencia-cursor.json) para que la siguiente corrida continúe desde ahí.
+  // Con pocas fichas todo se revisa en una sola corrida, igual que antes. Procesar una ficha es idempotente (los
+  // avisos llevan marcas para no repetirse), así que revisar una ficha dos veces no causa duplicados. ----
+  const PRESUPUESTO_MS = 20000;
+  const inicioMs = Date.now();
+  const trabajo = [];
   for (const carpeta of CARPETAS) {
-    let claves = [];
     try {
-      claves = await listarClaves(s3, BUCKET_RESUMEN, `${carpeta}/login/`);
+      const claves = await listarClaves(s3, BUCKET_RESUMEN, `${carpeta}/login/`);
+      claves.forEach((key) => trabajo.push({ carpeta, key }));
     } catch (err) {
       console.error('revisar-vigencia: no se pudo listar', carpeta, err);
       errores.push(`${carpeta}: ${err.message}`);
-      continue;
-    }
-    for (const key of claves) {
-      try {
-        await procesarFicha(s3, apiKey, ahora, carpeta, key, contadores);
-        revisadas++;
-      } catch (err) {
-        console.error('revisar-vigencia: error procesando', key, err);
-        errores.push(`${key}: ${err.message}`);
-      }
     }
   }
-
-  // ---- ubicación antigua (legacy, de antes de organizar por carpetas) — el folio mismo dice el
-  // tipo real, así que se resuelve caso por caso dentro de procesarFicha (vía carpetaDesdeFolio al
-  // leer datosFormulario/contactos no hace falta aquí; la carpeta correcta para derivar las URLs
-  // de S3 sí importa, así que se pasa la que corresponde según el folio) ----
-  let clavesLegacy = [];
+  // ubicación antigua (legacy, de antes de organizar por carpetas) — el folio mismo dice el tipo real
   try {
-    clavesLegacy = await listarClaves(s3, BUCKET_RESUMEN, 'login/');
+    const clavesLegacy = await listarClaves(s3, BUCKET_RESUMEN, 'login/');
+    clavesLegacy.forEach((key) => trabajo.push({ carpeta: carpetaDesdeFolio(folioDesdeClave(key)), key, legacy: true }));
   } catch (err) {
     console.error('revisar-vigencia: no se pudo listar login/ (legacy)', err);
     errores.push(`login/ (legacy): ${err.message}`);
   }
-  for (const key of clavesLegacy) {
-    const folio = folioDesdeClave(key);
-    const carpeta = carpetaDesdeFolio(folio);
+
+  const CURSOR_KEY = 'config/vigencia-cursor.json';
+  let inicio = 0;
+  try {
+    const rc = await s3.send(new GetObjectCommand({ Bucket: BUCKET_RESUMEN, Key: CURSOR_KEY }));
+    const cur = JSON.parse(await streamToString(rc.Body));
+    if (cur && typeof cur.siguiente === 'string' && cur.siguiente) {
+      const idx = trabajo.findIndex((t) => t.key === cur.siguiente);
+      if (idx > 0) inicio = idx; // si ya no existe esa ficha, se empieza desde el principio
+    }
+  } catch (err) { /* sin cursor todavía (primera corrida) — se empieza desde el principio */ }
+
+  let procesadas = 0;
+  let siguienteCursor = '';
+  for (let n = 0; n < trabajo.length; n++) {
+    const t = trabajo[(inicio + n) % trabajo.length];
+    if (n > 0 && Date.now() - inicioMs > PRESUPUESTO_MS) { siguienteCursor = t.key; break; }
     try {
-      await procesarFicha(s3, apiKey, ahora, carpeta, key, contadores);
+      await procesarFicha(s3, apiKey, ahora, t.carpeta, t.key, contadores);
       revisadas++;
     } catch (err) {
-      console.error('revisar-vigencia: error procesando (legacy)', key, err);
-      errores.push(`${key}: ${err.message}`);
+      console.error('revisar-vigencia: error procesando' + (t.legacy ? ' (legacy)' : ''), t.key, err);
+      errores.push(`${t.key}: ${err.message}`);
     }
+    procesadas++;
   }
+  try {
+    await s3.send(new PutObjectCommand({
+      Bucket: BUCKET_RESUMEN, Key: CURSOR_KEY,
+      Body: Buffer.from(JSON.stringify({ siguiente: siguienteCursor, actualizado: new Date().toISOString(), total: trabajo.length, procesadas }), 'utf-8'),
+      ContentType: 'application/json',
+    }));
+  } catch (err) { console.error('revisar-vigencia: no se pudo guardar el cursor —', err); }
+  if (siguienteCursor) console.error('revisar-vigencia: se alcanzó el presupuesto de tiempo; la siguiente corrida continúa en', siguienteCursor, '(', procesadas, 'de', trabajo.length, 'revisadas ahora)');
 
   console.log('revisar-vigencia: fichas revisadas =', revisadas, '— avisos/acciones =', JSON.stringify(contadores), errores.length ? `— errores: ${errores.length}` : '');
   return { statusCode: 200, body: JSON.stringify({ ok: true, revisadas, contadores, errores }) };

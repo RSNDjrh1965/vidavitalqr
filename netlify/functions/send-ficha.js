@@ -63,6 +63,14 @@ function contentTypeFromDataUrl(dataUrl, fallback) {
   return m ? m[1] : fallback;
 }
 
+// 2026-11-10 (auditoría, hallazgo 10): el tipo de la foto lo decide el navegador; antes se guardaba tal cual en el
+// bucket público, así que alguien podía subir una página web como si fuera una foto. Ahora solo se aceptan imágenes
+// reales (jpeg, png, webp); cualquier otro valor se guarda como image/jpeg. El formulario siempre envía image/jpeg.
+function tipoFotoSeguro(dataUrl) {
+  const t = String(contentTypeFromDataUrl(dataUrl, 'image/jpeg') || '').toLowerCase();
+  return (t === 'image/png' || t === 'image/webp') ? t : 'image/jpeg';
+}
+
 // URL pública del "visor" que se abre al escanear el código QR (en vez de abrir el PDF
 // directamente). Esa página es la que dispara el aviso por correo a los contactos de
 // emergencia y la que muestra el botón de idioma. Se puede sobreescribir con una variable de
@@ -638,13 +646,13 @@ async function subirABuckets(s3, region, { folio, filename, pdfBase64, fotoBase6
   // tenía guardada, en vez de borrarla del visor público.
   let fotoUrl = '';
   if (fotoBase64) {
-    const ext = (contentTypeFromDataUrl(fotoBase64, 'image/jpeg').split('/')[1] || 'jpg').replace('jpeg', 'jpg');
+    const ext = (tipoFotoSeguro(fotoBase64).split('/')[1] || 'jpg').replace('jpeg', 'jpg');
     const fotoKey = `${carpeta}/fotos/${folio}.${ext}`;
     await s3.send(new PutObjectCommand({
       Bucket: BUCKET_FICHAS,
       Key: fotoKey,
       Body: Buffer.from(base64PayloadOf(fotoBase64), 'base64'),
-      ContentType: contentTypeFromDataUrl(fotoBase64, 'image/jpeg'),
+      ContentType: tipoFotoSeguro(fotoBase64),
     }));
     fotoUrl = publicUrlFor(BUCKET_FICHAS, region_, fotoKey);
   } else {
@@ -813,7 +821,7 @@ async function subirABuckets(s3, region, { folio, filename, pdfBase64, fotoBase6
     await copiar('datos.json', datosJsonBuf, 'application/json');
     await copiar('qr.svg', Buffer.from(qrSvg, 'utf-8'), 'image/svg+xml');
     if (fotoBase64) {
-      const tipoFoto = contentTypeFromDataUrl(fotoBase64, 'image/jpeg');
+      const tipoFoto = tipoFotoSeguro(fotoBase64);
       const extFoto = { 'image/png': 'png', 'image/webp': 'webp' }[tipoFoto] || 'jpg';
       // si la foto cambió de formato, se quita la copia anterior para que no queden dos
       for (const e of ['jpg', 'png', 'webp']) {
@@ -1017,7 +1025,7 @@ exports.handler = async (event) => {
 
     empresaCtxCorreo = empresaCtx;
     if (folio) {
-      const login = await cargarOCrearLogin(s3, folio, datosFormulario, carpeta, esRenovacionPago === true, correoTitular, producto, placaEstilo, pinRecibido, empresaCtx, regaloCtx);
+      const login = await cargarOCrearLogin(s3, folio, datosFormulario, carpeta, false /* 2026-11-10: la renovación reinicia la vigencia en onvo-webhook, tras el pago */, correoTitular, producto, placaEstilo, pinRecibido, empresaCtx, regaloCtx);
       if (regaloCtx && regaloCtx.nueva) {
         await escribirJson(s3, BUCKET_RESUMEN, claveRegalo(folio), Object.assign({}, regaloCtx.registro, { estado: 'activa', activadoEn: new Date().toISOString() }));
       }
