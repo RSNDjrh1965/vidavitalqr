@@ -228,12 +228,15 @@
         document.getElementById('etFolio').textContent = 'Folio ' + folioActual;
         document.getElementById('etNombre').textContent = datos.nombreEnvio || '';
         document.getElementById('etTelefono').textContent = 'Tel: ' + (datos.telefono || '');
+        // 2026-11-10: los textos de la dirección los escribe el cliente; se escapan antes de usar
+        // innerHTML para que nunca se ejecute código escrito en ellos (hallazgo de seguridad).
+        function escH(t){ return String(t == null ? '' : t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
         document.getElementById('etUbicacion').innerHTML =
-          '<div class="col"><div class="lbl">Provincia</div><div class="val">' + (datos.provincia || '') + '</div></div>' +
-          '<div class="col"><div class="lbl">Cantón</div><div class="val">' + (datos.canton || '') + '</div></div>' +
-          '<div class="col"><div class="lbl">Distrito</div><div class="val">' + (datos.distrito || '') + '</div></div>';
+          '<div class="col"><div class="lbl">Provincia</div><div class="val">' + escH(datos.provincia) + '</div></div>' +
+          '<div class="col"><div class="lbl">Cantón</div><div class="val">' + escH(datos.canton) + '</div></div>' +
+          '<div class="col"><div class="lbl">Distrito</div><div class="val">' + escH(datos.distrito) + '</div></div>';
         document.getElementById('etSenas').innerHTML = datos.senas
-          ? '<span class="senas-label">Otras señas:</span> ' + datos.senas
+          ? '<span class="senas-label">Otras señas:</span> ' + escH(datos.senas)
           : '';
         etiquetaWrap.style.display = 'block';
         descargaMsg.textContent = '';

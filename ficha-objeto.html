@@ -315,7 +315,6 @@
 <div id="recuperarPinOpciones" style="display:none; margin-top:12px; padding-top:12px; border-top:1px dashed var(--line,#DAD3C4);">
 <p style="margin:0 0 10px; font-size:0.85rem; color:#6b6558;" data-i18n="recuperarVerificado">✔ Verificamos los datos. ¿Cómo quieres recibir el PIN?</p>
 <div style="display:flex; gap:10px; flex-wrap:wrap;">
-<button type="button" id="recuperarVerBtn" class="select-btn" style="white-space:nowrap;" data-i18n="btnVerPin">Ver el PIN en pantalla (15 seg.)</button>
 <button type="button" id="recuperarCorreoBtn" class="select-btn" style="white-space:nowrap;" data-i18n="btnCorreoPin">Enviármelo por correo</button>
 </div>
 </div>
@@ -1134,7 +1133,7 @@ $('photoRemove').addEventListener('click', e => {
           return;
         }
         const data = await resp.json();
-        pinRecuperado = data.pin;
+        pinRecuperado = true; // 2026-11-10: el servidor ya no devuelve el PIN; solo confirma la verificación
         $('recuperarPinOpciones').style.display = 'block';
       }catch(err){
         $('recuperarPinError').style.display = 'block';
@@ -1142,32 +1141,6 @@ $('photoRemove').addEventListener('click', e => {
         btn.disabled = false;
         btn.textContent = textoOriginal;
       }
-    });
-
-    // ---- opción 1: mostrarlo en pantalla, pero solo por 15 segundos, con cuenta atrás visible,
-    // para no dejarlo expuesto indefinidamente en una computadora compartida. ----
-    $('recuperarVerBtn').addEventListener('click', () => {
-      if (!pinRecuperado) return;
-      detenerCuentaAtras();
-      $('renewalPinInput').type = 'text';
-      $('renewalPinInput').value = pinRecuperado;
-
-      let segundos = 15;
-      const actualizarMensaje = () => {
-        $('recuperarPinOk').textContent = T().verPinCuentaAtras(pinRecuperado, segundos);
-        $('recuperarPinOk').style.display = 'block';
-      };
-      actualizarMensaje();
-      recuperarCuentaAtras = setInterval(() => {
-        segundos -= 1;
-        if (segundos <= 0) {
-          detenerCuentaAtras();
-          $('renewalPinInput').type = 'password';
-          $('recuperarPinOk').textContent = T().verPinOculto;
-          return;
-        }
-        actualizarMensaje();
-      }, 1000);
     });
 
     // ---- opción 2: enviarlo por correo al contacto registrado, en vez de mostrarlo en pantalla ----
@@ -1197,8 +1170,6 @@ $('photoRemove').addEventListener('click', e => {
           return;
         }
         detenerCuentaAtras();
-        $('renewalPinInput').type = 'password';
-        $('renewalPinInput').value = pinRecuperado;
         $('recuperarPinOk').textContent = T().pinEnviadoCorreo(data.correo || T().registrado);
         $('recuperarPinOk').style.display = 'block';
       }catch(err){
@@ -2173,6 +2144,38 @@ window.addEventListener('pageshow', (e) => {
 });
 
 updatePreview();
+</script>
+<script>
+/* 2026-11-10 (auditoría, hallazgos 18 y límites de longitud): (1) enlaza cada rótulo (<label>) con su campo para que los lectores
+   de pantalla anuncien qué se pide y al tocar el rótulo se active el campo; (2) pone un límite de caracteres a los campos de texto
+   que no lo tenían. No cambia el aspecto ni los datos; solo agrega atributos. Se repite si el formulario agrega filas nuevas. */
+(function(){
+  var LIM = { text:120, email:120, tel:40, textarea:1000 };
+  function aplicar(){
+    try {
+      document.querySelectorAll('label:not([for])').forEach(function(l){
+        if (l.querySelector('input,select,textarea')) return;
+        var padre = l.parentElement; if (!padre) return;
+        var cand = padre.querySelectorAll('input[id],select[id],textarea[id]');
+        for (var i = 0; i < cand.length; i++) {
+          if (l.compareDocumentPosition(cand[i]) & Node.DOCUMENT_POSITION_FOLLOWING) { l.setAttribute('for', cand[i].id); break; }
+        }
+      });
+      document.querySelectorAll('input[type=text]:not([maxlength]):not([readonly]),input[type=email]:not([maxlength]),input[type=tel]:not([maxlength]),textarea:not([maxlength])').forEach(function(el){
+        var t = el.tagName === 'TEXTAREA' ? 'textarea' : (el.getAttribute('type') || 'text');
+        var max = LIM[t] || 120;
+        if (el.id === 'senales') max = 250;
+        if (el.classList.contains('med-name') || el.classList.contains('med-dose')) max = 80;
+        el.setAttribute('maxlength', String(max));
+      });
+    } catch (e) {}
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', aplicar); else aplicar();
+  try {
+    var t = null;
+    new MutationObserver(function(){ clearTimeout(t); t = setTimeout(aplicar, 150); }).observe(document.body, { childList: true, subtree: true });
+  } catch (e) {}
+})();
 </script>
 </body>
 </html>

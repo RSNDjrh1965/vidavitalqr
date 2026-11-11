@@ -67,3 +67,54 @@
   to = "/.netlify/functions/qr-digital/:folio"
   status = 200
   force = true
+
+# ---- 2026-11-10 (auditoría de seguridad, hallazgo 12): "publish = '.'" publica toda la raíz del repositorio,
+# así que el código de las funciones, la bitácora interna y package.json se podían leer en vidavitalqr.com.
+# Estas reglas responden "no encontrado" (404) para esas rutas. "force = true" hace que la regla gane aunque el
+# archivo exista. NO afectan a "/.netlify/functions/..." (las funciones siguen funcionando igual: esa ruta
+# empieza con "/.netlify", distinta de "/netlify"). Las páginas y los paneles no se tocan. ----
+[[redirects]]
+  from = "/bitacora.md"
+  to = "/404.html"
+  status = 404
+  force = true
+
+[[redirects]]
+  from = "/package.json"
+  to = "/404.html"
+  status = 404
+  force = true
+
+[[redirects]]
+  from = "/package-lock.json"
+  to = "/404.html"
+  status = 404
+  force = true
+
+[[redirects]]
+  from = "/ver.js"
+  to = "/404.html"
+  status = 404
+  force = true
+
+[[redirects]]
+  from = "/netlify/*"
+  to = "/404.html"
+  status = 404
+  force = true
+
+[[redirects]]
+  from = "/.github/*"
+  to = "/404.html"
+  status = 404
+  force = true
+
+# ---- 2026-11-10 (hallazgo 16): cabeceras de seguridad seguras para todo el sitio. Se dejó FUERA a propósito la
+# política de contenido (Content-Security-Policy): las páginas usan scripts propios dentro del HTML y el pago de
+# ONVO, y activarla sin probarla en el sitio real podría romper algo. Se puede agregar después en modo de prueba. ----
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Content-Type-Options = "nosniff"
+    X-Frame-Options = "SAMEORIGIN"
+    Referrer-Policy = "strict-origin-when-cross-origin"
