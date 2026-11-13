@@ -1041,15 +1041,25 @@ document.getElementById('langbar').addEventListener('click', (e) => {
 })();
 
 // ---- edad automática ----
+// 2026-11-13: la edad se muestra en años y meses (p. ej. "34 años y 5 meses"; si es menor de 1 año, solo meses).
+// La fecha "AAAA-MM-DD" se separa a mano (no con new Date) para que la zona horaria no la corra un día.
+function edadEnAniosYMeses(v){
+  const p = String(v || '').split('-').map(Number);
+  if(p.length !== 3 || !p[0] || !p[1] || !p[2]) return '';
+  const now = new Date();
+  let meses = (now.getFullYear() - p[0]) * 12 + (now.getMonth() + 1 - p[1]);
+  if(now.getDate() < p[2]) meses--;
+  if(meses < 0) return '';
+  const anios = Math.floor(meses / 12), resto = meses % 12;
+  const a = anios === 1 ? '1 año' : anios + ' años';
+  const m = resto === 1 ? '1 mes' : resto + ' meses';
+  if(anios === 0) return resto === 0 ? 'Menos de 1 mes' : m;
+  return resto === 0 ? a : a + ' y ' + m;
+}
 $('fnac').addEventListener('input', () => {
   const v = $('fnac').value;
   if(!v){ $('edad').value = ''; return; }
-  const birth = new Date(v);
-  const now = new Date();
-  let age = now.getFullYear() - birth.getFullYear();
-  const m = now.getMonth() - birth.getMonth();
-  if(m < 0 || (m === 0 && now.getDate() < birth.getDate())) age--;
-  $('edad').value = age >= 0 ? age + ' años' : '';
+  $('edad').value = edadEnAniosYMeses(v);
   updatePreview();
 });
 
