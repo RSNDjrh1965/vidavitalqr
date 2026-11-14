@@ -178,7 +178,7 @@ exports.handler = async (event) => {
     // se acepta únicamente si es uno de los 4 valores reales, para que el aviso de pago al
     // administrador siempre reporte cuál de las 4 placas hay que fabricar ----
     let placaEstilo = '';
-    if (itemId === 'plate_personal') {
+    if (itemId === 'plate_personal' || itemId === 'plate_mascota' || itemId === 'plate_objeto') { // 2026-11-14: mascota y objeto también
       const estiloRecibido = String(entrada.placaEstilo || '').trim();
       if (ESTILOS_PLACA_VALIDOS.indexOf(estiloRecibido) !== -1) { placaEstilo = estiloRecibido; }
     }

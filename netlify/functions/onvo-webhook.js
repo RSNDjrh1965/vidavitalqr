@@ -113,7 +113,7 @@ const ETIQUETAS_PLACA_ESTILO = {
 // nombre real del producto y, si es "plate_personal" con estilo elegido, cuál de las 4 placas ----
 function descripcionItem(it) {
   const nombre = ETIQUETAS_ITEM[it.item] || it.item || '?';
-  if (it.item === 'plate_personal' && it.placaEstilo && ETIQUETAS_PLACA_ESTILO[it.placaEstilo]) {
+  if ((it.item === 'plate_personal' || it.item === 'plate_mascota' || it.item === 'plate_objeto') && it.placaEstilo && ETIQUETAS_PLACA_ESTILO[it.placaEstilo]) {
     return nombre + ' (' + ETIQUETAS_PLACA_ESTILO[it.placaEstilo] + ')';
   }
   return nombre;
