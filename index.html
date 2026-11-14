@@ -2672,7 +2672,7 @@
     // ---- si la placa personal ya está en el carrito, se refresca el recuadro de pago para que
     // el nuevo estilo elegido quede reflejado de inmediato en itemsReal (lo que finalmente llega
     // al aviso de pago del administrador -- ver bitácora punto 39) ----
-    if (typeof selected !== 'undefined' && selected.plate_personal && typeof renderOrder === 'function') {
+    if (typeof selected !== 'undefined' && (selected.plate_personal || selected.plate_mascota || selected.plate_objeto) && typeof renderOrder === 'function') {
       renderOrder();
     }
   }
@@ -3065,7 +3065,7 @@
       // para que el aviso de pago real al administrador ya no diga solo "plate_personal" sino
       // cuál exactamente hay que fabricar -- se lee en cada renderOrder() para que quede
       // actualizado aunque el comprador cambie de placa después de agregarla al carrito ----
-      if (k === 'plate_personal') { entrada.placaEstilo = window.VVQR_PLACA_ESTILO || 'clasica'; }
+      if (k === 'plate_personal' || k === 'plate_mascota' || k === 'plate_objeto') { entrada.placaEstilo = window.VVQR_PLACA_ESTILO || 'clasica'; } // 2026-11-14: la placa de mascota y de objeto también registra el estilo elegido
       // ---- la pulsera es un solo producto fijo (no tiene 4 estilos como "Placa con código QR"),
       // así que no necesita el selector de miniaturas -- se le asigna directamente el código
       // "pulsera", que ya tiene su medida (16 x 16 mm) en MEDIDA_QR_MM_POR_PLACA (lib/qr-svg.js)
@@ -3151,8 +3151,10 @@
       // producto de nuevo ni volver a llenar los datos -- ver
       // claude/reanudar-pago-pendiente-vidavitalqr.md) ----
       var productoQuery = 'producto=' + encodeURIComponent(item);
-      if (tipoItem === 'mascota') { openFichaMascota(esRenovacion, productoQuery); }
-      else if (tipoItem === 'objeto') { openFichaObjeto(esRenovacion, productoQuery); }
+      // 2026-11-14: la placa de mascota y de objeto también lleva el estilo elegido (1-4) a su ficha
+      var estiloPlacaQuery = (item === 'plate_mascota' || item === 'plate_objeto') ? '&placaEstilo=' + encodeURIComponent(window.VVQR_PLACA_ESTILO || 'clasica') : '';
+      if (tipoItem === 'mascota') { openFichaMascota(esRenovacion, productoQuery + estiloPlacaQuery); }
+      else if (tipoItem === 'objeto') { openFichaObjeto(esRenovacion, productoQuery + estiloPlacaQuery); }
       else if (item === 'plate_personal') {
         // ---- el estilo (1-4) se elige con las miniaturas numeradas de la tarjeta "Placa con
         // código QR", antes de hacer clic en "Agregar a mi pago" -- se pasa aquí a la ficha para

@@ -447,6 +447,8 @@ const PAYMENT_URL = 'https://vidavitalqr.com/';
 //      ficha para poder usarlo después en la pantalla de "continuar mi pago" — ver el mismo
 //      comentario, más detallado, en ficha.html. ----
 const productoElegido = new URLSearchParams(window.location.search).get('producto') || '';
+// 2026-11-14: estilo de placa elegido en la página principal (?placaEstilo=clasica|llavero|ranuras|dije); solo se acepta uno de esos 4 valores
+const placaEstilo = (function(){ const v = new URLSearchParams(window.location.search).get('placaEstilo') || ''; return ['clasica','llavero','ranuras','dije'].indexOf(v) !== -1 ? v : ''; })();
 
 // ---- ¿Es una renovación pagada (?renovar=1)? Declarada aquí, en el ámbito global del script,
 //      porque se usa al enviar el formulario (fuera del IIFE del contador/renovación donde
@@ -2067,7 +2069,7 @@ $('btnEmail').addEventListener('click', async () => {
     const resp = await fetch('/.netlify/functions/send-ficha', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({ folio, filename, pdfBase64, nombreCompleto, tipo: 'Objeto', fotoBase64, producto: productoElegido, contactos, datosVisor, datosFormulario, esRenovacionPago: esRenovacion, idioma: LANG_FICHA, correoTitular: $('correoTitular').value || '', pin: pinConfirmadoFicha })
+      body: JSON.stringify({ folio, filename, pdfBase64, nombreCompleto, tipo: 'Objeto', fotoBase64, placaEstilo, producto: productoElegido, contactos, datosVisor, datosFormulario, esRenovacionPago: esRenovacion, idioma: LANG_FICHA, correoTitular: $('correoTitular').value || '', pin: pinConfirmadoFicha })
     });
 
     if(!resp.ok){
