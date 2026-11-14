@@ -113,8 +113,10 @@ const DESPLAZ_TEXTO_MM_POR_PLACA = { llavero: 3.3, clasica: -1.1, pulsera: -2.35
 // texto que ya se probó con el QR de 18 mm = 92 % de 18 mm).
 const ANCHO_TEXTO_MM_POR_PLACA = { clasica: 16.56 };
 
+// 2026-11-14: debajo del QR ya NO va el folio sino el dominio "vidavitalqr.com" (mismo criterio que las placas, 2026-10-02); folioText se conserva como parámetro por compatibilidad pero no se dibuja.
 async function buildQrSvg(targetUrl, folioText) {
-  const qr = QRCode.create(targetUrl, { errorCorrectionLevel: 'H' });
+  // 2026-11-14: mismo criterio que las placas (nivel 'L', sin recuadro "VIDAVITALQR" en el centro): cuadrícula más chica = cuadritos más grandes y fáciles de imprimir.
+  const qr = QRCode.create(targetUrl, { errorCorrectionLevel: 'L' });
   const modules = qr.modules;
   const size = modules.size; // número de módulos por lado
   const moduleSize = 10; // px por módulo
@@ -135,33 +137,16 @@ async function buildQrSvg(targetUrl, folioText) {
     }
   }
 
-  // Bloque blanco central para el texto "VIDAVITALQR" (nivel H tolera hasta ~30% de obstrucción;
-  // este bloque cubre bastante menos que eso).
-  const labelBoxWidthModules = Math.round(size * 0.72);
-  const labelBoxHeightModules = Math.round(size * 0.16);
-  const labelBoxWidth = labelBoxWidthModules * moduleSize;
-  const labelBoxHeight = labelBoxHeightModules * moduleSize;
-  const labelBoxX = (qrPixelSize - labelBoxWidth) / 2;
-  const labelBoxY = (qrPixelSize - labelBoxHeight) / 2;
-  const labelFontSize = Math.round(labelBoxHeight * 0.48);
-
-  const centerLabel = `
-    <rect x="${labelBoxX}" y="${labelBoxY}" width="${labelBoxWidth}" height="${labelBoxHeight}" rx="6" fill="#F9F6EF" stroke="#12282B" stroke-width="2"/>
-    <text x="${qrPixelSize / 2}" y="${labelBoxY + labelBoxHeight / 2}" text-anchor="middle" dominant-baseline="central"
-      font-family="Arial, Helvetica, sans-serif" font-weight="700" font-size="${labelFontSize}" fill="#12282B" textLength="${labelBoxWidth - 24}" lengthAdjust="spacingAndGlyphs">VIDAVITALQR</text>
-  `;
-
   const captionFontSize = 30;
   const caption = `
     <text x="${totalWidth / 2}" y="${qrPixelSize + captionHeight / 2}" text-anchor="middle" dominant-baseline="central"
-      font-family="'Courier New', monospace" font-weight="700" font-size="${captionFontSize}" fill="#12282B">${escapeXml(folioText || '')}</text>
+      font-family="Arial, Helvetica, sans-serif" font-weight="700" font-size="${captionFontSize}" fill="#12282B">vidavitalqr.com</text>
   `;
 
   return `<?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" width="${totalWidth}" height="${totalHeight}" viewBox="0 0 ${totalWidth} ${totalHeight}">
   <rect x="0" y="0" width="${totalWidth}" height="${totalHeight}" fill="#F9F6EF"/>
   <g>${modulesSvg}</g>
-  ${centerLabel}
   ${caption}
 </svg>`;
 }
