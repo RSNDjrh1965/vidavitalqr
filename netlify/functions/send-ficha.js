@@ -627,6 +627,141 @@ async function enviarConfirmacionActualizacion(correoTitular, { folio, nombreCom
   }
 }
 
+// ---- 2026-11-14: correo de BIENVENIDA de una ficha de OBSEQUIO (a pedido de James). Cuando la persona que
+// recibió el enlace de obsequio llena su ficha y pulsa Enviar (primera y única vez que se activa), recibe en el
+// correo del titular: su folio y su PIN, su tarjeta Identificador QR (imagen adjunta, con su foto y su código QR) y
+// una explicación de qué es y cómo ponerla en la pantalla de bloqueo del celular. Solo se envía al ACTIVAR el obsequio
+// (regaloCtx.nueva); las fichas que se pagan y las actualizaciones NO cambian. Si falla, no bloquea el guardado: se
+// avisa a James en el correo de administración. La tarjeta es la misma imagen que ya se guarda en S3
+// (personas/identificador-qr/<folio>.jpg). No se crea ningún enlace público nuevo. ----
+const TEXTOS_BIENVENIDA_OBSEQUIO = {
+  es: {
+    asunto: (folio) => `Su ficha VidaVitalQR de obsequio está lista — ${folio}`,
+    saludo: (n) => `Hola${n ? ' ' + n : ''},`,
+    intro: 'Su ficha de emergencia VidaVitalQR (obsequio) quedó activa. En este correo tiene todo lo que necesita:',
+    folioLbl: 'Folio', pinLbl: 'PIN de acceso',
+    pinNota: 'Con su folio y su PIN puede actualizar sus datos cuando quiera. Guárdelos en un lugar seguro y no los comparta.',
+    adjunto: 'Adjunta va su tarjeta Identificador QR (imagen): lleva su foto, su nombre y su código QR. Si alguien escanea ese código en una emergencia, verá la información esencial que usted escribió, y sus contactos de emergencia recibirán un aviso por correo.',
+    sinAdjunto: 'No pudimos generar su tarjeta en este momento. Su ficha y su código QR sí están activos; escríbanos por WhatsApp (6093-3090) y se la enviamos.',
+    pantallaTitulo: 'Cómo dejarla en la pantalla de bloqueo del celular:',
+    pasos: [
+      '1) Abra este correo en su celular y guarde la imagen adjunta en sus fotos (mantenga pulsada la imagen y elija "Guardar imagen" o "Descargar").',
+      '2) iPhone: Ajustes > Fondo de pantalla > Añadir fondo de pantalla nuevo > Fotos, elija la tarjeta y póngala en la pantalla de bloqueo.',
+      '3) Android: abra la imagen en Galería o Fotos > menú (tres puntos) > Usar como > Fondo de pantalla > Pantalla de bloqueo. Los nombres pueden variar un poco según la marca del celular.',
+    ],
+    privacidad: 'Su tarjeta lleva su foto: compártala solo con quien usted quiera.',
+    vigencia: 'Su ficha de obsequio tiene una vigencia de 12 meses desde hoy. Antes de que venza le avisaremos por correo cómo renovarla.',
+    publicidadTitulo: "Conozca también lo que ofrece VidaVitalQR (https://vidavitalqr.com):",
+    publicidad: ["- Placa con código QR, para la billetera, el llavero o la bolsa.", "- Pulsera con placa QR, para el uso diario.", "- Cadena con incrustación religiosa.", "- Identificador QR: tarjeta de bolsillo con su foto y su código.", "- Placa para el collar de su mascota (perro o gato) y código QR para objetos de valor.", "- Código QR solo digital, para imprimirlo donde usted prefiera."],
+    publicidadCierre: "Cada persona, mascota u objeto tiene su propio código. Regale tranquilidad a su familia.",
+    firma: 'Este es un correo automático de VidaVitalQR. vidavitalqr.com',
+  },
+  en: {
+    asunto: (folio) => `Your gift VidaVitalQR record is ready — ${folio}`,
+    saludo: (n) => `Hello${n ? ' ' + n : ''},`,
+    intro: 'Your VidaVitalQR emergency record (gift) is now active. This email has everything you need:',
+    folioLbl: 'Folio', pinLbl: 'Access PIN',
+    pinNota: 'With your folio and PIN you can update your information whenever you like. Keep them somewhere safe and do not share them.',
+    adjunto: 'Your Identificador QR card (image) is attached: it has your photo, your name and your QR code. If someone scans that code in an emergency, they will see the essential information you entered, and your emergency contacts will get an email notice.',
+    sinAdjunto: 'We could not generate your card right now. Your record and QR code are active; write to us on WhatsApp (6093-3090) and we will send it to you.',
+    pantallaTitulo: 'How to set it as your phone lock screen:',
+    pasos: [
+      '1) Open this email on your phone and save the attached image to your photos (press and hold the image and choose "Save image" or "Download").',
+      '2) iPhone: Settings > Wallpaper > Add New Wallpaper > Photos, choose the card and set it as your lock screen.',
+      '3) Android: open the image in Gallery or Photos > menu (three dots) > Use as > Wallpaper > Lock screen. Names may vary slightly by phone brand.',
+    ],
+    privacidad: 'Your card includes your photo: share it only with whom you choose.',
+    vigencia: 'Your gift record is valid for 12 months from today. Before it expires we will email you how to renew it.',
+    publicidadTitulo: "Also discover what VidaVitalQR offers (https://vidavitalqr.com):",
+    publicidad: ["- QR code tag, for your wallet, key ring or bag.", "- Bracelet with a QR tag, for everyday wear.", "- Chain with a religious inlay.", "- Identificador QR: a pocket card with your photo and your code.", "- Tag for your pet's collar (dog or cat) and a QR code for valuable objects.", "- Digital-only QR code, to print wherever you prefer."],
+    publicidadCierre: "Every person, pet or object has its own code. Give your family peace of mind.",
+    firma: 'This is an automated email from VidaVitalQR. vidavitalqr.com',
+  },
+  fr: {
+    asunto: (folio) => `Votre fiche VidaVitalQR offerte est prête — ${folio}`,
+    saludo: (n) => `Bonjour${n ? ' ' + n : ''},`,
+    intro: "Votre fiche d'urgence VidaVitalQR (cadeau) est maintenant active. Cet e-mail contient tout ce dont vous avez besoin :",
+    folioLbl: 'Numéro de dossier', pinLbl: "Code PIN d'accès",
+    pinNota: "Avec votre numéro de dossier et votre PIN, vous pouvez mettre à jour vos informations quand vous le souhaitez. Gardez-les en lieu sûr et ne les partagez pas.",
+    adjunto: "Votre carte Identificador QR (image) est jointe : elle contient votre photo, votre nom et votre code QR. Si quelqu'un scanne ce code en cas d'urgence, il verra les informations essentielles que vous avez saisies, et vos contacts d'urgence recevront un avis par e-mail.",
+    sinAdjunto: "Nous n'avons pas pu générer votre carte pour le moment. Votre fiche et votre code QR sont actifs ; écrivez-nous sur WhatsApp (6093-3090) et nous vous l'enverrons.",
+    pantallaTitulo: "Comment la mettre en écran de verrouillage de votre téléphone :",
+    pasos: [
+      "1) Ouvrez cet e-mail sur votre téléphone et enregistrez l'image jointe dans vos photos (appui long sur l'image, puis « Enregistrer l'image » ou « Télécharger »).",
+      "2) iPhone : Réglages > Fond d'écran > Ajouter un nouveau fond d'écran > Photos, choisissez la carte et définissez-la comme écran de verrouillage.",
+      "3) Android : ouvrez l'image dans Galerie ou Photos > menu (trois points) > Utiliser comme > Fond d'écran > Écran de verrouillage. Les noms peuvent varier légèrement selon la marque.",
+    ],
+    privacidad: "Votre carte contient votre photo : ne la partagez qu'avec les personnes de votre choix.",
+    vigencia: "Votre fiche offerte est valable 12 mois à partir d'aujourd'hui. Avant son expiration, nous vous écrirons pour vous expliquer comment la renouveler.",
+    publicidadTitulo: "Découvrez aussi ce que propose VidaVitalQR (https://vidavitalqr.com) :",
+    publicidad: ["- Plaque avec code QR, pour le portefeuille, le porte-clés ou le sac.", "- Bracelet avec plaque QR, pour un usage quotidien.", "- Chaîne avec incrustation religieuse.", "- Identificador QR : une carte de poche avec votre photo et votre code.", "- Plaque pour le collier de votre animal (chien ou chat) et code QR pour les objets de valeur.", "- Code QR uniquement numérique, à imprimer où vous le souhaitez."],
+    publicidadCierre: "Chaque personne, animal ou objet a son propre code. Offrez la tranquillité à votre famille.",
+    firma: "Ceci est un e-mail automatique de VidaVitalQR. vidavitalqr.com",
+  },
+  pt: {
+    asunto: (folio) => `Sua ficha VidaVitalQR de presente está pronta — ${folio}`,
+    saludo: (n) => `Olá${n ? ' ' + n : ''},`,
+    intro: 'Sua ficha de emergência VidaVitalQR (presente) está ativa. Neste e-mail você tem tudo o que precisa:',
+    folioLbl: 'Folio', pinLbl: 'PIN de acesso',
+    pinNota: 'Com seu folio e seu PIN você pode atualizar seus dados quando quiser. Guarde-os em um lugar seguro e não os compartilhe.',
+    adjunto: 'Em anexo vai seu cartão Identificador QR (imagem): tem sua foto, seu nome e seu código QR. Se alguém escanear esse código em uma emergência, verá as informações essenciais que você escreveu, e seus contatos de emergência receberão um aviso por e-mail.',
+    sinAdjunto: 'Não conseguimos gerar seu cartão agora. Sua ficha e seu código QR estão ativos; escreva-nos pelo WhatsApp (6093-3090) e enviaremos para você.',
+    pantallaTitulo: 'Como deixá-lo na tela de bloqueio do celular:',
+    pasos: [
+      '1) Abra este e-mail no celular e salve a imagem anexa nas suas fotos (mantenha a imagem pressionada e escolha "Salvar imagem" ou "Baixar").',
+      '2) iPhone: Ajustes > Papel de parede > Adicionar novo papel de parede > Fotos, escolha o cartão e defina como tela de bloqueio.',
+      '3) Android: abra a imagem na Galeria ou Fotos > menu (três pontos) > Usar como > Papel de parede > Tela de bloqueio. Os nomes podem variar um pouco conforme a marca.',
+    ],
+    privacidad: 'Seu cartão tem sua foto: compartilhe apenas com quem você quiser.',
+    vigencia: 'Sua ficha de presente tem validade de 12 meses a partir de hoje. Antes de vencer, avisaremos por e-mail como renová-la.',
+    publicidadTitulo: "Conheça também o que o VidaVitalQR oferece (https://vidavitalqr.com):",
+    publicidad: ["- Placa com código QR, para a carteira, o chaveiro ou a bolsa.", "- Pulseira com placa QR, para o uso diário.", "- Corrente com incrustação religiosa.", "- Identificador QR: cartão de bolso com sua foto e seu código.", "- Placa para a coleira do seu pet (cão ou gato) e código QR para objetos de valor.", "- Código QR somente digital, para imprimir onde você preferir."],
+    publicidadCierre: "Cada pessoa, pet ou objeto tem seu próprio código. Dê tranquilidade à sua família.",
+    firma: 'Este é um e-mail automático do VidaVitalQR. vidavitalqr.com',
+  },
+};
+
+// Devuelve null si se envió (o no había nada que hacer) o { email, status, detalle } si falló.
+async function enviarBienvenidaObsequio(correoTitular, { folio, pin, nombreCompleto, idioma, tarjetaBase64 }) {
+  const apiKey = process.env.RESEND_API_KEY;
+  const email = correoTitular && String(correoTitular).trim();
+  if (!apiKey || !folio || !pin || !email || !/^[^@\s<>,;]+@[^@\s<>,;]+\.[^@\s<>,;]+$/.test(email) || email.length > 120) return null;
+  const t = TEXTOS_BIENVENIDA_OBSEQUIO[idioma] || TEXTOS_BIENVENIDA_OBSEQUIO.es;
+  const tarjetaB64 = base64PayloadOf(tarjetaBase64);
+  const nombre = String(nombreCompleto || '').replace(/[\r\n]+/g, ' ').trim().slice(0, 80);
+  const cuerpo = [
+    t.saludo(nombre), '',
+    t.intro, '',
+    `${t.folioLbl}: ${folio}`,
+    `${t.pinLbl}: ${pin}`, '',
+    t.pinNota, '',
+    tarjetaB64 ? t.adjunto : t.sinAdjunto, '',
+    ...(tarjetaB64 ? [t.pantallaTitulo, ...t.pasos, '', t.privacidad, ''] : []),
+    t.vigencia, '',
+    t.publicidadTitulo, ...t.publicidad, '', t.publicidadCierre, '',
+    t.firma,
+  ].join('\n');
+  const payload = { from: REMITENTE, to: [email], subject: t.asunto(folio), text: cuerpo };
+  if (tarjetaB64) payload.attachments = [{ filename: `tarjeta-identificador-${folio}.jpg`, content: tarjetaB64 }];
+  try {
+    const resp = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    if (!resp.ok) {
+      let detalle = '';
+      try { detalle = JSON.stringify(await resp.json()); } catch (e) { try { detalle = await resp.text(); } catch (e2) {} }
+      console.error('Resend rechazó el correo de bienvenida del obsequio para', email, '— status', resp.status, detalle);
+      return { email, status: resp.status, detalle };
+    }
+    return null;
+  } catch (err) {
+    console.error('No se pudo enviar el correo de bienvenida del obsequio a', email, err);
+    return { email, status: null, detalle: String(err && err.message ? err.message : err) };
+  }
+}
+
 async function subirABuckets(s3, region, { folio, filename, pdfBase64, fotoBase64, tarjetaBase64, placaEstilo, nombreCompleto, tipo, contactos, datosVisor, idioma, creado, activo, empresaId }) {
   const region_ = region;
   const carpeta = carpetaTipo(tipo, folio);
@@ -937,6 +1072,7 @@ exports.handler = async (event) => {
   let s3Error = null;
   let pinNuevo = null;
   let codigoCorreoFallidos = [];
+  let bienvenidaObsequioFallo = null;
   const carpeta = carpetaTipo(tipo, folio);
   let s3Limite = null;
   let empresaCtxCorreo = null;
@@ -1062,6 +1198,11 @@ exports.handler = async (event) => {
     const subido = await subirABuckets(s3, region, { folio, filename, pdfBase64, fotoBase64, tarjetaBase64, placaEstilo, nombreCompleto, tipo, contactos, datosVisor, idioma, creado: creadoActual, activo: activoActual, empresaId: empresaCtx ? empresaCtx.id : '' });
     pdfUrl = subido.pdfUrl; fotoUrl = subido.fotoUrl; qrUrl = subido.qrUrl; qrSvg = subido.qrSvg; tarjetaUrl = subido.tarjetaUrl; qrPlacaUrl = subido.qrPlacaUrl; qrPlacaPngUrl = subido.qrPlacaPngUrl;
 
+    // ---- 2026-11-14: correo de bienvenida SOLO al activar una ficha de obsequio (ver enviarBienvenidaObsequio) ----
+    if (regaloCtx && regaloCtx.nueva && carpeta === 'personas' && pinActual) {
+      bienvenidaObsequioFallo = await enviarBienvenidaObsequio(correoTitular, { folio, pin: pinActual, nombreCompleto, idioma, tarjetaBase64 });
+    }
+
     // resumen.xlsx separado por tipo (personas/resumen.xlsx y mascotas/resumen.xlsx), para
     // poder revisarlos por separado. El resumen.xlsx combinado que ya existía en la raíz del
     // bucket queda como respaldo histórico — deja de actualizarse a partir de este cambio.
@@ -1128,6 +1269,9 @@ exports.handler = async (event) => {
   if (qrPlacaPngUrl) lineasExtra.push(`Código QR listo para grabar con láser, PNG para LaserGRBL (tamaño exacto de esta placa): ${qrPlacaPngUrl}`);
   if (qrPlacaUrl) lineasExtra.push(`Código QR de la placa en SVG (tamaño exacto de esta placa): ${qrPlacaUrl}`);
   if (s3Error) lineasExtra.push(`(Aviso: no se pudo subir a S3 / actualizar el resumen — ${s3Error})`);
+  if (bienvenidaObsequioFallo) {
+    lineasExtra.push(`(Aviso: el correo de bienvenida del obsequio NO se pudo enviar a ${bienvenidaObsequioFallo.email}: ${bienvenidaObsequioFallo.status ? 'HTTP ' + bienvenidaObsequioFallo.status + ' — ' : ''}${bienvenidaObsequioFallo.detalle || 'sin detalle'})`);
+  }
   if (codigoCorreoFallidos.length) {
     lineasExtra.push('(Aviso: el correo con el folio y el PIN NO se pudo enviar a los siguientes contactos:');
     codigoCorreoFallidos.forEach((f) => {
